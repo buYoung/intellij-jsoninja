@@ -1,9 +1,9 @@
-package com.github.buyoung.intellijjsonhelper2.services
+package com.livteam.jsonhelper2.services
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
-import com.github.buyoung.intellijjsonhelper2.MyBundle
+import com.livteam.jsonhelper2.MyBundle
 
 @Service(Service.Level.PROJECT)
 class MyProjectService(project: Project) {
@@ -13,5 +13,5 @@ class MyProjectService(project: Project) {
         thisLogger().warn("Don't forget to remove all non-needed sample code files with their corresponding registration entries in `plugin.xml`.")
     }
 
-    fun getRandomNumber() = (1..100).random()
+    fun getRandomNumber() = (1..300).random()
 }
