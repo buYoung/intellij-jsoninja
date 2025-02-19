@@ -14,6 +14,7 @@ JSON Helper 2는 JetBrains IDE를 위한 JSON 처리 플러그인입니다. 이 
 - **JSON Uglify**: JSON 데이터를 한 줄로 압축
 - **JSON Escape**: JSON 문자열 이스케이프 처리
 - **JSON Unescape**: 이스케이프된 JSON 문자열을 원래 형태로 복원
+- **JMES Path**: JSON 데이터 내에서 JMES Path를 사용한 고급 검색 및 필터링 기능
 
 ## 개발 체크리스트
 - [x] [IntelliJ Platform Plugin Template][template] 프로젝트 생성 완료
