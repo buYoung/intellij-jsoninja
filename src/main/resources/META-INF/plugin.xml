@@ -1,7 +1,7 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <id>com.github.buyoung.intellijjsonhelper2</id>
-    <name>intellij-json-helper2</name>
+    <id>com.livteam.jsonhelper2</id>
+    <name>Json Helper2</name>
     <vendor>buyoung</vendor>
 
     <depends>com.intellij.modules.platform</depends>
@@ -9,10 +9,11 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.buyoung.intellijjsonhelper2.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
+        <toolWindow factoryClass="com.livteam.jsonhelper2.toolWindow.MyToolWindowFactory" id="JsonHelper2"/>
     </extensions>
 
     <applicationListeners>
-        <listener class="com.github.buyoung.intellijjsonhelper2.listeners.MyApplicationActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+        <listener class="com.livteam.jsonhelper2.listeners.MyApplicationActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+        <listener class="com.livteam.jsonhelper2.listeners.MyApplicationActivationListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
 </idea-plugin>

@@ -1,6 +1,6 @@
 <!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
-# intellij-json-helper2 Changelog
+# json-helper2 Changelog
 
 ## [Unreleased]
 ### Added
