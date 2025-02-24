@@ -43,6 +43,7 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
     private fun LanguageTextField.configureEditorSettings() {
         addSettingsProvider { editor ->
             editor.settings.applyEditorSettings()
+            editor.colorsScheme = EditorColorsManager.getInstance().globalScheme
             editor.backgroundColor = EditorColorsManager.getInstance().globalScheme.defaultBackground
         }
     }
