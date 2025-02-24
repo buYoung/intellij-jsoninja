@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.PlatformDataKeys
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.IconLoader
 import com.livteam.jsonhelper2.toolWindow.component.JsonHelperPanel
 import javax.swing.Icon
@@ -51,7 +52,32 @@ class JsonHelperActionGroup : DefaultActionGroup() {
             "Open Json file",
             "JSON 파일 열기",
             AllIcons.Actions.MenuOpen
-        ))
+        ) { e ->
+            val project = e.project ?: return@createAction
+            val panel = e.getData(JsonHelperPanel.DATA_KEY)
+                ?: e.getData(PlatformDataKeys.CONTEXT_COMPONENT) as? JsonHelperPanel
+                ?: return@createAction
+
+            val fileChooser = com.intellij.openapi.fileChooser.FileChooser.chooseFile(
+                com.intellij.openapi.fileChooser.FileChooserDescriptor(
+                    true,  // files
+                    false, // directories
+                    false, // jars
+                    false, // jars directory
+                    false, // archives
+                    false  // all files
+                ).withFileFilter { it.name.endsWith(".json") },
+                project,
+                null
+            )
+
+            fileChooser?.let { virtualFile ->
+                val content = String(virtualFile.contentsToByteArray())
+                ApplicationManager.getApplication().runWriteAction {
+                    panel.addNewTab(content)
+                }
+            }
+        })
 
         addSeparator()
 

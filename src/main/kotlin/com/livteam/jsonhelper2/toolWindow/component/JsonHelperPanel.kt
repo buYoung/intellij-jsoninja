@@ -3,8 +3,7 @@ package com.livteam.jsonhelper2.toolWindow.component
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.DataKey
 import com.intellij.openapi.actionSystem.DataProvider
-import com.intellij.openapi.editor.EditorFactory
-import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.ui.SearchTextField
@@ -14,6 +13,7 @@ import com.livteam.jsonhelper2.toolWindow.actions.JsonHelperActionGroup
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
+import com.intellij.json.JsonFileType
 
 class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true), DataProvider {
     private val tabbedPane = JBTabbedPane()
@@ -27,7 +27,9 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
 
     private fun setupUI() {
         // 초기 탭 추가
-        addNewTab()
+       runWriteAction {
+            addNewTab()
+        }
         
         // Add content
         val contentPanel = JPanel(BorderLayout()).apply {
@@ -40,21 +42,9 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         setContent(contentPanel)
     }
 
-    private fun createEditor(): EditorEx {
-        return (EditorFactory.getInstance().createEditor(
-            EditorFactory.getInstance().createDocument(""),
-            project,
-            JSON_FILE_TYPE,
-            false
-        ) as EditorEx).apply {
-            setPlaceholder("JSON 문자열을 입력하세요")
-            settings.apply {
-                isLineMarkerAreaShown = false
-                isIndentGuidesShown = true
-                isLineNumbersShown = true
-                isWhitespacesShown = false
-                isFoldingOutlineShown = true
-            }
+    private fun createEditor(): JComponent {
+        return JsonEditor(project).apply {
+            setText("")
         }
     }
 
@@ -66,11 +56,15 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         return actionToolbar.component
     }
 
-    fun addNewTab() {
+    fun addNewTab(content: String = "") {
         val editor = createEditor()
-        val title = "JSON ${tabCounter++}"
+        if (content.isNotEmpty()) {
+            (editor as JsonEditor).setText(content)
+        }
         
-        tabbedPane.addTab(title, JBScrollPane(editor.component))
+        val title = "JSON ${tabCounter++}"
+        val scrollPane = JBScrollPane(editor)
+        tabbedPane.addTab(title, scrollPane)
         tabbedPane.selectedIndex = tabbedPane.tabCount - 1
     }
 
@@ -82,7 +76,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     }
 
     companion object {
-        private val JSON_FILE_TYPE = com.intellij.json.JsonFileType.INSTANCE
+        private val JSON_FILE_TYPE = JsonFileType.INSTANCE
         val DATA_KEY = DataKey.create<JsonHelperPanel>("JsonHelperPanel")
     }
 }
