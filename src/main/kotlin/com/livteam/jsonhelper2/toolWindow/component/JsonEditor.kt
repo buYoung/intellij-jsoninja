@@ -9,6 +9,7 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.LanguageTextField
+import com.livteam.jsonhelper2.LocalizationBundle
 import javax.swing.JPanel
 import java.awt.BorderLayout
 
@@ -18,8 +19,8 @@ import java.awt.BorderLayout
  */
 class JsonEditor(private val project: Project) : JPanel(), Disposable {
     companion object {
-        private const val PLACEHOLDER_TEXT = "Enter JSON here..."
         private const val EMPTY_TEXT = ""
+        private var PLACEHOLDER_TEXT = LocalizationBundle.message("enterJsonHere")
     }
 
     private val editor: EditorTextField = createJsonEditor()
