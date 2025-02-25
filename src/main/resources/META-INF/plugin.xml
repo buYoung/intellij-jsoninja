@@ -6,14 +6,14 @@
 
     <depends>com.intellij.modules.platform</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <resource-bundle>messages.LocalizationBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.livteam.jsonhelper2.toolWindow.MyToolWindowFactory" id="JsonHelper2"/>
+        <toolWindow factoryClass="com.livteam.jsonhelper2.toolWindow.JsonHelperToolWindowFactory" id="JsonHelper2"/>
     </extensions>
 
     <applicationListeners>
-        <listener class="com.livteam.jsonhelper2.listeners.MyApplicationActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
-        <listener class="com.livteam.jsonhelper2.listeners.MyApplicationActivationListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+        <listener class="com.livteam.jsonhelper2.listeners.JsonHelperActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+        <listener class="com.livteam.jsonhelper2.listeners.JsonHelperActivationListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
 </idea-plugin>

@@ -6,7 +6,7 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
 import com.livteam.jsonhelper2.toolWindow.component.JsonHelperPanel
 
-class MyToolWindowFactory : ToolWindowFactory {
+class JsonHelperToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val jsonHelperPanel = JsonHelperPanel(project)
         val content = ContentFactory.getInstance().createContent(jsonHelperPanel, "", false)

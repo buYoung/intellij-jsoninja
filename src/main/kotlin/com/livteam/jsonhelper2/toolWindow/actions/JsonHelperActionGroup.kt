@@ -7,6 +7,7 @@ import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.IconLoader
+import com.livteam.jsonhelper2.LocalizationBundle
 import com.livteam.jsonhelper2.toolWindow.component.JsonHelperPanel
 import javax.swing.Icon
 
@@ -37,8 +38,8 @@ class JsonHelperActionGroup : DefaultActionGroup() {
     private fun addActions() {
         // 기본 액션 추가
         add(createAction(
-            "Add Tab",
-            "새로운 탭 추가",
+            LocalizationBundle.message("addTab"),
+            LocalizationBundle.message("addTabDescription"),
             AllIcons.General.Add
         ) { e ->
             // 두 가지 방식으로 JsonHelperPanel을 찾아봅니다
@@ -49,8 +50,8 @@ class JsonHelperActionGroup : DefaultActionGroup() {
         })
 
         add(createAction(
-            "Open Json file",
-            "JSON 파일 열기",
+            LocalizationBundle.message("openJsonFile"),
+            LocalizationBundle.message("openJsonFileDescription"),
             AllIcons.Actions.MenuOpen
         ) { e ->
             val project = e.project ?: return@createAction
@@ -84,23 +85,23 @@ class JsonHelperActionGroup : DefaultActionGroup() {
         // JSON 변환 관련 액션 추가
         val jsonActions = listOf(
             Triple(
-                "Prettify",
-                "JSON 문자열을 들여쓰기와 줄바꿈을 포함한 가독성 좋은 형태로 변환",
+                LocalizationBundle.message("prettify"),
+                LocalizationBundle.message("prettifyDescription"),
                 "/icons/prettify.svg"
             ),
             Triple(
-                "Uglify",
-                "JSON 문자열을 한 줄로 변환",
+                LocalizationBundle.message("uglify"),
+                LocalizationBundle.message("uglifyDescription"),
                 "/icons/uglify.svg"
             ),
             Triple(
-                "Escape",
-                "JSON 문자열을 이스케이프 처리",
+                LocalizationBundle.message("escape"),
+                LocalizationBundle.message("escapeDescription"),
                 "/icons/escape.svg"
             ),
             Triple(
-                "Unescape",
-                "이스케이프된 JSON 문자열을 원래 형태로 변환",
+                LocalizationBundle.message("unescape"),
+                LocalizationBundle.message("unescapeDescription"),
                 "/icons/unescape.svg"
             )
         )
