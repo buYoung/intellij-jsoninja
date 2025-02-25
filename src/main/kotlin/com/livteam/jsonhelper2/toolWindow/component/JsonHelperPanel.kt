@@ -14,6 +14,7 @@ import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 import com.intellij.json.JsonFileType
+import com.livteam.jsonhelper2.LocalizationBundle
 
 class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true), DataProvider {
     private val tabbedPane = JBTabbedPane()
@@ -21,7 +22,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     private var tabCounter = 1
 
     init {
-        jmesPathField.textEditor.emptyText.text = "Enter JMES Path..."
+        jmesPathField.textEditor.emptyText.text = LocalizationBundle.message("jmesPathPlaceholder")
         setupUI()
     }
 
