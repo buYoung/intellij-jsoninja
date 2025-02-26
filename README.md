@@ -16,6 +16,39 @@ JSON Helper 2는 JetBrains IDE를 위한 JSON 처리 플러그인입니다. 이 
 - **JSON Unescape**: 이스케이프된 JSON 문자열을 원래 형태로 복원
 - **JMES Path**: JSON 데이터 내에서 JMES Path를 사용한 고급 검색 및 필터링 기능
 
+## 벤치마크 결과
+
+JSON 라이브러리 성능 비교 벤치마크를 통해 Jackson 라이브러리가 가장 우수한 성능을 보여주었습니다. 이 결과를 바탕으로 JSON Helper 2는 Jackson 라이브러리를 기반으로 구현되었습니다.
+
+### 성능 비교 (일반적인 경향)
+
+#### 직렬화 성능
+- 작은 데이터: Gson ≈ Moshi > Jackson
+- 중간 데이터: Jackson > Gson > Moshi
+- 큰 데이터: Jackson > Gson > Moshi
+
+#### 역직렬화 성능
+- 작은 데이터: Moshi > Gson > Jackson
+- 중간 데이터: Jackson > Gson > Moshi
+- 큰 데이터: Jackson > Gson > Moshi
+
+### 기본 JSON 작업 성능
+- Beautify(포맷팅): Jackson > Gson > Moshi
+- Minify(압축): Jackson > Gson > Moshi
+- Escape(이스케이프): Jackson > Gson > Moshi
+- Unescape(이스케이프 해제): Jackson > Gson > Moshi
+
+### 데이터 크기별 성능
+- 중간 크기 데이터: Jackson > Gson > Moshi
+- 대용량 데이터: Jackson > Gson > Moshi
+
+### 전체 성능 순위
+1. Jackson - 대부분의 작업에서 가장 빠른 성능을 보여줍니다.
+2. Gson - Jackson보다는 느리지만 Moshi보다 빠르며, 중간 수준의 성능을 제공합니다.
+3. Moshi - 전반적으로 가장 느린 성능을 보이지만 Kotlin 친화적인 API를 제공합니다.
+
+자세한 벤치마크 결과는 [kotlin-json-library-bench](https://github.com/buYoung/kotlin-json-library-bench) 저장소에서 확인할 수 있습니다.
+
 ## 개발 체크리스트
 - [x] [IntelliJ Platform Plugin Template][template] 프로젝트 생성 완료
 - [ ] [템플릿 문서][template] 검토
