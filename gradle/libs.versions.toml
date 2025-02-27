@@ -1,7 +1,9 @@
 [versions]
 # libraries
 junit = "4.13.2"
-gson = "2.11.0"
+jackson-databind = "2.18.2"
+jackson-module-kotlin = "2.18.2"
+json-path = "2.9.0"
 
 # plugins
 changelog = "2.2.1"
@@ -12,7 +14,9 @@ qodana = "2024.2.3"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
-gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+jacksonDatabind = {  group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson-databind" }
+jacksonModuleKotlin = { group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version.ref = "jackson-module-kotlin" }
+jsonPath = { group = "com.jayway.jsonpath", name = "json-path", version.ref = "json-path" }
 
 [plugins]
 changelog = { id = "org.jetbrains.changelog", version.ref = "changelog" }
