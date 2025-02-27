@@ -9,7 +9,7 @@
     <resource-bundle>messages.LocalizationBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.livteam.jsonhelper2.toolWindow.JsonHelperToolWindowFactory" id="JsonHelper2"/>
+        <toolWindow factoryClass="com.livteam.jsonhelper2.ui.toolWindow.JsonHelperToolWindowFactory" id="JsonHelper2"/>
     </extensions>
 
     <applicationListeners>
