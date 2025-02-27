@@ -1,10 +1,10 @@
-package com.livteam.jsonhelper2.toolWindow
+package com.livteam.jsonhelper2.ui.toolWindow
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
-import com.livteam.jsonhelper2.toolWindow.component.JsonHelperPanel
+import com.livteam.jsonhelper2.ui.component.JsonHelperPanel
 
 class JsonHelperToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
