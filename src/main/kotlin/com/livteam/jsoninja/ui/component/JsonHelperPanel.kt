@@ -16,96 +16,48 @@ import javax.swing.JPanel
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.services.JsonHelperService
+import com.intellij.icons.AllIcons
+import java.awt.Component
+import javax.swing.JButton
+import javax.swing.JLabel
+import javax.swing.event.ChangeEvent
+import javax.swing.event.ChangeListener
+import java.awt.event.ActionEvent
+import java.awt.event.ActionListener
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
+import java.awt.Cursor
+import javax.swing.plaf.basic.BasicTabbedPaneUI
 
 class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true), DataProvider {
-    val tabbedPane = JBTabbedPane()
-    private val jmesPathComponent = JmesPathComponent(project)
-    private var tabCounter = 1
+    private val tabbedPane = JsonHelperTabbedPane(project)
     
-    // JSON 포맷 상태
-    private var jsonFormatState = JsonFormatState.PRETTIFY
-
     // JMES 쿼리 진행 중인지 여부
     private var isJmesQueryInProgress = false
 
     // JsonFormatterService 인스턴스 (한 번만 가져와서 재사용)
     private val formatterService = project.getService(JsonFormatterService::class.java)
+    
+    // JsonHelperService 인스턴스
+    private val helperService = project.getService(JsonHelperService::class.java)
 
     init {
         setupUI()
-        setupJmesPathComponent()
     }
 
     private fun setupUI() {
         // 초기 탭 추가
-        ApplicationManager.getApplication().executeOnPooledThread {
-            ApplicationManager.getApplication().invokeLater({
-                runWriteAction {
-                    addNewTab()
-                }
-            }, ModalityState.any())
-        }
-        
-        // 탭 변경 리스너 추가
-        tabbedPane.addChangeListener { e ->
-            updateJmesPathOriginalJson()
-        }
-        
+        tabbedPane.setupInitialTabs()
+
         // Add content
         val contentPanel = JPanel(BorderLayout()).apply {
-            add(jmesPathComponent.getComponent(), BorderLayout.NORTH)
             add(tabbedPane, BorderLayout.CENTER)
         }
         
         // Setup toolbar and content
         toolbar = createToolbar()
         setContent(contentPanel)
-    }
-
-    /**
-     * JMESPath 컴포넌트 설정
-     */
-    private fun setupJmesPathComponent() {
-        // 쿼리 수행 전 이벤트
-        jmesPathComponent.setOnBeforeSearchCallback {
-            // 원본 JSON이 없으면 현재 에디터에서 가져옴
-            if (jmesPathComponent.hasOriginalJson()) return@setOnBeforeSearchCallback
-
-
-            val currentEditor = getCurrentEditor() ?: return@setOnBeforeSearchCallback
-
-            val editorText = currentEditor.getText()
-            if (editorText.isNotEmpty()) {
-                jmesPathComponent.setOriginalJson(editorText)
-                // 원본 JSON도 설정
-                currentEditor.setOriginalJson(editorText)
-            }
-        }
-
-        // 쿼리 결과 처리 이벤트
-        jmesPathComponent.setOnSearchCallback { originalJson, resultJson ->
-            val currentEditor = getCurrentEditor()
-            if (currentEditor != null) {
-                // JMES 쿼리 진행 중 상태로 설정
-                isJmesQueryInProgress = true
-                try {
-                    val formattedJson = formatterService.formatJson(resultJson, jsonFormatState)
-                    // 포맷팅 없이 결과 그대로 표시
-                    currentEditor.setText(formattedJson)
-                    // 원본 JSON 저장
-                    currentEditor.setOriginalJson(originalJson)
-                } finally {
-                    // 쿼리 처리 완료 후 상태 복원
-                    isJmesQueryInProgress = false
-                }
-            }
-        }
-    }
-
-    private fun createEditor(): JsonEditor {
-        return JsonEditor(project).apply {
-            setText("")
-        }
     }
 
     private fun createToolbar(): JComponent {
@@ -116,50 +68,20 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         return actionToolbar.component
     }
 
-    fun addNewTab(content: String = "") {
-        val editor = createEditor()
-        if (content.isNotEmpty()) {
-            editor.setText(content)
-            // 새 탭이 추가될 때 JMESPath 컴포넌트에 원본 JSON 설정
-            jmesPathComponent.setOriginalJson(content)
-        }
-        
-        val title = "JSON ${tabCounter++}"
-        val scrollPane = JBScrollPane(editor)
-        tabbedPane.addTab(title, scrollPane)
-        tabbedPane.selectedIndex = tabbedPane.tabCount - 1
-    }
-
-    /**
-     * JMESPath 컴포넌트에 현재 에디터의 원본 JSON 업데이트
-     */
-    private fun updateJmesPathOriginalJson() {
-        // JMES 쿼리 진행 중에는 원본 JSON 업데이트하지 않음
-        if (isJmesQueryInProgress) return
-
-        val currentEditor = getCurrentEditor()
-        if (currentEditor != null) {
-            val json = currentEditor.getText()
-            if (json.isNotEmpty()) {
-                // 원본 JSON 저장
-                currentEditor.setOriginalJson(json)
-                // JMESPath 컴포넌트에 원본 JSON 설정
-                jmesPathComponent.setOriginalJson(json)
-            }
-        }
-    }
-
     /**
      * 현재 선택된 탭의 에디터 반환
      * @return 현재 선택된 탭의 에디터
      */
     fun getCurrentEditor(): JsonEditor? {
-        val currentIndex = tabbedPane.selectedIndex
-        if (currentIndex >= 0) {
-            val scrollPane = tabbedPane.getComponentAt(currentIndex) as? JBScrollPane
-            return scrollPane?.viewport?.view as? JsonEditor
-        }
-        return null
+        return tabbedPane.getCurrentEditor()
+    }
+
+    /**
+     * 새 탭 추가
+     * @param content 초기 내용
+     */
+    fun addNewTab(content: String = "") {
+        tabbedPane.addNewTab(content)
     }
 
     /**
@@ -167,7 +89,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
      * @param state 설정할 JSON 포맷 상태
      */
     fun setJsonFormatState(state: JsonFormatState) {
-        jsonFormatState = state
+        helperService.setJsonFormatState(state)
     }
 
     /**
@@ -175,14 +97,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
      * @return 현재 JSON 포맷 상태
      */
     fun getJsonFormatState(): JsonFormatState {
-        return jsonFormatState
-    }
-
-    override fun getData(dataId: String): Any? {
-        return when {
-            DATA_KEY.`is`(dataId) -> this
-            else -> null
-        }
+        return helperService.getJsonFormatState()
     }
 
     /**
@@ -239,6 +154,13 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     fun unescapeJson() {
         processEditorText { jsonText ->
             formatterService.unescapeJson(jsonText)
+        }
+    }
+
+    override fun getData(dataId: String): Any? {
+        return when {
+            DATA_KEY.`is`(dataId) -> this
+            else -> null
         }
     }
 
