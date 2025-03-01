@@ -1,4 +1,4 @@
-package com.livteam.jsonhelper2
+package com.livteam.jsoninja
 
 import com.intellij.DynamicBundle
 import org.jetbrains.annotations.NonNls

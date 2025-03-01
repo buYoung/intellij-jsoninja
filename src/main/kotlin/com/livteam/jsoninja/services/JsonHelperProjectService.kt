@@ -1,9 +1,9 @@
-package com.livteam.jsonhelper2.services
+package com.livteam.jsoninja.services
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
-import com.livteam.jsonhelper2.LocalizationBundle
+import com.livteam.jsoninja.LocalizationBundle
 
 @Service(Service.Level.PROJECT)
 class JsonHelperProjectService(project: Project) {

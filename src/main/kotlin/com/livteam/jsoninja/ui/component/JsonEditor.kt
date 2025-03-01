@@ -1,4 +1,4 @@
-package com.livteam.jsonhelper2.ui.component
+package com.livteam.jsoninja.ui.component
 
 import com.intellij.json.JsonLanguage
 import com.intellij.openapi.Disposable
@@ -10,7 +10,7 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.LanguageTextField
-import com.livteam.jsonhelper2.LocalizationBundle
+import com.livteam.jsoninja.LocalizationBundle
 import javax.swing.JPanel
 import java.awt.BorderLayout
 
