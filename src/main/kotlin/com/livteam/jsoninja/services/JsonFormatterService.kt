@@ -1,4 +1,4 @@
-package com.livteam.jsonhelper2.services
+package com.livteam.jsoninja.services
 
 import com.intellij.openapi.components.Service
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -8,7 +8,7 @@ import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.intellij.openapi.diagnostic.logger
-import com.livteam.jsonhelper2.model.JsonFormatState
+import com.livteam.jsoninja.model.JsonFormatState
 
 /**
  * JSON 포맷팅 서비스
@@ -125,7 +125,7 @@ class JsonFormatterService {
             val jsonNode = mapper.readTree(json)
             
             when (formatState) {
-                JsonFormatState.PRETTIFY, 
+                JsonFormatState.PRETTIFY,
                 JsonFormatState.PRETTIFY_SORTED,
                 JsonFormatState.PRETTIFY_COMPACT -> {
                     val prettyPrinter = createConfiguredPrettyPrinter(formatState)

@@ -1,4 +1,4 @@
-package com.livteam.jsonhelper2.services
+package com.livteam.jsoninja.services
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.intellij.openapi.components.Service

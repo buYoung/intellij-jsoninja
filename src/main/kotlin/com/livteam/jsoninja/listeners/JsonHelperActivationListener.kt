@@ -1,4 +1,4 @@
-package com.livteam.jsonhelper2.listeners
+package com.livteam.jsoninja.listeners
 
 import com.intellij.ide.plugins.DynamicPluginListener
 import com.intellij.openapi.application.ApplicationActivationListener

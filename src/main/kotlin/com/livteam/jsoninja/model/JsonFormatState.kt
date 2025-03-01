@@ -1,4 +1,4 @@
-package com.livteam.jsonhelper2.model
+package com.livteam.jsoninja.model
 
 /**
  * JSON 포맷 상태를 나타내는 열거형
