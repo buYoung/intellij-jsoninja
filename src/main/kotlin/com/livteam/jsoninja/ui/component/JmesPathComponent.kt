@@ -1,11 +1,11 @@
-package com.livteam.jsonhelper2.ui.component
+package com.livteam.jsoninja.ui.component
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.SearchTextField
-import com.livteam.jsonhelper2.LocalizationBundle
-import com.livteam.jsonhelper2.services.JMESPathService
-import com.livteam.jsonhelper2.services.JsonFormatterService
+import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.services.JMESPathService
+import com.livteam.jsoninja.services.JsonFormatterService
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import javax.swing.JComponent
