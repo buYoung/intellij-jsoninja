@@ -1,4 +1,4 @@
-package com.livteam.jsonhelper2.ui.component
+package com.livteam.jsoninja.ui.component
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
@@ -7,8 +7,8 @@ import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.IconLoader
-import com.livteam.jsonhelper2.LocalizationBundle
-import com.livteam.jsonhelper2.model.JsonFormatState
+import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.model.JsonFormatState
 import javax.swing.Icon
 
 /**

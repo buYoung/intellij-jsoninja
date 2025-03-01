@@ -1,4 +1,4 @@
-package com.livteam.jsonhelper2.ui.component
+package com.livteam.jsoninja.ui.component
 
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.DataKey
@@ -8,14 +8,14 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
-import com.livteam.jsonhelper2.model.JsonFormatState
-import com.livteam.jsonhelper2.ui.component.JsonHelperActionBar
+import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.ui.component.JsonHelperActionBar
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
-import com.livteam.jsonhelper2.services.JsonFormatterService
+import com.livteam.jsoninja.services.JsonFormatterService
 
 class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true), DataProvider {
     val tabbedPane = JBTabbedPane()
