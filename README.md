@@ -29,11 +29,24 @@ JSON Helper 2는 JetBrains IDE를 위한 JSON 처리 플러그인입니다. 이 
 - [ ] 새로운 기능과 수정사항에 대한 알림을 받기 위해 [IntelliJ Platform Plugin Template][template]의 <kbd>Watch</kbd> 버튼 클릭
 
 <!-- Plugin description -->
-이 멋진 IntelliJ Platform 플러그인은 여러분이 가진 훌륭한 아이디어를 구현하기 위한 것입니다.
+JSONinja is a powerful JSON processing plugin for JetBrains IDEs.  
+It provides advanced tools for JSON data manipulation, allowing you to work efficiently without disrupting your development workflow.
 
-이 특별한 섹션은 빌드 과정에서 [Gradle](/build.gradle.kts)에 의해 추출될 [plugin.xml](/src/main/resources/META-INF/plugin.xml) 파일의 소스입니다.
+Key Features:  
+• JSON Prettify: Format JSON data for improved readability  
+• JSON Uglify: Compress JSON data into a single line for transmission or storage  
+• JSON Escape/Unescape: Process and restore escaped JSON strings  
+• JMES Path Support: Find and filter specific values within complex JSON data  
+• Multi-tab Interface: Work with multiple JSON documents simultaneously  
+• Advanced Formatting Options: Customize indentation size, key sorting, and more  
 
-모든 것이 정상적으로 작동하도록 하기 위해 `<!-- ... -->` 섹션을 제거하지 마세요.
+[Under Development]  
+• Enhanced JSON Validation  
+• JSON Schema Support  
+• JSON to Various Format Converters  
+• History and Favorites Management  
+
+JSONinja is ideal for analyzing REST API responses, editing configuration files, and performing data transformation tasks. Streamline your JSON-related work with our intuitive and efficient interface!
 <!-- Plugin description end -->
 
 ## 설치 방법

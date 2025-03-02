@@ -7,6 +7,7 @@ import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
+import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
 import java.awt.BorderLayout
@@ -57,8 +58,11 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
         val emptyPanel = JPanel().apply {
             name = "addNewTab"
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            toolTipText = LocalizationBundle.message("addTab")
         }
         addTab("", AllIcons.General.Add, emptyPanel)
+
+        setToolTipTextAt(tabCount - 1, LocalizationBundle.message("addTab"))
         addMouseListener(object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) {
                 val clickedTab = e.component as? JBTabbedPane ?: return
