@@ -2,14 +2,17 @@
 <idea-plugin>
     <id>com.livteam.jsoninja</id>
     <name>JSONinja</name>
-    <vendor>buyoung</vendor>
+    <version>1.0.0</version>
+    <vendor email="leebu18@gmail.com">BuYoung</vendor>
 
+    <depends>com.intellij.modules.lang</depends>
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.json</depends>
 
     <resource-bundle>messages.LocalizationBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja"/>
+        <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja" icon="/META-INF/pluginIcon.svg"/>
     </extensions>
 
     <applicationListeners>
