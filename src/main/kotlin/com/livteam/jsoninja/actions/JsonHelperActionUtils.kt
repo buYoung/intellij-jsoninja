@@ -3,13 +3,14 @@ package com.livteam.jsoninja.actions
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.util.IconLoader
+import com.intellij.openapi.util.ValueKey
 import com.livteam.jsoninja.ui.component.JsonHelperPanel
 
 /**
  * JSON Helper 액션에 필요한 유틸리티 함수들을 제공하는 객체입니다.
  */
 object JsonHelperActionUtils {
-    
+
     /**
      * 이벤트에서 JsonHelperPanel을 가져옵니다.
      *
@@ -17,8 +18,12 @@ object JsonHelperActionUtils {
      * @return JsonHelperPanel 인스턴스 또는 null
      */
     fun getPanel(e: AnActionEvent): JsonHelperPanel? {
-        return e.getData(JsonHelperPanel.DATA_KEY)
-            ?: e.getData(PlatformDataKeys.CONTEXT_COMPONENT) as? JsonHelperPanel
+        // PlatformDataKeys.EDITOR는 Editor 타입을 반환하기 때문에 JsonHelperPanel로 변환하는 것은 적합하지 않음
+        // 직접 정의한 JsonHelperPanel을 찾기 위해 컨텍스트 컴포넌트를 확인
+        val component = e.getData(PlatformDataKeys.CONTEXT_COMPONENT)
+        
+        // 컨텍스트 컴포넌트가 JsonHelperPanel인지 확인
+        return if (component is JsonHelperPanel) component else null
     }
     
     /**
