@@ -6,31 +6,15 @@ import com.intellij.openapi.actionSystem.DataProvider
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
-import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.components.JBTabbedPane
 import com.livteam.jsoninja.model.JsonFormatState
-import com.livteam.jsoninja.ui.component.JsonHelperActionBar
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
-import com.intellij.icons.AllIcons
-import java.awt.Component
-import javax.swing.JButton
-import javax.swing.JLabel
-import javax.swing.event.ChangeEvent
-import javax.swing.event.ChangeListener
-import java.awt.event.ActionEvent
-import java.awt.event.ActionListener
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
-import java.awt.Cursor
-import javax.swing.plaf.basic.BasicTabbedPaneUI
 
-class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true), DataProvider {
+class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true) {
     private val tabbedPane = JsonHelperTabbedPane(project)
     
     // JMES 쿼리 진행 중인지 여부
@@ -155,16 +139,5 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         processEditorText { jsonText ->
             formatterService.unescapeJson(jsonText)
         }
-    }
-
-    override fun getData(dataId: String): Any? {
-        return when {
-            DATA_KEY.`is`(dataId) -> this
-            else -> null
-        }
-    }
-
-    companion object {
-        val DATA_KEY = DataKey.create<JsonHelperPanel>("JsonHelperPanel")
     }
 }
