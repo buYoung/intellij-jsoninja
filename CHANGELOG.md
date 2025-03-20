@@ -2,6 +2,10 @@
 
 # JSONinja Changelog
 
+## [1.0.2] - 2025-03-21
+### Fixed
+- Support for IntelliJ 2025.1
+
 ## [Unreleased]
 ### Added
 - Multi-tab interface - Work with multiple JSON documents simultaneously
