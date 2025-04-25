@@ -2,6 +2,7 @@ import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
+
 plugins {
     id("java") // Java support
     alias(libs.plugins.kotlin) // Kotlin support
@@ -35,6 +36,7 @@ dependencies {
     implementation(libs.jacksonDatabind)
     implementation(libs.jacksonModuleKotlin)
     implementation(libs.jsonPath)
+    implementation(libs.dataFaker)
 
     testImplementation(libs.junit)
 

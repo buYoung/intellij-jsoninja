@@ -7,7 +7,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.ui.component.JsonHelperPanel
 
 /**
  * JSON 파일을 열어 새 탭에 로드하는 액션 클래스입니다.

@@ -4,6 +4,7 @@ junit = "4.13.2"
 jackson-databind = "2.18.2"
 jackson-module-kotlin = "2.18.2"
 json-path = "2.9.0"
+datafaker = "2.4.3"
 
 # plugins
 changelog = "2.2.1"
@@ -17,6 +18,7 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 jacksonDatabind = {  group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson-databind" }
 jacksonModuleKotlin = { group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version.ref = "jackson-module-kotlin" }
 jsonPath = { group = "com.jayway.jsonpath", name = "json-path", version.ref = "json-path" }
+dataFaker = { group = "net.datafaker", name = "datafaker", version.ref = "datafaker" }
 
 [plugins]
 changelog = { id = "org.jetbrains.changelog", version.ref = "changelog" }
