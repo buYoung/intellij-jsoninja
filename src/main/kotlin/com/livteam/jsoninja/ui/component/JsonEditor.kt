@@ -15,12 +15,18 @@ import com.intellij.ui.LanguageTextField
 import com.intellij.ide.PasteProvider
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.editor.Caret
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorModificationUtil
 import com.intellij.openapi.editor.actionSystem.EditorActionHandler
 import com.intellij.openapi.editor.actionSystem.EditorActionManager
+import com.intellij.openapi.ide.CopyPasteManager
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.services.JsonFormatterService
 import javax.swing.JPanel
 import java.awt.BorderLayout
+import java.awt.datatransfer.DataFlavor
 
 /**
  * JSON 편집을 위한 커스텀 에디터 컴포넌트
@@ -57,17 +63,53 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
      */
     private inner class CustomPasteHandler(private val originalHandler: EditorActionHandler?) : EditorActionHandler() {
         override fun doExecute(editor: Editor, caret: Caret?, dataContext: DataContext?) {
-            // 이 JsonEditor 인스턴스 내부의 에디터에서 발생한 이벤트인지 확인
-            if (editor === this@JsonEditor.editor.editor) {
-                println("Paste event detected via ActionHandler replacement!") // 디버그 메시지 출력
-                // TODO: 추가적인 붙여넣기 관련 로직 구현 가능
+            if (editor !== this@JsonEditor.editor.editor) {
+                originalHandler?.execute(editor, caret, dataContext)
+                return
             }
 
-            // 원래 핸들러 실행 (null 체크 포함)
+            val clipboardText = try {
+                CopyPasteManager.getInstance().getContents<String>(DataFlavor.stringFlavor)
+            } catch (e: Exception) {
+                println("Failed to get clipboard content: ${e.message}")
+                originalHandler?.execute(editor, caret, dataContext)
+                return
+            }
+
+            if (clipboardText != null && clipboardText.isNotBlank()) {
+                val formatterService = project.getService(JsonFormatterService::class.java)
+
+                if (formatterService.isValidJson(clipboardText)) { //
+                    val formattedText = formatterService.formatJson(clipboardText, JsonFormatState.PRETTIFY) //
+
+                    if (formattedText != clipboardText && formatterService.isValidJson(formattedText)) { //
+                        // WriteCommandAction 내에서 Document API 사용하여 수정
+                        WriteCommandAction.runWriteCommandAction(project) {
+                            val document: Document = editor.document //
+                            val selectionModel = editor.selectionModel
+
+                            if (selectionModel.hasSelection()) {
+                                val start: Int = selectionModel.selectionStart //
+                                val end: Int = selectionModel.selectionEnd //
+                                document.replaceString(start, end, formattedText) //
+                            } else {
+                                val offset: Int = editor.caretModel.offset //
+                                document.insertString(offset, formattedText) //
+                                selectionModel.setSelection(offset, offset + formattedText.length)
+                            }
+
+                            // 선택 해제 (선택 교체 후 필요시)
+                             selectionModel.removeSelection()
+                        }
+                        return // 원래 핸들러 호출 안함
+                    }
+                }
+            }
+
+            // 포맷팅 대상 아니거나 실패 시 원래 핸들러 실행
             originalHandler?.execute(editor, caret, dataContext)
         }
 
-        // isEnabled 로직은 원래 핸들러에 위임 (null 체크 포함)
         override fun isEnabledForCaret(editor: Editor, caret: Caret, dataContext: DataContext?): Boolean {
             return originalHandler?.isEnabled(editor, caret, dataContext) ?: super.isEnabledForCaret(editor, caret, dataContext)
         }
