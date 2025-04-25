@@ -3,7 +3,6 @@ package com.livteam.jsoninja.actions
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.ui.component.JsonHelperPanel
 
 /**
  * JSON의 이스케이프를 해제하는 액션 클래스입니다.
