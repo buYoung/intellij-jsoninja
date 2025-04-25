@@ -2,6 +2,11 @@
 
 # JSONinja Changelog
 
+## [1.0.3] - 2025-04-25
+### Added
+- Change to enforce json pretty on paste
+- {G} icon, a popup window will open, and you can now create Json random data.
+
 ## [1.0.2] - 2025-03-21
 ### Fixed
 - Support for IntelliJ 2025.1
