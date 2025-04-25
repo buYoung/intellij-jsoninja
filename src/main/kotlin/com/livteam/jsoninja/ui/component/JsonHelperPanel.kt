@@ -1,9 +1,6 @@
 package com.livteam.jsoninja.ui.component
 
 import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.DataKey
-import com.intellij.openapi.actionSystem.DataProvider
-import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.livteam.jsoninja.model.JsonFormatState
@@ -101,6 +98,16 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         ApplicationManager.getApplication().runWriteAction {
             currentEditor.setText(processedJson)
         }
+    }
+
+    fun setRandomJsonData(data: String) {
+        val currentEditor = getCurrentEditor() ?: return
+
+        ApplicationManager.getApplication().runWriteAction {
+            val processedJson = formatterService.formatJson(data, JsonFormatState.PRETTIFY)
+            currentEditor.setText(processedJson)
+        }
+
     }
 
     /**
