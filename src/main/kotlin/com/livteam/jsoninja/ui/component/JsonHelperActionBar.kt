@@ -26,5 +26,7 @@ class JsonHelperActionBar : DefaultActionGroup() {
         add(UglifyJsonAction(JsonHelperActionUtils.getIcon("/icons/uglify.svg")))
         add(EscapeJsonAction(JsonHelperActionUtils.getIcon("/icons/escape.svg")))
         add(UnescapeJsonAction(JsonHelperActionUtils.getIcon("/icons/unescape.svg")))
+
+        add(GenerateRandomJsonAction(JsonHelperActionUtils.getIcon("/icons/random_json.svg")))
     }
 }
