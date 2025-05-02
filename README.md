@@ -1,35 +1,37 @@
 # JSON Helper 2
 
-![빌드 상태](https://github.com/buYoung/json-helper2/workflows/Build/badge.svg)
-[![버전](https://img.shields.io/jetbrains/plugin/v/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
-[![다운로드](https://img.shields.io/jetbrains/plugin/d/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
+![Build Status](https://github.com/buYoung/intellij-jsoninja/workflows/Build/badge.svg)
+[![Version](https://img.shields.io/jetbrains/plugin/v/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
 
 
-## 소개
+## Introduction
 
-JSON Helper 2는 JetBrains IDE를 위한 JSON 처리 플러그인입니다. 이 플러그인은 개발자들이 JSON 데이터를 더 쉽게 다룰 수 있도록 다음과 같은 핵심 기능들을 제공합니다:
+JSON Helper 2 is a JSON processing plugin for JetBrains IDEs. This plugin provides the following core features to help developers handle JSON data more easily:
 
-### 주요 기능
+### Key Features
 
-- **JSON Prettify**: JSON 데이터를 보기 좋게 포맷팅
-- **JSON Uglify**: JSON 데이터를 한 줄로 압축
-- **JSON Escape**: JSON 문자열 이스케이프 처리
-- **JSON Unescape**: 이스케이프된 JSON 문자열을 원래 형태로 복원
-- **JMES Path**: JSON 데이터 내에서 JMES Path를 사용한 고급 검색 및 필터링 기능
+- **JSON Prettify**:
+  - Formats JSON data nicely for readability
+  - (+1.0.3) Auto-formatting on paste
+- **JSON Uglify**: Compresses JSON data into a single line
+- **JSON Escape**: Escapes JSON strings
+- **JSON Unescape**: Restores escaped JSON strings to their original form
+- **JMES Path**: Advanced search and filtering within JSON data using JMES Path
+- **JSON Generator**: Generates JSON data
 
-## 개발 체크리스트
-- [x] [IntelliJ Platform Plugin Template][template] 프로젝트 생성 완료
-- [x] [템플릿 문서][template] 검토
-- [x] [pluginGroup](./gradle.properties)과 [pluginName](./gradle.properties), [plugin.xml의 id](./src/main/resources/META-INF/plugin.xml)와 [소스 패키지](./src/main/kotlin) 수정
-- [x] `README`의 플러그인 설명 수정 ([참고][docs:plugin-description])
-- [x] [법적 동의사항](https://plugins.jetbrains.com/docs/marketplace/legal-agreements.html?from=IJPluginTemplate) 검토
-- [x] 처음으로 [플러그인 수동 배포](https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate)
-- [x] 위의 README 배지에 `MARKETPLACE_ID` 설정. JetBrains Marketplace에 플러그인이 게시된 후 얻을 수 있음
-- [ ] [플러그인 서명](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html?from=IJPluginTemplate) 관련 [시크릿](https://github.com/JetBrains/intellij-platform-plugin-template#environment-variables) 설정
-- [ ] [배포 토큰](https://plugins.jetbrains.com/docs/marketplace/plugin-upload.html?from=IJPluginTemplate) 설정
-- [ ] 새로운 기능과 수정사항에 대한 알림을 받기 위해 [IntelliJ Platform Plugin Template][template]의 <kbd>Watch</kbd> 버튼 클릭
+## Development Checklist
+- [x] Created project using [IntelliJ Platform Plugin Template][template].
+- [x] Reviewed [template documentation][template].
+- [x] Modified `pluginGroup` and `pluginName` in [`./gradle.properties`], `id` in [`./src/main/resources/META-INF/plugin.xml`], and the source package in [`./src/main/kotlin`].
+- [x] Updated the plugin description in `README` ([Reference][docs:plugin-description]).
+- [x] Reviewed [Legal Agreements](https://plugins.jetbrains.com/docs/marketplace/legal-agreements.html?from=IJPluginTemplate).
+- [x] Performed the first [manual plugin deployment](https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate).
+- [x] Set `MARKETPLACE_ID` in the README badges above. Can be obtained after the plugin is published on JetBrains Marketplace.
+- [ ] Set up [secrets](https://github.com/JetBrains/intellij-platform-plugin-template#environment-variables) related to [plugin signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html?from=IJPluginTemplate).
+- [ ] Set up [deployment token](https://plugins.jetbrains.com/docs/marketplace/plugin-upload.html?from=IJPluginTemplate).
+- [ ] Click the <kbd>Watch</kbd> button on the [IntelliJ Platform Plugin Template][template] to receive notifications about new features and fixes.
 
-<!-- Plugin description -->
 JSONinja is a powerful JSON processing plugin for JetBrains IDEs.  
 It provides advanced tools for JSON data manipulation, allowing you to work efficiently without disrupting your development workflow.
 
@@ -39,42 +41,35 @@ Key Features:
 • JSON Escape/Unescape: Process and restore escaped JSON strings  
 • JMES Path Support: Find and filter specific values within complex JSON data  
 • Multi-tab Interface: Work with multiple JSON documents simultaneously  
-• Advanced Formatting Options: Customize indentation size, key sorting, and more  
+• Advanced Formatting Options: Customize indentation size, key sorting, and more
 
 [Under Development]  
 • Enhanced JSON Validation  
 • JSON Schema Support  
 • JSON to Various Format Converters  
-• History and Favorites Management  
+• History and Favorites Management
 
 JSONinja is ideal for analyzing REST API responses, editing configuration files, and performing data transformation tasks. Streamline your JSON-related work with our intuitive and efficient interface!
 
 **The Birth of JSONinja** 😄  
-Inspired by the need for reliable JSON tools! When we faced compatibility challenges with existing solutions after an IDE update, we saw an opportunity to create something new. Our development journey took a bit longer than expected, but we're excited to finally share JSONinja with the community. Sometimes the best tools come from personal necessity!  
-<!-- Plugin description end -->
+Inspired by the need for reliable JSON tools! When we faced compatibility challenges with existing solutions after an IDE update, we saw an opportunity to create something new. Our development journey took a bit longer than expected, but we're excited to finally share JSONinja with the community. Sometimes the best tools come from personal necessity!
+## Installation
 
-## 설치 방법
+- Using the IDE's built-in plugin system:
 
-- IDE 내장 플러그인 시스템 사용:
-  
-  <kbd>설정/환경설정</kbd> > <kbd>플러그인</kbd> > <kbd>마켓플레이스</kbd> > <kbd>"json-helper2" 검색</kbd> >
-  <kbd>설치</kbd>
-  
-- JetBrains 마켓플레이스 사용:
+  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "jsoninja"</kbd> >
+  <kbd>Install</kbd>
 
-  [JetBrains 마켓플레이스](https://plugins.jetbrains.com/plugin/26715)에서 IDE가 실행 중인 경우 <kbd>Install to ...</kbd> 버튼을 클릭하여 설치하세요.
+- Using JetBrains Marketplace:
 
-  또는 JetBrains 마켓플레이스에서 [최신 릴리즈](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions)를 다운로드하고
-  <kbd>설정/환경설정</kbd> > <kbd>플러그인</kbd> > <kbd>⚙️</kbd> > <kbd>디스크에서 플러그인 설치...</kbd>를 통해 수동으로 설치하세요.
+  Go to the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/26715) page and click the <kbd>Install to ...</kbd> button if your IDE is running.
 
-- 수동 설치:
-
-  [최신 릴리즈](https://github.com/buYoung/json-helper2/releases/latest)를 다운로드하고
-  <kbd>설정/환경설정</kbd> > <kbd>플러그인</kbd> > <kbd>⚙️</kbd> > <kbd>디스크에서 플러그인 설치...</kbd>를 통해 수동으로 설치하세요.
+  Alternatively, download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from the JetBrains Marketplace versions page and install it manually using
+  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install Plugin from Disk...</kbd>.
 
 
 ---
-이 플러그인은 [IntelliJ Platform Plugin Template][template]을 기반으로 제작되었습니다.
+This plugin is based on the [IntelliJ Platform Plugin Template][template].
 
 [template]: https://github.com/JetBrains/intellij-platform-plugin-template
 [docs:plugin-description]: https://plugins.jetbrains.com/docs/intellij/plugin-user-experience.html#plugin-description-and-presentation
