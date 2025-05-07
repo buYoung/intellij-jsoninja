@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.intellij.openapi.diagnostic.logger
 import com.livteam.jsoninja.model.JsonFormatState
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * JSON 포맷팅 서비스
@@ -27,12 +28,25 @@ class JsonFormatterService {
             // 역직렬화 설정
             configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
             configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
+            configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
         }
-        
+
+        private val SORTED_MAPPER = DEFAULT_MAPPER.copy().apply {
+            // 핵심: 추가적인 토큰이 있면 실패하도록 설정
+            configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+        }
+
+        private val NON_SORTED_MAPPER = DEFAULT_MAPPER.copy().apply {
+            // 핵심: 추가적인 토큰이 있면 실패하도록 설정
+            configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, false)
+        }
+
+        private val prettyPrinterCache = ConcurrentHashMap<Pair<Int, Boolean>, DefaultPrettyPrinter>()
+
         // 기본 들여쓰기 공백 수
         private const val DEFAULT_INDENT_SIZE = 2
     }
-    
+
     // 현재 설정된 들여쓰기 공백 수
     private var indentSize = DEFAULT_INDENT_SIZE
     
@@ -80,10 +94,10 @@ class JsonFormatterService {
      * @return 설정된 ObjectMapper
      */
     private fun getConfiguredMapper(usesSorting: Boolean): ObjectMapper {
-        return DEFAULT_MAPPER.copy().apply {
-            if (usesSorting) {
-                configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
-            }
+        if (usesSorting) {
+            return SORTED_MAPPER
+        } else {
+            return NON_SORTED_MAPPER
         }
     }
     
@@ -94,10 +108,18 @@ class JsonFormatterService {
      * @return 설정된 CustomPrettyPrinter
      */
     private fun createConfiguredPrettyPrinter(formatState: JsonFormatState): DefaultPrettyPrinter {
-        return CustomPrettyPrinter(
-            indentSize = indentSize,
-            useCompactArrays = formatState.usesCompactArrays()
-        )
+        val currentIndentSize = this.indentSize // 현재 서비스의 indentSize 사용
+        val useEffectiveCompactArrays = formatState.usesCompactArrays()
+        val cacheKey = Pair(currentIndentSize, useEffectiveCompactArrays)
+
+        // 캐시에서 PrettyPrinter를 찾거나, 없으면 새로 생성하여 캐시에 저장 후 반환
+        return prettyPrinterCache.computeIfAbsent(cacheKey) {
+            LOG.debug("Creating new CustomPrettyPrinter for indent: $currentIndentSize, compactArrays: $useEffectiveCompactArrays")
+            CustomPrettyPrinter(
+                indentSize = currentIndentSize,
+                useCompactArrays = useEffectiveCompactArrays
+            )
+        }
     }
     
     /**
@@ -108,14 +130,10 @@ class JsonFormatterService {
      * @return 포맷팅된 JSON 문자열, 포맷팅 실패 시 원본 반환
      */
     fun formatJson(json: String, formatState: JsonFormatState): String {
-        if (json.isBlank()) return json
-        
-        // 유효하지 않은 JSON이면 원본 반환
-        if (!isValidJson(json)) {
-            LOG.warn("유효하지 않은 JSON 포맷을 감지했습니다.")
-            return json
-        }
-        
+        val trimedJson = json.trim()
+        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
+        if (isEmptyJson) return json
+
         return try {
             // 포맷 상태에 따라 설정 조정
             val usesSorting = sortKeys || formatState == JsonFormatState.PRETTIFY_SORTED
@@ -149,7 +167,9 @@ class JsonFormatterService {
      * @return 유효한 JSON이면 true, 아니면 false
      */
     fun isValidJson(json: String): Boolean {
-        if (json.isBlank()) return false
+        val trimedJson = json.trim()
+        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
+        if (isEmptyJson) return false
         
         return try {
             DEFAULT_MAPPER.readTree(json)
@@ -237,7 +257,9 @@ class JsonFormatterService {
      * @return 이스케이프 처리된 JSON 문자열, 실패 시 원본 반환
      */
     fun escapeJson(json: String): String {
-        if (json.isBlank()) return json
+        val trimedJson = json.trim()
+        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
+        if (isEmptyJson) return json
 
         try {
             if (isBeautifiedJson(json)) {
@@ -262,7 +284,10 @@ class JsonFormatterService {
      * @return 한 단계 언이스케이프 처리된 JSON 문자열, 실패 시 원본 반환
      */
     fun unescapeJson(json: String): String {
-        if (json.isBlank()) return json
+        val trimedJson = json.trim()
+        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
+        if (isEmptyJson) return json
+
 
         // 이스케이프 문자가 포함되어 있는지 확인
         if (!containsEscapeCharacters(json)) {
@@ -285,54 +310,74 @@ class JsonFormatterService {
     }
 
     /**
-     * Escapes a beautified JSON string while preserving formatting
+     * 포맷팅(들여쓰기, 줄바꿈)이 유지된 JSON 문자열을 이스케이프 처리합니다.
+     * 이 최적화된 버전은 단일 패스 접근 방식을 사용합니다.
+     * 백슬래시와 큰따옴표만 이스케이프 처리하며, 줄바꿈 문자 및 기타 문자들은 그대로 유지합니다.
      *
-     * @param beautifiedJson The beautified JSON to escape
-     * @return Escaped beautified JSON
+     * @param beautifiedJson 이스케이프 처리할, 포맷팅된 JSON 문자열 (JSON 리터럴이 아닌 원시 문자열 형태).
+     * @return 다른 JSON 내부에 문자열 리터럴로 포함될 수 있도록 이스케이프 처리된 beautified JSON 문자열.
      */
     private fun escapeBeautifiedJson(beautifiedJson: String): String {
         // Process line by line to preserve formatting
-        return beautifiedJson.lines().joinToString("\n") { line ->
-            // First, escape all backslashes (\ to \\)
-            var processedLine = line.replace("\\", "\\\\")
-
-            // Then, escape all quotes (" to \")
-            val parts = processedLine.split("\"")
-            if (parts.size <= 1) {
-                // No quotes on this line, return as is
-                processedLine
-            } else {
-                val result = StringBuilder()
-                for (i in parts.indices) {
-                    if (i > 0) {
-                        // Add escaped quote
-                        result.append("\\\"")
-                    }
-                    // Add part (which already has escaped backslashes)
-                    result.append(parts[i])
-                }
-                result.toString()
+        val result = StringBuilder(beautifiedJson.length + beautifiedJson.length / 10 + 16)
+        for (char in beautifiedJson) {
+            when (char) {
+                '\\' -> result.append("\\\\") // 백슬래시를 먼저 이스케이프
+                '"' -> result.append("\\\"")  // 큰따옴표를 이스케이프
+                // \n, \r 등 다른 문자들은 포맷팅 유지를 위해 그대로 추가
+                else -> result.append(char)
             }
         }
+        return result.toString()
     }
 
     /**
-     * Unescapes a beautified JSON string while preserving formatting
+     * 포맷팅(들여쓰기, 줄바꿈)이 유지된 이스케이프된 JSON 문자열을 언이스케이프 처리합니다.
+     * 이 최적화된 버전은 단일 패스 접근 방식을 사용합니다.
+     * 이스케이프된 백슬래시(\\)와 이스케이프된 큰따옴표(\")만 언이스케이프 처리하며,
+     * 줄바꿈 문자 및 기타 문자들은 그대로 유지합니다.
      *
-     * @param escapedBeautifiedJson The escaped beautified JSON to unescape
-     * @return Unescaped beautified JSON
+     * @param escapedBeautifiedJson 언이스케이프 처리할, 이스케이프된 beautified JSON 문자열.
+     * @return 언이스케이프 처리된 beautified JSON 문자열.
      */
     private fun unescapeBeautifiedJson(escapedBeautifiedJson: String): String {
-        // Process line by line to preserve formatting
-        return escapedBeautifiedJson.lines().joinToString("\n") { line ->
-            // First, unescape quotes
-            var processedLine = line.replace("\\\"", "\"")
-
-            // Then, unescape backslashes
-            processedLine = processedLine.replace("\\\\", "\\")
-
-            processedLine
+        val result = StringBuilder(escapedBeautifiedJson.length)
+        var i = 0
+        while (i < escapedBeautifiedJson.length) {
+            var char = escapedBeautifiedJson[i]
+            if (char == '\\') {
+                // 다음 문자가 있는지 확인 (이스케이프 시퀀스의 일부)
+                if (i + 1 < escapedBeautifiedJson.length) {
+                    val nextChar = escapedBeautifiedJson[i + 1]
+                    when (nextChar) {
+                        '\"' -> { // \" -> "
+                            result.append('\"')
+                            i++ // 다음 문자까지 처리했으므로 인덱스 증가
+                        }
+                        '\\' -> { // \\ -> \
+                            result.append('\\')
+                            i++ // 다음 문자까지 처리했으므로 인덱스 증가
+                        }
+                        // 이 "beautified" unescape는 \n, \t 등을 실제 문자로 변환하지 않음.
+                        // 오직 \" 와 \\ 만 처리하고, 그 외 \x는 \x 그대로 둠.
+                        // (예: \n은 문자열 "\n"으로 유지, 실제 개행 문자로 바뀌지 않음)
+                        else -> {
+                            result.append('\\') // 백슬래시 자체를 추가 (예: \n의 경우 \를 추가)
+                            // 다음 루프에서 nextChar (예: n)가 처리됨
+                        }
+                    }
+                } else {
+                    // 문자열 끝에 백슬래시만 있는 경우 (일반적으로 유효하지 않은 이스케이프)
+                    result.append('\\')
+                }
+            } else {
+                // 일반 문자는 그대로 추가
+                result.append(char)
+            }
+            i++
         }
+        return result.toString()
+
     }
 
     /**
@@ -342,13 +387,36 @@ class JsonFormatterService {
      * @return true if the JSON is beautified, false otherwise
      */
     fun isBeautifiedJson(jsonString: String): Boolean {
-        // Check multiple criteria to determine if JSON is beautified
-        val hasMultipleLines = jsonString.contains("\n")
-        val hasIndentation = jsonString.lines().any { it.startsWith(" ") || it.startsWith("\t") }
-        val hasSpaceAfterColon = jsonString.contains(": ")
+        val trimedJson = jsonString.trim()
+        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
 
-        // Consider it beautified if it has line breaks and either indentation or spaced colons
-        return hasMultipleLines && (hasIndentation || hasSpaceAfterColon)
+        if (isEmptyJson) return false
+
+        val hasMultipleLines = jsonString.contains("\n")
+        if (!hasMultipleLines) return false
+
+        val hasSpaceAfterColon = jsonString.contains(": ")
+        if (!hasSpaceAfterColon) return false
+
+        var atLineStart = true
+        for (char in jsonString) {
+            if (atLineStart) {
+                if (char == ' ' || char == '\t') {
+                    return true
+                }
+
+                if (char != '\n' && char != '\r') {
+                    atLineStart = false
+                }
+            }
+
+            if (char == '\n') {
+                atLineStart = true
+            }
+        }
+
+        // 루프를 모두 통과했지만 들여쓰기를 찾지 못함
+        return false
     }
     
     /**
