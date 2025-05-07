@@ -26,6 +26,9 @@ class JmesPathComponent(private val project: Project) {
     private var lastQuery: String = ""
     private var parentPanel: JsonHelperPanel? = null
 
+    private val jmesPathService =  project.getService(JMESPathService::class.java)
+    private val jsonFormatterService = project.getService(JsonFormatterService::class.java)
+
     init {
         jmesPathField.textEditor.emptyText.text = LocalizationBundle.message("jmesPathPlaceholder")
         setupKeyListener()
@@ -56,28 +59,16 @@ class JmesPathComponent(private val project: Project) {
     }
 
     /**
-     * 텍스트 필드가 비어있는지 확인하고 비어있으면 원본 JSON으로 돌아갑니다.
-     */
-    private fun checkEmptyQuery() {
-        val text = jmesPathField.text.trim()
-        // 텍스트가 비어있고 이전에 쿼리가 있었던 경우에만 원본 JSON으로 돌아감
-        if (text.isEmpty() && lastQuery.isNotEmpty()) {
-            lastQuery = ""
-            ApplicationManager.getApplication().invokeLater({
-                onSearchCallback?.invoke(originalJson, originalJson)
-            }, ModalityState.any())
-        }
-    }
-
-    /**
      * JMESPath 검색 실행
      */
     private fun performSearch(query: String) {
+        val originalJsonTrim = originalJson.trim()
+        val isOriginalJsonEmpty = originalJsonTrim.isBlank() || originalJsonTrim.isEmpty()
         // 검색 전 콜백 호출
         onBeforeSearchCallback?.invoke()
         
         // 원본 JSON이 비어있으면 검색 중단
-        if (originalJson.isEmpty() || !isValidJson(originalJson)) {
+        if (isOriginalJsonEmpty || !isValidJson(originalJson)) {
             LOG.warn("원본 JSON이 비어있거나 유효하지 않습니다.")
             return
         }
@@ -91,8 +82,6 @@ class JmesPathComponent(private val project: Project) {
         // 백그라운드 스레드에서 쿼리 실행
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val jmesPathService = project.getService(JMESPathService::class.java)
-                
                 // 쿼리 유효성 먼저 검사
                 if (!jmesPathService.isValidExpression(query)) {
                     LOG.warn("유효하지 않은 JMESPath 표현식: $query")
@@ -103,14 +92,18 @@ class JmesPathComponent(private val project: Project) {
 
                 // UI 업데이트는 EDT에서 수행
                 ApplicationManager.getApplication().invokeLater({
-                    if (result != null && result.isNotEmpty()) {
-                        // 결과가 있는 경우만 출력 업데이트
-                        onSearchCallback?.invoke(originalJson, result)
-                    } else {
+                    if (result == null) {
+                        return@invokeLater
+                    }
+
+                    if (result.isEmpty()) {
                         // 결과가 null인 경우(쿼리 실패) 아무 작업도 수행하지 않음
                         // 이전 상태를 유지하기 위해 콜백을 호출하지 않음
                         LOG.warn("JMESPath 쿼리 결과가 없습니다: $query")
                     }
+
+                    // 결과가 있는 경우만 출력 업데이트
+                    onSearchCallback?.invoke(originalJson, result)
                 }, ModalityState.any())
             } catch (e: Exception) {
                 LOG.error("JMESPath 쿼리 실행 중 오류 발생", e)
@@ -125,7 +118,6 @@ class JmesPathComponent(private val project: Project) {
      * @return 유효성 여부
      */
     private fun isValidJson(json: String): Boolean {
-        val jsonFormatterService = project.getService(JsonFormatterService::class.java)
         return jsonFormatterService.isValidJson(json)
     }
 
