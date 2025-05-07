@@ -13,14 +13,8 @@ import com.livteam.jsoninja.services.JsonHelperService
 
 class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true) {
     private val tabbedPane = JsonHelperTabbedPane(project)
-    
-    // JMES 쿼리 진행 중인지 여부
     private var isJmesQueryInProgress = false
-
-    // JsonFormatterService 인스턴스 (한 번만 가져와서 재사용)
     private val formatterService = project.getService(JsonFormatterService::class.java)
-    
-    // JsonHelperService 인스턴스
     private val helperService = project.getService(JsonHelperService::class.java)
 
     init {
@@ -62,7 +56,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
      * @param content 초기 내용
      */
     fun addNewTab(content: String = "") {
-        tabbedPane.addNewTab(content)
+        tabbedPane.addNewTabFromPlusTab(content)
     }
 
     /**
@@ -89,8 +83,10 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     private fun processEditorText(processor: (String) -> String) {
         val currentEditor = getCurrentEditor() ?: return
         val jsonText = currentEditor.getText()
+        val trimedJsonText = jsonText.trim()
+        val isJsonTextEmpty = trimedJsonText.isBlank() || trimedJsonText.isEmpty()
 
-        if (jsonText.isBlank()) return
+        if (isJsonTextEmpty) return
 
         val processedJson = processor(jsonText)
 
