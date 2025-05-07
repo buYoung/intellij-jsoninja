@@ -32,6 +32,7 @@ JSON Helper 2 is a JSON processing plugin for JetBrains IDEs. This plugin provid
 - [ ] Set up [deployment token](https://plugins.jetbrains.com/docs/marketplace/plugin-upload.html?from=IJPluginTemplate).
 - [ ] Click the <kbd>Watch</kbd> button on the [IntelliJ Platform Plugin Template][template] to receive notifications about new features and fixes.
 
+<!-- Plugin description -->
 JSONinja is a powerful JSON processing plugin for JetBrains IDEs.  
 It provides advanced tools for JSON data manipulation, allowing you to work efficiently without disrupting your development workflow.
 
@@ -53,6 +54,8 @@ JSONinja is ideal for analyzing REST API responses, editing configuration files,
 
 **The Birth of JSONinja** 😄  
 Inspired by the need for reliable JSON tools! When we faced compatibility challenges with existing solutions after an IDE update, we saw an opportunity to create something new. Our development journey took a bit longer than expected, but we're excited to finally share JSONinja with the community. Sometimes the best tools come from personal necessity!
+<!-- Plugin description end -->
+
 ## Installation
 
 - Using the IDE's built-in plugin system:
