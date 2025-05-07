@@ -2,6 +2,12 @@
 
 # JSONinja Changelog
 
+## [1.0.4] - 2025-05-08
+### Fixed
+- JSON functionality performance improvement [pretty, ugly, escape, unescape]
+- Fixed an issue where sort functionality wasn't working during JSON Prettify operation [sort will be added later]
+- Fixed an issue where non-JSON data could be deleted when JSON functionality was operating (Added Jackson DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+
 ## [1.0.3] - 2025-04-25
 ### Added
 - Change to enforce json pretty on paste

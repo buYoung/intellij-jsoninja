@@ -31,25 +31,12 @@ class JsonFormatterService {
             configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
         }
 
-        private val SORTED_MAPPER = ObjectMapper().apply {
-            // 직렬화 설정
-            configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
+        private val SORTED_MAPPER = DEFAULT_MAPPER.copy().apply {
             configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
-            // 역직렬화 설정
-            configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
-            configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
         }
 
         private val NON_SORTED_MAPPER = ObjectMapper().apply {
-
-            // 직렬화 설정
-            configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
             configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, false)
-            // 역직렬화 설정
-            configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
-            configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
         }
 
         private val prettyPrinterCache = ConcurrentHashMap<Pair<Int, Boolean>, DefaultPrettyPrinter>()
