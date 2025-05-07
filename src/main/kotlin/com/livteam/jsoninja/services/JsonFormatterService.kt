@@ -31,14 +31,25 @@ class JsonFormatterService {
             configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
         }
 
-        private val SORTED_MAPPER = DEFAULT_MAPPER.copy().apply {
-            // 핵심: 추가적인 토큰이 있면 실패하도록 설정
+        private val SORTED_MAPPER = ObjectMapper().apply {
+            // 직렬화 설정
+            configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
             configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+            // 역직렬화 설정
+            configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
+            configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
         }
 
-        private val NON_SORTED_MAPPER = DEFAULT_MAPPER.copy().apply {
-            // 핵심: 추가적인 토큰이 있면 실패하도록 설정
+        private val NON_SORTED_MAPPER = ObjectMapper().apply {
+
+            // 직렬화 설정
+            configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
             configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, false)
+            // 역직렬화 설정
+            configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
+            configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
         }
 
         private val prettyPrinterCache = ConcurrentHashMap<Pair<Int, Boolean>, DefaultPrettyPrinter>()
@@ -130,24 +141,34 @@ class JsonFormatterService {
      * @return 포맷팅된 JSON 문자열, 포맷팅 실패 시 원본 반환
      */
     fun formatJson(json: String, formatState: JsonFormatState): String {
+        var formatState = formatState
         val trimedJson = json.trim()
         val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
         if (isEmptyJson) return json
 
         return try {
             // 포맷 상태에 따라 설정 조정
-            val usesSorting = sortKeys || formatState == JsonFormatState.PRETTIFY_SORTED
-            
+            val usesSorting = if (formatState == JsonFormatState.PRETTIFY_SORTED) true
+            else sortKeys
+
+            if (usesSorting) {
+                formatState = JsonFormatState.PRETTIFY_SORTED
+            }
+
             // 매퍼 설정
             val mapper = getConfiguredMapper(usesSorting)
             val jsonNode = mapper.readTree(json)
-            
+
+
             when (formatState) {
                 JsonFormatState.PRETTIFY,
-                JsonFormatState.PRETTIFY_SORTED,
                 JsonFormatState.PRETTIFY_COMPACT -> {
                     val prettyPrinter = createConfiguredPrettyPrinter(formatState)
                     mapper.writer(prettyPrinter).writeValueAsString(jsonNode)
+                }
+                JsonFormatState.PRETTIFY_SORTED -> {
+                    val prettyPrinter = createConfiguredPrettyPrinter(formatState)
+                    mapper.writer(prettyPrinter).writeValueAsString(mapper.treeToValue(jsonNode, Object::class.java))
                 }
                 JsonFormatState.UGLIFY -> {
                     mapper.writeValueAsString(jsonNode)
