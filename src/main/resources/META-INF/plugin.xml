@@ -13,6 +13,7 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja" icon="/META-INF/pluginIcon.svg"/>
+        <applicationConfigurable id="com.livteam.jsoninja.settings" displayName="JSONinja" instance="com.livteam.jsoninja.settings.JsoninjaSettingsConfigurable"/>
     </extensions>
 
     <applicationListeners>
