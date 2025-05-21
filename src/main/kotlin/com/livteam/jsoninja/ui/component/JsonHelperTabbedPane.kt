@@ -5,7 +5,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
-import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
@@ -128,7 +127,7 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
 
     // 탭 닫기 버튼의 이벤트를 처리하는 내부 클래스
     private inner class TabCloseButtonListener(
-        private val tabContentComponent: JComponent, // 닫을 탭의 메인 컨텐츠 (예: JBScrollPane)
+        private val tabContentComponent: JComponent, // 닫을 탭의 메인 컨텐츠 (예: JPanel)
         private val closeButtonLabel: JLabel
     ) : MouseAdapter() {
         private val originalIcon = closeButtonLabel.icon
@@ -150,7 +149,10 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
                     if (closableTabIndex == -1) return@runWriteAction
 
                     // "+" 탭은 닫을 수 없도록 하고, 실제 JSON 탭이 1개만 남는 경우에도 닫지 않음
-                    val jsonTabCount = components.count { it.name != ADD_NEW_TAB_COMPONENT_NAME && it is JBScrollPane }
+                    val jsonTabCount = components.count {
+                        val nm = it.name
+                        nm != null && nm != ADD_NEW_TAB_COMPONENT_NAME && nm.startsWith(TAB_TITLE_PREFIX)
+                    }
 
                     if (jsonTabCount <= 1 && getComponentAt(closableTabIndex)?.name != ADD_NEW_TAB_COMPONENT_NAME) {
                         // 마지막 남은 실제 탭이거나, 실수로 "+"탭을 닫으려는 경우 방지
@@ -180,7 +182,7 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
     /**
      * 탭 제목과 닫기 버튼을 포함하는 커스텀 탭 컴포넌트를 생성합니다.
      * @param title 탭에 표시될 제목
-     * @param contentComponent 이 탭 컴포넌트와 연결된 메인 컨텐츠 (보통 JBScrollPane)
+     * @param contentComponent 이 탭 컴포넌트와 연결된 메인 컨텐츠 (예: JPanel)
      * @return 생성된 JPanel 형태의 탭 컴포넌트
      */
     private fun createTabComponent(title: String, contentComponent: JComponent): JPanel {
@@ -241,15 +243,12 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
         editorPanel.add(jmesPathComponent.getComponent(), BorderLayout.NORTH)
         editorPanel.add(editor, BorderLayout.CENTER)
 
+        editorPanel.name = title
+
         setupJmesPathComponent(jmesPathComponent, editor, initialJson = content)
 
-        val scrollPane = JBScrollPane(editorPanel).apply {
-            // 스크롤 패널에 이름을 부여하여 탭 컴포넌트와 컨텐츠를 식별할 수 있게 함 (선택 사항)
-            name = title // 또는 고유 ID
-        }
-
-        insertTab(title, null, scrollPane, null, index)
-        setTabComponentAt(index, createTabComponent(title, scrollPane))
+        insertTab(title, null, editorPanel, null, index)
+        setTabComponentAt(index, createTabComponent(title, editorPanel))
 
         return editor
     }
@@ -260,13 +259,12 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
      */
     fun getCurrentEditor(): JsonEditor? {
         val currentSelectedComponent = selectedComponent
-        // "+" 탭이거나, 유효한 JBScrollPane이 아닌 경우 null 반환
-        if (currentSelectedComponent == null || currentSelectedComponent.name == ADD_NEW_TAB_COMPONENT_NAME || currentSelectedComponent !is JBScrollPane) {
+        // "+" 탭이거나, 유효한 패널이 아닌 경우 null 반환
+        if (currentSelectedComponent == null || currentSelectedComponent.name == ADD_NEW_TAB_COMPONENT_NAME || currentSelectedComponent !is JPanel) {
             return null
         }
-        // JBScrollPane -> JPanel (editorPanel) -> JsonEditor 순으로 탐색
-        val editorPanel = currentSelectedComponent.viewport?.view as? JPanel
-        return editorPanel?.components?.find { it is JsonEditor } as? JsonEditor
+        // JPanel(editorPanel) -> JsonEditor 순으로 탐색
+        return currentSelectedComponent.components.find { it is JsonEditor } as? JsonEditor
     }
     
     /**
