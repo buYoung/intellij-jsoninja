@@ -24,6 +24,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import javax.swing.JPanel
 import java.awt.BorderLayout
 import java.awt.datatransfer.DataFlavor
@@ -53,6 +54,7 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
     private val editor: EditorTextField = createJsonEditor()
     private val editorActionManager = EditorActionManager.getInstance()
     private val formatterService = project.getService(JsonFormatterService::class.java)
+    private val settings = JsoninjaSettingsState.getInstance(project)
 
     init {
         initializeUI()
@@ -92,7 +94,9 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
             }
 
             try {
-                val formattedText = formatterService.formatJson(clipboardText, JsonFormatState.PRETTIFY)
+                // Use the paste format setting from settings
+                val pasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
+                val formattedText = formatterService.formatJson(clipboardText, pasteFormatState)
 
                 if (formattedText == clipboardText) {
                     originalHandler?.execute(editor, caret, dataContext)

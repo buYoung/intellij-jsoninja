@@ -9,7 +9,7 @@ class JsonFormatterServiceTest : BasePlatformTestCase() {
 
     override fun setUp() {
         super.setUp()
-        jsonFormatterService = JsonFormatterService()
+        jsonFormatterService = JsonFormatterService(project)
     }
 
     fun testFormatJson() {
