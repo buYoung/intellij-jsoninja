@@ -8,7 +8,7 @@ import com.livteam.jsoninja.actions.*
  * 이 컴포넌트는 툴바에 표시되는 버튼과 메뉴 항목을 관리합니다.
  */
 class JsonHelperActionBar : DefaultActionGroup() {
-    
+
     init {
         isPopup = true
         addActions()

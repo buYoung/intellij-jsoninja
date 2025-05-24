@@ -8,7 +8,9 @@ import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -17,8 +19,9 @@ import java.util.concurrent.ConcurrentHashMap
  * 다양한 JSON 포맷팅 옵션을 설정할 수 있는 기능 제공
  */
 @Service(Service.Level.PROJECT)
-class JsonFormatterService {
+class JsonFormatterService(private val project: Project) {
     private val LOG = logger<JsonFormatterService>()
+    private val settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
 
     companion object {
         // 성능 향상을 위한 싱글톤 ObjectMapper 인스턴스
@@ -45,12 +48,7 @@ class JsonFormatterService {
         private const val DEFAULT_INDENT_SIZE = 2
     }
 
-    // 현재 설정된 들여쓰기 공백 수
-    private var indentSize = DEFAULT_INDENT_SIZE
-    
-    // 정렬 옵션 (키 기준 알파벳 순서로 정렬)
-    private var sortKeys = false
-    
+
     /**
      * 들여쓰기 공백 수 설정
      * 
@@ -59,10 +57,10 @@ class JsonFormatterService {
      */
     fun setIndentSize(size: Int): JsonFormatterService {
         require(size >= 0) { "들여쓰기 공백 수는 0 이상이어야 합니다." }
-        this.indentSize = size
+        settings.indentSize = size
         return this
     }
-    
+
     /**
      * 키 정렬 옵션 설정
      * 
@@ -70,21 +68,24 @@ class JsonFormatterService {
      * @return this (메서드 체이닝 지원)
      */
     fun setSortKeys(sort: Boolean): JsonFormatterService {
-        this.sortKeys = sort
+
+        settings.sortKeys = sort
         return this
     }
-    
+
     /**
      * 모든 설정을 기본값으로 초기화
      * 
      * @return this (메서드 체이닝 지원)
      */
     fun resetSettings(): JsonFormatterService {
-        indentSize = DEFAULT_INDENT_SIZE
-        sortKeys = false
+        settings.indentSize = DEFAULT_INDENT_SIZE
+        settings.sortKeys = false
+        // Consider if JsonFormatState also needs reset here or if it's handled elsewhere.
+        // For now, only reset what's directly managed by JsonFormatterService's original responsibilities.
         return this
     }
-    
+
     /**
      * 현재 설정에 맞는 ObjectMapper 가져오기
      * 
@@ -98,7 +99,7 @@ class JsonFormatterService {
             return NON_SORTED_MAPPER
         }
     }
-    
+
     /**
      * 현재 설정에 맞는 PrettyPrinter 생성
      * 
@@ -106,7 +107,7 @@ class JsonFormatterService {
      * @return 설정된 CustomPrettyPrinter
      */
     private fun createConfiguredPrettyPrinter(formatState: JsonFormatState): DefaultPrettyPrinter {
-        val currentIndentSize = this.indentSize // 현재 서비스의 indentSize 사용
+        val currentIndentSize = settings.indentSize // 현재 서비스의 indentSize 사용
         val useEffectiveCompactArrays = formatState.usesCompactArrays()
         val cacheKey = Pair(currentIndentSize, useEffectiveCompactArrays)
 
@@ -119,7 +120,7 @@ class JsonFormatterService {
             )
         }
     }
-    
+
     /**
      * JSON 문자열을 지정된 포맷 상태에 따라 포맷팅
      * 
@@ -135,10 +136,17 @@ class JsonFormatterService {
 
         return try {
             // 포맷 상태에 따라 설정 조정
-            val usesSorting = if (formatState == JsonFormatState.PRETTIFY_SORTED) true
-            else sortKeys
+            // UGLIFY 상태일 때는 설정에 관계없이 항상 UGLIFY 유지
+            val usesSorting = if (formatState == JsonFormatState.PRETTIFY_SORTED) {
+                true
+            } else if (formatState == JsonFormatState.UGLIFY) {
+                false // UGLIFY 상태에서는 정렬하지 않음
+            } else {
+                settings.sortKeys // 다른 상태에서는 설정값 사용
+            }
 
-            if (usesSorting) {
+            // UGLIFY가 아니고 정렬이 필요한 경우에만 PRETTIFY_SORTED로 변경
+            if (formatState != JsonFormatState.UGLIFY && usesSorting) {
                 formatState = JsonFormatState.PRETTIFY_SORTED
             }
 
@@ -167,7 +175,7 @@ class JsonFormatterService {
             json
         }
     }
-    
+
     /**
      * JSON 문자열이 유효한지 검사
      * 
@@ -178,7 +186,7 @@ class JsonFormatterService {
         val trimedJson = json.trim()
         val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
         if (isEmptyJson) return false
-        
+
         return try {
             DEFAULT_MAPPER.readTree(json)
             true
@@ -187,7 +195,7 @@ class JsonFormatterService {
             false
         }
     }
-    
+
     /**
      * 커스텀 PrettyPrinter 클래스
      * JSON 포맷팅 시 사용되는 들여쓰기 및 출력 형식 정의
@@ -199,24 +207,24 @@ class JsonFormatterService {
         private val indentSize: Int = 2,
         private val useCompactArrays: Boolean = false
     ) : DefaultPrettyPrinter() {
-        
+
         init {
             // 들여쓰기 설정
             val spaces = " ".repeat(indentSize)
             val indenter = DefaultIndenter(spaces, "\n")
-            
+
             // 객체 들여쓰기 설정
             indentObjectsWith(indenter)
-            
+
             // 배열 들여쓰기 설정 (압축 모드가 아닐 경우)
             if (!useCompactArrays) {
                 indentArraysWith(indenter)
             }
-            
+
             // 객체 필드 출력 설정 (콜론 뒤에만 공백)
             _objectFieldValueSeparatorWithSpaces = ": "
         }
-        
+
         /**
          * 배열 값 사이에 구분자 추가
          */
@@ -228,7 +236,7 @@ class JsonFormatterService {
                 super.writeArrayValueSeparator(g)
             }
         }
-        
+
         /**
          * 배열 시작 처리
          */
@@ -238,7 +246,7 @@ class JsonFormatterService {
                 g.writeRaw(' ')
             }
         }
-        
+
         /**
          * 배열 종료 처리
          */
@@ -248,7 +256,7 @@ class JsonFormatterService {
             }
             super.writeEndArray(g, nrOfValues)
         }
-        
+
         /**
          * 복제 메서드 (Jackson 내부에서 사용)
          */
@@ -283,7 +291,7 @@ class JsonFormatterService {
             return json
         }
     }
-    
+
     /**
      * 이스케이프 처리된 JSON 문자열을 한 단계씩 원래대로 되돌립니다.
      * 다중 이스케이프된 경우 한 단계만 언이스케이프합니다.
@@ -426,7 +434,7 @@ class JsonFormatterService {
         // 루프를 모두 통과했지만 들여쓰기를 찾지 못함
         return false
     }
-    
+
     /**
      * 다중 이스케이프된 JSON 문자열을 완전히 언이스케이프 처리합니다.
      * 더 이상 이스케이프 문자가 없을 때까지 반복적으로 언이스케이프를 수행합니다.
@@ -437,21 +445,21 @@ class JsonFormatterService {
     fun fullyUnescapeJson(json: String): String {
         var result = json
         var previousResult: String
-        
+
         // 이스케이프 문자가 더 이상 없을 때까지 반복
         do {
             previousResult = result
             result = unescapeJson(result)
-            
+
             // 변화가 없으면 더 이상 언이스케이프할 것이 없는 것
             if (result == previousResult) {
                 break
             }
         } while (containsEscapeCharacters(result))
-        
+
         return result
     }
-    
+
     /**
      * 문자열에 이스케이프 문자가 포함되어 있는지 확인합니다.
      * 
