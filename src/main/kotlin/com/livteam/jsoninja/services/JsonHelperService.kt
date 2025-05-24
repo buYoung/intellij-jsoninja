@@ -3,6 +3,7 @@ package com.livteam.jsoninja.services
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.settings.JsoninjaSettingsState
 
 /**
  * JSON Helper 서비스
@@ -10,15 +11,15 @@ import com.livteam.jsoninja.model.JsonFormatState
  */
 @Service(Service.Level.PROJECT)
 class JsonHelperService(private val project: Project) {
-    // JSON 포맷 상태
-    private var jsonFormatState = JsonFormatState.PRETTIFY
+
+    private val settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
 
     /**
      * JSON 포맷 상태 설정
      * @param state 설정할 JSON 포맷 상태
      */
     fun setJsonFormatState(state: JsonFormatState) {
-        jsonFormatState = state
+        settings.jsonFormatState = state.name // Store the enum's name as a String
     }
 
     /**
@@ -26,6 +27,6 @@ class JsonHelperService(private val project: Project) {
      * @return 현재 JSON 포맷 상태
      */
     fun getJsonFormatState(): JsonFormatState {
-        return jsonFormatState
+        return JsonFormatState.fromString(settings.jsonFormatState) // Convert String back to enum
     }
 }
