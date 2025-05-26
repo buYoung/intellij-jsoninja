@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.livteam.jsoninja</id>
     <name>JSONinja</name>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
     <vendor email="leebu18@gmail.com">BuYoung</vendor>
 
     <depends>com.intellij.modules.lang</depends>
@@ -12,7 +12,8 @@
     <resource-bundle>messages.LocalizationBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja" icon="/META-INF/pluginIcon.svg"/>
+        <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja"
+                    icon="/META-INF/pluginIcon.svg"/>
 
         <projectService serviceImplementation="com.livteam.jsoninja.settings.JsoninjaSettingsState"/>
 
@@ -25,7 +26,9 @@
     </extensions>
 
     <applicationListeners>
-        <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
-        <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener" topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+        <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener"
+                  topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+        <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
 </idea-plugin>
