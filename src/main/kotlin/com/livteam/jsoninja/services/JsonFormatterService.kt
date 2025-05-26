@@ -132,6 +132,7 @@ class JsonFormatterService(private val project: Project) {
         var formatState = formatState
         val trimedJson = json.trim()
         val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
+
         if (isEmptyJson) return json
 
         return try {
