@@ -39,13 +39,15 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
     private val plusTabMouseAdapter = object : MouseAdapter() {
         override fun mousePressed(e: MouseEvent) {
             val selectedComponent = this@JsonHelperTabbedPane.selectedComponent
-            if (selectedComponent?.name == ADD_NEW_TAB_COMPONENT_NAME) {
-                ApplicationManager.getApplication().invokeLater({
-                    runWriteAction {
-                        addNewTabFromPlusTab()
-                    }
-                }, ModalityState.defaultModalityState())
+            if (selectedComponent?.name != ADD_NEW_TAB_COMPONENT_NAME) {
+                return;
             }
+
+            ApplicationManager.getApplication().invokeLater({
+                runWriteAction {
+                    addNewTabFromPlusTab()
+                }
+            }, ModalityState.defaultModalityState())
         }
     }
 
@@ -57,19 +59,19 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
         // TabbedPane에 "+" 탭 기능 마우스 리스너 추가
         addMouseListener(plusTabMouseAdapter)
     }
-    
+
     /**
      * 초기 탭을 설정합니다.
      */
     fun setupInitialTabs() {
         ApplicationManager.getApplication().invokeLater({
             runWriteAction {
-                addNewTabFromPlusTab()
+                addNewTabInternal(0)
                 addPlusTab()
             }
         }, ModalityState.defaultModalityState())
     }
-    
+
     /**
      * + 버튼 탭을 추가합니다.
      */
@@ -88,7 +90,7 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
             it.name.startsWith(TAB_TITLE_PREFIX)
         }
 
-        val currentIndex =  if (latestJsonEditor != null) {
+        val currentIndex = if (latestJsonEditor != null) {
             indexOfComponent(latestJsonEditor)
         } else {
             // 새 탭을 찾지 못한 경우 json editor의 다음 탭이므로 1로 설정
@@ -97,7 +99,7 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
 
         setToolTipTextAt(currentIndex, LocalizationBundle.message("addTab"))
     }
-    
+
     /**
      * + 탭을 클릭했을 때 새 탭을 추가하는 로직
      */
@@ -107,28 +109,17 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
         if (plusTabIndex != -1) {
             // 새 탭을 "+" 탭 바로 앞에 추가하고 선택
             addNewTabInternal(plusTabIndex, content)
-            selectedIndex = indexOfComponent(components.findLast { it.name.startsWith(TAB_TITLE_PREFIX) } ?: return)
+            // 새로 추가된 탭을 선택하는 것은 addNewTabInternal에서 처리
         } else {
             // "+" 탭을 찾지 못한 경우 (예외적 상황), 그냥 새 탭을 마지막에 추가
             addNewTabInternal(tabCount, content)
-
-            val latestJsonEditor = components.findLast {
-                if (it.name == null) return@findLast false
-                if (it.name.isEmpty()) return@findLast false
-
-                it.name.startsWith(TAB_TITLE_PREFIX)
-            }
-            if (latestJsonEditor != null) {
-                selectedIndex = indexOfComponent(latestJsonEditor)
-            } else {
-                selectedIndex = 0
-            }
+            // 새로 추가된 탭을 선택하는 것은 addNewTabInternal에서 처리
         }
     }
 
     // 탭 닫기 버튼의 이벤트를 처리하는 내부 클래스
     private inner class TabCloseButtonListener(
-        private val tabContentComponent: JComponent, // 닫을 탭의 메인 컨텐츠 (예: JBScrollPane)
+        private val tabContentComponent: JComponent, // 닫을 탭의 메인 컨텐츠 (tabContentPanel)
         private val closeButtonLabel: JLabel
     ) : MouseAdapter() {
         private val originalIcon = closeButtonLabel.icon
@@ -150,28 +141,31 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
                     if (closableTabIndex == -1) return@runWriteAction
 
                     // "+" 탭은 닫을 수 없도록 하고, 실제 JSON 탭이 1개만 남는 경우에도 닫지 않음
-                    val jsonTabCount = components.count { it.name != ADD_NEW_TAB_COMPONENT_NAME && it is JBScrollPane }
+                    val jsonTabCount = components.count {
+                        it.name != ADD_NEW_TAB_COMPONENT_NAME && it.name?.startsWith(TAB_TITLE_PREFIX) == true
+                    }
 
                     if (jsonTabCount <= 1 && getComponentAt(closableTabIndex)?.name != ADD_NEW_TAB_COMPONENT_NAME) {
                         // 마지막 남은 실제 탭이거나, 실수로 "+"탭을 닫으려는 경우 방지
-                        if (getComponentAt(closableTabIndex)?.name == ADD_NEW_TAB_COMPONENT_NAME) return@runWriteAction // "+" 탭은 닫지 않음
-                        return@runWriteAction // 마지막 JSON 탭은 닫지 않음
+                        return@runWriteAction
                     }
 
+                    // 닫을 탭의 이전 탭 인덱스 (선택할 탭)
+                    val nextSelectedIndex = if (closableTabIndex > 0) closableTabIndex - 1 else 0
+
+                    // 탭 제거
                     removeTabAt(closableTabIndex)
 
-                    // 탭 제거 후 선택 로직:
-                    // 만약 제거된 탭의 인덱스에 "+" 탭이 위치하게 되면 (즉, "+" 탭 바로 앞 탭이 닫힌 경우)
-                    // 그리고 그 이전 탭이 존재하면 그 이전 탭을 선택한다.
-                    // 그렇지 않으면 JBTabbedPane의 기본 동작 또는 ChangeListener가 선택을 처리.
-                    if (closableTabIndex < tabCount && getComponentAt(closableTabIndex)?.name == ADD_NEW_TAB_COMPONENT_NAME) {
-                        if (closableTabIndex > 0) {
-                            selectedIndex = closableTabIndex - 1
+                    // 닫은 후 적절한 탭 선택
+                    if (tabCount > 0) {
+                        // 이전 탭 또는 첫 번째 탭 선택
+                        if (nextSelectedIndex < tabCount) {
+                            selectedIndex = nextSelectedIndex
+                        } else {
+                            // 마지막 탭이 닫혔을 경우 새로운 마지막 탭 선택
+                            selectedIndex = tabCount - 1
                         }
-                        // closableTabIndex가 0이고, 해당 위치에 ADD_NEW_TAB_COMPONENT_NAME이 있다면,
-                        // 이는 모든 실제 탭이 닫혔고 "+" 탭만 남았음을 의미. 이 경우 "+" 탭이 선택된 상태로 둔다.
                     }
-                    // 다른 경우에는 selectedIndex가 자동으로 조정되거나 changeListener에 의해 처리됨.
                 }
             }, ModalityState.defaultModalityState())
         }
@@ -180,7 +174,7 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
     /**
      * 탭 제목과 닫기 버튼을 포함하는 커스텀 탭 컴포넌트를 생성합니다.
      * @param title 탭에 표시될 제목
-     * @param contentComponent 이 탭 컴포넌트와 연결된 메인 컨텐츠 (보통 JBScrollPane)
+     * @param contentComponent 이 탭 컴포넌트와 연결된 메인 컨텐츠 (보통 JPanel)
      * @return 생성된 JPanel 형태의 탭 컴포넌트
      */
     private fun createTabComponent(title: String, contentComponent: JComponent): JPanel {
@@ -236,20 +230,27 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
 
         val title = "$TAB_TITLE_PREFIX${tabCounter++}"
 
-        val editorPanel = JPanel(BorderLayout())
+        // 1. JmesPathComponent와 Editor를 담을 새로운 패널 생성
+        val tabContentPanel = JPanel(BorderLayout()).apply {
+            // 중요: 탭 컨텐츠 패널에 고유한 이름 부여
+            name = title // 탭 제목을 패널 이름으로 사용하여 식별 가능하게 함
+        }
+
+        // 2. JmesPathComponent 생성 및 상단에 추가
         val jmesPathComponent = JmesPathComponent(project)
-        editorPanel.add(jmesPathComponent.getComponent(), BorderLayout.NORTH)
-        editorPanel.add(editor, BorderLayout.CENTER)
+        tabContentPanel.add(jmesPathComponent.getComponent(), BorderLayout.NORTH)
+
+        // 3. JsonEditor를 중앙에 직접 추가 (JBScrollPane 제거)
+        tabContentPanel.add(editor, BorderLayout.CENTER)
 
         setupJmesPathComponent(jmesPathComponent, editor, initialJson = content)
 
-        val scrollPane = JBScrollPane(editorPanel).apply {
-            // 스크롤 패널에 이름을 부여하여 탭 컴포넌트와 컨텐츠를 식별할 수 있게 함 (선택 사항)
-            name = title // 또는 고유 ID
-        }
+        // 4. 수정된 tabContentPanel을 탭에 추가
+        insertTab(title, null, tabContentPanel, null, index)
+        setTabComponentAt(index, createTabComponent(title, tabContentPanel))
 
-        insertTab(title, null, scrollPane, null, index)
-        setTabComponentAt(index, createTabComponent(title, scrollPane))
+        // 5. 새로 추가된 탭을 선택
+        selectedIndex = index
 
         return editor
     }
@@ -260,15 +261,21 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
      */
     fun getCurrentEditor(): JsonEditor? {
         val currentSelectedComponent = selectedComponent
-        // "+" 탭이거나, 유효한 JBScrollPane이 아닌 경우 null 반환
-        if (currentSelectedComponent == null || currentSelectedComponent.name == ADD_NEW_TAB_COMPONENT_NAME || currentSelectedComponent !is JBScrollPane) {
+        // "+" 탭이거나, null인 경우
+        if (currentSelectedComponent == null || currentSelectedComponent.name == ADD_NEW_TAB_COMPONENT_NAME) {
             return null
         }
-        // JBScrollPane -> JPanel (editorPanel) -> JsonEditor 순으로 탐색
-        val editorPanel = currentSelectedComponent.viewport?.view as? JPanel
-        return editorPanel?.components?.find { it is JsonEditor } as? JsonEditor
+
+        // currentSelectedComponent는 이제 tabContentPanel (JPanel)임
+        if (currentSelectedComponent is JPanel) {
+            // tabContentPanel 내에서 JsonEditor를 찾음
+            val editor = currentSelectedComponent.components.find { it is JsonEditor } as? JsonEditor
+            // JsonEditor를 반환
+            return editor
+        }
+        return null // JPanel이 아닌 경우 (예상치 못한 상황)
     }
-    
+
     /**
      * 탭 선택 리스너 설정
      * @param listener 선택된 탭의 에디터를 매개변수로 받는 함수
@@ -276,7 +283,7 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
     fun setOnTabSelectedListener(listener: (JsonEditor?) -> Unit) {
         this.onTabSelectedListener = listener
     }
-    
+
     /**
      * 탭 내용 변경 리스너 설정
      * @param listener 변경된 내용을 매개변수로 받는 함수
@@ -291,7 +298,11 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
      * @param editor 연결된 JsonEditor 인스턴스
      * @param initialJson JMESPath 컴포넌트의 초기 원본 JSON (선택 사항)
      */
-    private fun setupJmesPathComponent(jmesPathComponent: JmesPathComponent, editor: JsonEditor, initialJson: String? = null) {
+    private fun setupJmesPathComponent(
+        jmesPathComponent: JmesPathComponent,
+        editor: JsonEditor,
+        initialJson: String? = null
+    ) {
         // 초기 원본 JSON 설정 (탭 생성 시 내용이 있다면)
         initialJson?.takeIf { it.isNotBlank() }?.let {
             jmesPathComponent.setOriginalJson(it)

@@ -1,26 +1,27 @@
 package com.livteam.jsoninja.ui.component
 
-import com.intellij.json.JsonLanguage
+import com.intellij.codeInsight.hints.settings.language.createEditor
+import com.intellij.json.JsonFileType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.actionSystem.DataContext
-import com.intellij.ui.EditorTextField
-import com.intellij.ui.LanguageTextField
-import com.intellij.ide.PasteProvider
-import com.intellij.openapi.actionSystem.IdeActions
-import com.intellij.openapi.editor.Caret
-import com.intellij.openapi.editor.Document
-import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.EditorModificationUtil
 import com.intellij.openapi.editor.actionSystem.EditorActionHandler
 import com.intellij.openapi.editor.actionSystem.EditorActionManager
+import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.ide.PasteProvider
+import com.intellij.openapi.editor.Caret
+import com.intellij.ui.EditorTextField
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
@@ -31,7 +32,7 @@ import java.awt.datatransfer.DataFlavor
 
 /**
  * JSON 편집을 위한 커스텀 에디터 컴포넌트
- * IntelliJ의 LanguageTextField를 활용하여 JSON 문법 지원 및 편집 기능을 제공
+ * IntelliJ의 EditorTextField를 활용하여 JSON 문법 지원 및 편집 기능을 제공
  */
 class JsonEditor(private val project: Project) : JPanel(), Disposable {
     companion object {
@@ -129,7 +130,11 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
         }
 
         override fun isEnabledForCaret(editor: Editor, caret: Caret, dataContext: DataContext?): Boolean {
-            return originalHandler?.isEnabled(editor, caret, dataContext) ?: super.isEnabledForCaret(editor, caret, dataContext)
+            return originalHandler?.isEnabled(editor, caret, dataContext) ?: super.isEnabledForCaret(
+                editor,
+                caret,
+                dataContext
+            )
         }
     }
 
@@ -173,17 +178,24 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
         }
     }
 
-    private fun createJsonEditor(): LanguageTextField =
-        LanguageTextField(
-            JsonLanguage.INSTANCE,
-            project,
-            EMPTY_TEXT
-        ).apply {
-            configureEditorSettings()
-            setOneLineMode(false)
+    private fun createJsonEditor(): EditorTextField {
+        val document = EditorFactory.getInstance().createDocument(EMPTY_TEXT)
+        return EditorTextField(document, project, JsonFileType.INSTANCE, false, false).apply {
+
+            addSettingsProvider { editor ->
+                editor.settings.applyEditorSettings()
+                editor.colorsScheme = EditorColorsManager.getInstance().globalScheme
+                editor.backgroundColor = EditorColorsManager.getInstance().globalScheme.defaultBackground
+
+                editor.setHorizontalScrollbarVisible(true)
+                editor.setVerticalScrollbarVisible(true)
+            }
             setPlaceholder(PLACEHOLDER_TEXT)
             putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
+
         }
+    }
+
 
     override fun addNotify() {
         super.addNotify()
@@ -205,21 +217,12 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
         super.removeNotify()
     }
 
-
-    private fun LanguageTextField.configureEditorSettings() {
-        addSettingsProvider { editor ->
-            editor.settings.applyEditorSettings()
-            editor.colorsScheme = EditorColorsManager.getInstance().globalScheme
-            editor.backgroundColor = EditorColorsManager.getInstance().globalScheme.defaultBackground
-        }
-    }
-
     private fun EditorSettings.applyEditorSettings() {
         isLineNumbersShown = true
         isWhitespacesShown = true
         isCaretRowShown = true
         isRightMarginShown = true
-        isUseSoftWraps = true
+        isUseSoftWraps = false
         isIndentGuidesShown = true
         isFoldingOutlineShown = true
     }
