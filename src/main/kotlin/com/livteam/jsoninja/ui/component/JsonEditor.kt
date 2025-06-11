@@ -1,27 +1,31 @@
 package com.livteam.jsoninja.ui.component
 
-import com.intellij.codeInsight.hints.settings.language.createEditor
 import com.intellij.json.JsonFileType
+import com.intellij.ide.highlighter.HighlighterFactory
+import com.intellij.json.JsonLanguage
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
-import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.actionSystem.EditorActionHandler
 import com.intellij.openapi.editor.actionSystem.EditorActionManager
-import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.IdeActions
-import com.intellij.ide.PasteProvider
 import com.intellij.openapi.editor.Caret
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiFileFactory
 import com.intellij.ui.EditorTextField
+import com.intellij.util.LocalTimeCounter
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
@@ -31,10 +35,33 @@ import java.awt.BorderLayout
 import java.awt.datatransfer.DataFlavor
 
 /**
+ * JSON Document 생성을 위한 인터페이스
+ */
+interface JsonDocumentCreator {
+    fun createDocument(value: String, project: Project?): Document
+}
+
+/**
+ * PsiFile 기반의 JSON Document 생성 구현체
+ */
+class SimpleJsonDocumentCreator : JsonDocumentCreator {
+    override fun createDocument(value: String, project: Project?): Document {
+        return JsonEditor.createJsonDocument(value, project, this)
+    }
+
+    fun customizePsiFile(file: PsiFile) {
+        // 하위 클래스에서 필요시 구현
+    }
+}
+
+/**
  * JSON 편집을 위한 커스텀 에디터 컴포넌트
  * IntelliJ의 EditorTextField를 활용하여 JSON 문법 지원 및 편집 기능을 제공
  */
-class JsonEditor(private val project: Project) : JPanel(), Disposable {
+class JsonEditor(
+    private val project: Project,
+    private val documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
+) : JPanel(), Disposable {
     companion object {
         private const val EMPTY_TEXT = ""
 
@@ -42,6 +69,41 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
          * 국제화를 지원하기위해 const val 대신 var로 사용
          */
         private var PLACEHOLDER_TEXT = LocalizationBundle.message("enterJsonHere")
+
+        /**
+         * PsiFile 기반 JSON Document 생성
+         */
+        fun createJsonDocument(
+            value: String,
+            project: Project?,
+            documentCreator: SimpleJsonDocumentCreator
+        ): Document {
+            val language = JsonLanguage.INSTANCE
+            val fileType = language.associatedFileType ?: JsonFileType.INSTANCE
+
+            val notNullProject = project ?: ProjectManager.getInstance().defaultProject
+            val factory = PsiFileFactory.getInstance(notNullProject)
+
+            val stamp = LocalTimeCounter.currentTime()
+            val psiFile = ReadAction.compute<PsiFile, RuntimeException> {
+                factory.createFileFromText(
+                    "Dummy." + fileType.defaultExtension,
+                    fileType,
+                    value,
+                    stamp,
+                    true,
+                    false
+                )
+            }
+
+            documentCreator.customizePsiFile(psiFile)
+
+            val document = ReadAction.compute<Document?, RuntimeException> {
+                PsiDocumentManager.getInstance(notNullProject).getDocument(psiFile)
+            }
+
+            return document ?: EditorFactory.getInstance().createDocument(value)
+        }
     }
 
     private var originalJson: String = ""
@@ -179,14 +241,18 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
     }
 
     private fun createJsonEditor(): EditorTextField {
-        val document = EditorFactory.getInstance().createDocument(EMPTY_TEXT)
-        return EditorTextField(document, project, JsonFileType.INSTANCE, false, false).apply {
+        val document = documentCreator.createDocument(EMPTY_TEXT, project)
+        val fileType = JsonLanguage.INSTANCE.associatedFileType ?: JsonFileType.INSTANCE
+
+        return EditorTextField(document, project, fileType, false, false).apply {
 
             addSettingsProvider { editor ->
                 editor.settings.applyEditorSettings()
                 editor.colorsScheme = EditorColorsManager.getInstance().globalScheme
                 editor.backgroundColor = EditorColorsManager.getInstance().globalScheme.defaultBackground
+                editor.highlighter = HighlighterFactory.createHighlighter(project, fileType)
 
+                editor.isEmbeddedIntoDialogWrapper = true
                 editor.setHorizontalScrollbarVisible(true)
                 editor.setVerticalScrollbarVisible(true)
             }
@@ -222,7 +288,7 @@ class JsonEditor(private val project: Project) : JPanel(), Disposable {
         isWhitespacesShown = true
         isCaretRowShown = true
         isRightMarginShown = true
-        isUseSoftWraps = false
+        isUseSoftWraps = true
         isIndentGuidesShown = true
         isFoldingOutlineShown = true
     }
