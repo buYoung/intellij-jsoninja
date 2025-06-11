@@ -1,4 +1,4 @@
-package com.livteam.jsonhelper2.services
+package com.livteam.jsoninja.services
 
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.livteam.jsoninja.services.JMESPathService
