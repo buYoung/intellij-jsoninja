@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.livteam.jsoninja</id>
     <name>JSONinja</name>
-    <version>1.0.5</version>
+    <version>1.0.6</version>
     <vendor email="leebu18@gmail.com">BuYoung</vendor>
 
     <depends>com.intellij.modules.lang</depends>
@@ -14,8 +14,6 @@
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja"
                     icon="/META-INF/pluginIcon.svg"/>
-
-        <projectService serviceImplementation="com.livteam.jsoninja.settings.JsoninjaSettingsState"/>
 
         <projectConfigurable
                 instance="com.livteam.jsoninja.settings.JsoninjaSettingsConfigurable"
