@@ -11,7 +11,7 @@
 ### 1.2 프로젝트 설정
 1. 프로젝트 클론:
    ```bash
-   git clone https://github.com/buYoung/json-helper2.git
+   git clone https://github.com/buYoung/intellij-jsoninja.git
    ```
 2. IntelliJ IDEA에서 프로젝트 열기
 3. Gradle 동기화 실행
@@ -19,7 +19,7 @@
 ## 2. 프로젝트 구조
 
 ```
-json-helper2/
+intellij-jsoninja/
 ├── src/
 │   ├── main/
 │   │   ├── kotlin/           # 소스 코드
