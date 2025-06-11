@@ -1,6 +1,6 @@
 # JSON Helper 2
 
-![빌드 상태](https://github.com/buYoung/json-helper2/workflows/Build/badge.svg)
+![빌드 상태](https://github.com/buYoung/intellij-jsoninja/workflows/Build/badge.svg)
 [![버전](https://img.shields.io/jetbrains/plugin/v/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
 [![다운로드](https://img.shields.io/jetbrains/plugin/d/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
 
@@ -59,7 +59,7 @@ JSONinja는 REST API 응답 분석, 구성 파일 편집, 데이터 변환 작�
 
 - IDE 내장 플러그인 시스템 사용:
   
-  <kbd>설정/환경설정</kbd> > <kbd>플러그인</kbd> > <kbd>마켓플레이스</kbd> > <kbd>"json-helper2" 검색</kbd> >
+  <kbd>설정/환경설정</kbd> > <kbd>플러그인</kbd> > <kbd>마켓플레이스</kbd> > <kbd>"jsoninja" 검색</kbd> >
   <kbd>설치</kbd>
   
 - JetBrains 마켓플레이스 사용:

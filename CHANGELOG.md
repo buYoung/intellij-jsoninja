@@ -2,6 +2,17 @@
 
 # JSONinja Changelog
 
+## [1.0.6] - 2025-06-11
+
+### Fixed
+
+- Fixed Json Document not being activated after JsonEditor refactoring
+- Fixed Json Highlighter not working properly in the refactored JsonEditor
+
+### Changed
+
+- Added support for IntelliJ IDEA 2025.2
+
 ## [1.0.5] - 2025-05-26
 
 ### Fixed
