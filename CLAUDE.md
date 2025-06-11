@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-JSON Helper 2 (JSONinja) is an IntelliJ IDEA plugin for JSON processing. It's built using:
+JSON Ninja (JSONinja) is an IntelliJ IDEA plugin for JSON processing. It's built using:
 - Kotlin
 - IntelliJ Platform SDK
 - Gradle with IntelliJ Platform Gradle Plugin

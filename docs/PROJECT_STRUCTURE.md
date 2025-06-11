@@ -1,4 +1,4 @@
-# JSON Helper 2 프로젝트 구조
+# JSON Ninja 프로젝트 구조
 
 ## 기본 디렉토리 구조
 

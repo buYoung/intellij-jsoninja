@@ -1,4 +1,4 @@
-# JSON Helper 2 개발 가이드
+# JSON Ninja 개발 가이드
 
 ## 1. 개발 환경 설정
 

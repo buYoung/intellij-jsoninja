@@ -1,4 +1,4 @@
-# JSON Helper 2
+# JSON Ninja
 
 ![빌드 상태](https://github.com/buYoung/intellij-jsoninja/workflows/Build/badge.svg)
 [![버전](https://img.shields.io/jetbrains/plugin/v/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
@@ -7,7 +7,7 @@
 
 ## 소개
 
-JSON Helper 2는 JetBrains IDE를 위한 JSON 처리 플러그인입니다. 이 플러그인은 개발자들이 JSON 데이터를 더 쉽게 다룰 수 있도록 다음과 같은 핵심 기능들을 제공합니다:
+JSON Ninja는 JetBrains IDE를 위한 JSON 처리 플러그인입니다. 이 플러그인은 개발자들이 JSON 데이터를 더 쉽게 다룰 수 있도록 다음과 같은 핵심 기능들을 제공합니다:
 
 ### 주요 기능
 

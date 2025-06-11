@@ -1,4 +1,4 @@
-# JSON Helper 2
+# JSON Ninja
 
 ![Build Status](https://github.com/buYoung/intellij-jsoninja/workflows/Build/badge.svg)
 [![Version](https://img.shields.io/jetbrains/plugin/v/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
@@ -7,7 +7,7 @@
 
 ## Introduction
 
-JSON Helper 2 is a JSON processing plugin for JetBrains IDEs. This plugin provides the following core features to help developers handle JSON data more easily:
+JSON Ninja is a JSON processing plugin for JetBrains IDEs. This plugin provides the following core features to help developers handle JSON data more easily:
 
 ### Key Features
 
