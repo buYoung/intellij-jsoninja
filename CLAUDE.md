@@ -114,3 +114,15 @@ JsoninjaToolWindowFactory
 
 ### Package Structure
 All code (both main and test) is under the `com.livteam.jsoninja` package.
+
+## Important Notes
+
+### Development Process
+- **IMPORTANT**: When asked to implement features or fix issues, always explain your plan first and wait for confirmation before writing code
+- Explicitly describe what changes you'll make and why
+- Only proceed with implementation after the user confirms the plan looks good
+
+### Code Style
+- Follow existing patterns in neighboring files
+- Check imports and existing libraries before adding new dependencies
+- Prefer editing existing files over creating new ones
