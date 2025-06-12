@@ -1,24 +1,18 @@
 package com.livteam.jsoninja.ui.dialog
 
-import com.intellij.diff.DiffManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.command.WriteCommandAction
-import com.intellij.openapi.fileChooser.FileChooser
-import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
-import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
-import com.intellij.ui.JBColor
-import com.intellij.ui.components.JBCheckBox
-import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonDiffService
-import com.livteam.jsoninja.ui.component.JsonEditor
-import java.awt.*
-import java.awt.datatransfer.DataFlavor
-import java.io.File
-import javax.swing.*
+import com.livteam.jsoninja.ui.dialog.component.*
+import java.awt.BorderLayout
+import java.awt.Dimension
+import javax.swing.JComponent
+import javax.swing.JPanel
+import javax.swing.JSplitPane
 
 class JsonDiffDialog(
     private val project: Project,
@@ -26,10 +20,17 @@ class JsonDiffDialog(
     private val currentJson: String? = null
 ) : DialogWrapper(project), Disposable {
 
-    private lateinit var leftEditor: JsonEditor
-    private lateinit var rightEditor: JsonEditor
-    private lateinit var semanticCheckbox: JBCheckBox
-    private lateinit var diffViewerPanel: JPanel
+    companion object {
+        private const val DIALOG_WIDTH = 800
+        private const val DIALOG_HEIGHT = 1200
+        private const val SPLIT_DIVIDER_LOCATION = 400
+        private const val SPLIT_RESIZE_WEIGHT = 0.4
+    }
+
+    private lateinit var editorPanel: JsonDiffEditorPanel
+    private lateinit var optionsPanel: JsonDiffOptionsPanel
+    private lateinit var diffViewerPanel: JsonDiffViewerPanel
+    private lateinit var actionHandler: DefaultEditorActionHandler
 
     init {
         title = LocalizationBundle.message("dialog.json.diff.title")
@@ -37,7 +38,7 @@ class JsonDiffDialog(
         init()
 
         // Set dialog size
-        setSize(800, 1200)
+        setSize(DIALOG_WIDTH, DIALOG_HEIGHT)
 
         // Register for disposal
         Disposer.register(myDisposable, this)
@@ -46,227 +47,116 @@ class JsonDiffDialog(
     override fun createCenterPanel(): JComponent {
         val mainPanel = JPanel(BorderLayout())
 
+        // Initialize components
+        initializeComponents()
+
         // Create editors container
         val editorsContainer = JPanel(BorderLayout())
+        editorsContainer.add(editorPanel, BorderLayout.CENTER)
+        editorsContainer.add(optionsPanel, BorderLayout.SOUTH)
 
-        // Create editors panel with horizontal split
-        val editorsPanel = JPanel(GridLayout(1, 2, 10, 0))
-        editorsPanel.border = JBUI.Borders.empty(10)
-
-        // Initialize editors
-        leftEditor = createEditor()
-        rightEditor = createEditor()
-
-        // Add editor panels
-        editorsPanel.add(createEditorPanel(leftEditor, LocalizationBundle.message("dialog.json.diff.left"), true))
-        editorsPanel.add(createEditorPanel(rightEditor, LocalizationBundle.message("dialog.json.diff.right"), false))
-
-        editorsContainer.add(editorsPanel, BorderLayout.CENTER)
-
-        // Options panel at the bottom of editors
-        editorsContainer.add(createOptionsPanel(), BorderLayout.SOUTH)
-
-        // Create split pane for editors and diff viewer
-        val splitPane = JSplitPane(JSplitPane.VERTICAL_SPLIT, true)
-        splitPane.topComponent = editorsContainer
-
-        // Diff viewer panel
-        diffViewerPanel = JPanel(BorderLayout())
-        diffViewerPanel.border = BorderFactory.createTitledBorder(LocalizationBundle.message("dialog.json.diff.result"))
-        diffViewerPanel.minimumSize = Dimension(800, 200)
-        splitPane.bottomComponent = diffViewerPanel
-
-        splitPane.dividerLocation = 400
-        splitPane.resizeWeight = 0.4
-
+        // Create split pane
+        val splitPane = createSplitPane(editorsContainer)
         mainPanel.add(splitPane, BorderLayout.CENTER)
 
-        // Add document listeners for real-time diff
-        addDocumentListeners()
-
-        // Set initial JSON if provided
-        currentJson?.let {
-            leftEditor.setText(it)
-        }
+        // Setup listeners
+        setupListeners()
 
         // Initial diff if both have content
-        if (leftEditor.getText().isNotBlank() && rightEditor.getText().isNotBlank()) {
+        if (editorPanel.getLeftContent().isNotBlank() && editorPanel.getRightContent().isNotBlank()) {
             updateDiff()
         }
 
         return mainPanel
     }
 
-    private fun createEditor(): JsonEditor {
-        return JsonEditor(project).apply {
-            preferredSize = Dimension(400, 300)
-        }
+    private fun initializeComponents() {
+        // Initialize editor panel
+        editorPanel = JsonDiffEditorPanel(
+            project,
+            initialLeftContent = currentJson
+        )
+
+        // Initialize action handler with editorPanel reference
+        actionHandler = DefaultEditorActionHandler(project, editorPanel)
+        editorPanel.addActionHandler(actionHandler)
+
+        // Initialize options panel
+        optionsPanel = JsonDiffOptionsPanel()
+
+        // Initialize diff viewer panel
+        diffViewerPanel = JsonDiffViewerPanel(project, this)
     }
 
-    private fun createEditorPanel(editor: JsonEditor, title: String, isLeft: Boolean): JComponent {
-        val panel = JPanel(BorderLayout())
-
-        // Create header panel with title and buttons
-        val headerPanel = JPanel(BorderLayout())
-        headerPanel.background = JBColor.PanelBackground
-        headerPanel.border = JBUI.Borders.empty(5, 10)
-
-        // Title
-        val titleLabel = JLabel(title)
-        titleLabel.font = titleLabel.font.deriveFont(Font.BOLD, 14f)
-        headerPanel.add(titleLabel, BorderLayout.WEST)
-
-        // Button panel
-        val buttonPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 5, 0))
-        buttonPanel.isOpaque = false
-
-        if (!isLeft) {
-            buttonPanel.add(createButton(LocalizationBundle.message("openJsonFile")) {
-                loadFromFile(editor)
-            })
-            buttonPanel.add(createButton(LocalizationBundle.message("dialog.json.diff.paste")) {
-                pasteFromClipboard(editor)
-            })
-        }
-        buttonPanel.add(createButton(LocalizationBundle.message("dialog.json.diff.clear")) {
-            editor.setText("")
-        })
-
-        headerPanel.add(buttonPanel, BorderLayout.EAST)
-
-        // Add components to panel
-        panel.add(headerPanel, BorderLayout.NORTH)
-        panel.add(editor, BorderLayout.CENTER)
-        panel.border = JBUI.Borders.empty()
-
-        return panel
+    private fun createSplitPane(editorsContainer: JPanel): JSplitPane {
+        val splitPane = JSplitPane(JSplitPane.VERTICAL_SPLIT, true)
+        splitPane.topComponent = editorsContainer
+        splitPane.bottomComponent = diffViewerPanel
+        splitPane.dividerLocation = SPLIT_DIVIDER_LOCATION
+        splitPane.resizeWeight = SPLIT_RESIZE_WEIGHT
+        return splitPane
     }
 
-    private fun createOptionsPanel(): JComponent {
-        val panel = JPanel(FlowLayout(FlowLayout.LEFT))
-
-        semanticCheckbox = JBCheckBox(LocalizationBundle.message("dialog.json.diff.semantic"))
-        semanticCheckbox.addActionListener { updateDiff() }
-
-        panel.add(semanticCheckbox)
-
-        return panel
-    }
-
-    private fun createButton(text: String, action: () -> Unit): JButton {
-        return JButton(text).apply {
-            addActionListener { action() }
-        }
-    }
-
-    private fun addDocumentListeners() {
-        leftEditor.setOnContentChangeCallback { content ->
+    private fun setupListeners() {
+        // Editor change listeners
+        editorPanel.setLeftEditorChangeCallback { content ->
             WriteCommandAction.runWriteCommandAction(project) {
-                updateDiff()
+                updateDiffWithContent(content, editorPanel.getRightContent())
             }
         }
 
-        rightEditor.setOnContentChangeCallback { content ->
+        editorPanel.setRightEditorChangeCallback { content ->
             WriteCommandAction.runWriteCommandAction(project) {
-                updateDiff()
+                updateDiffWithContent(editorPanel.getLeftContent(), content)
             }
+        }
+
+        // Options change listener
+        optionsPanel.addOptionsChangeListener {
+            updateDiff()
         }
     }
 
     private fun updateDiff() {
-        val leftJson = leftEditor.getText().trim()
-        val rightJson = rightEditor.getText().trim()
+        val leftJson = editorPanel.getLeftContent()
+        val rightJson = editorPanel.getRightContent()
+        updateDiffWithContent(leftJson, rightJson)
+    }
+    
+    private fun updateDiffWithContent(leftJson: String, rightJson: String) {
+        val leftContent = leftJson.trim()
+        val rightContent = rightJson.trim()
 
-        if (leftJson.isEmpty() || rightJson.isEmpty()) {
-            diffViewerPanel.removeAll()
-            diffViewerPanel.revalidate()
-            diffViewerPanel.repaint()
+        if (leftContent.isEmpty() || rightContent.isEmpty()) {
+            diffViewerPanel.clear()
             return
         }
 
         // Validate JSON
-        val leftValidation = diffService.validateJson(leftJson)
-        val rightValidation = diffService.validateJson(rightJson)
+        val leftValidation = diffService.validateJson(leftContent)
+        val rightValidation = diffService.validateJson(rightContent)
 
         if (!leftValidation.first || !rightValidation.first) {
-            diffViewerPanel.removeAll()
-            val errorLabel = JLabel(LocalizationBundle.message("dialog.json.diff.invalid.json.format"))
-            errorLabel.foreground = JBColor.RED
-            errorLabel.horizontalAlignment = SwingConstants.CENTER
-            diffViewerPanel.add(errorLabel, BorderLayout.CENTER)
-            diffViewerPanel.revalidate()
-            diffViewerPanel.repaint()
+            diffViewerPanel.showValidationError()
             return
         }
 
-        // Create embedded diff viewer
+        // Create and show diff
         try {
             val request = diffService.createDiffRequest(
-                leftJson,
-                rightJson,
-                semantic = semanticCheckbox.isSelected
+                leftContent,
+                rightContent,
+                semantic = optionsPanel.isSemanticComparisonEnabled()
             )
-
-            val diffPanel = DiffManager.getInstance().createRequestPanel(
-                project,
-                this,
-                null
-            )
-
-            diffPanel.setRequest(request)
-
-            diffViewerPanel.removeAll()
-            diffViewerPanel.add(diffPanel.component, BorderLayout.CENTER)
-            diffViewerPanel.revalidate()
-            diffViewerPanel.repaint()
+            diffViewerPanel.showDiff(request)
         } catch (e: Exception) {
-            // Handle error
-            diffViewerPanel.removeAll()
-            val errorLabel = JLabel("Error: ${e.message}")
-            errorLabel.foreground = JBColor.RED
-            errorLabel.horizontalAlignment = SwingConstants.CENTER
-            diffViewerPanel.add(errorLabel, BorderLayout.CENTER)
-            diffViewerPanel.revalidate()
-            diffViewerPanel.repaint()
+            diffViewerPanel.showError("Error: ${e.message}")
         }
     }
 
-    private fun loadFromFile(editor: JsonEditor) {
-        val descriptor = FileChooserDescriptor(true, false, false, false, false, false)
-            .withFileFilter { it.extension == "json" }
-
-        val file = FileChooser.chooseFile(descriptor, project, null)
-        if (file != null) {
-            try {
-                val content = File(file.path).readText()
-                editor.setText(content)
-            } catch (e: Exception) {
-                Messages.showErrorDialog(
-                    project,
-                    LocalizationBundle.message("dialog.json.diff.file.read.error", e.message ?: ""),
-                    LocalizationBundle.message("dialog.json.diff.error")
-                )
-            }
-        }
-    }
-
-    private fun pasteFromClipboard(editor: JsonEditor) {
-        try {
-            val clipboard = Toolkit.getDefaultToolkit().systemClipboard
-            val data = clipboard.getData(DataFlavor.stringFlavor) as? String
-            if (data != null) {
-                editor.setText(data)
-            }
-        } catch (e: Exception) {
-            // Ignore clipboard errors
-        }
-    }
-
-    override fun doOKAction() {
-        super.doOKAction()
-    }
 
     override fun dispose() {
+        // Cleanup resources if needed
         super.dispose()
     }
 
