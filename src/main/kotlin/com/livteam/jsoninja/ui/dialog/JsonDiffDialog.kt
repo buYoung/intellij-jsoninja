@@ -30,7 +30,6 @@ class JsonDiffDialog(
     private lateinit var rightEditor: JsonEditor
     private lateinit var semanticCheckbox: JBCheckBox
     private lateinit var diffViewerPanel: JPanel
-    private lateinit var addToTabButton: JButton
 
     init {
         title = LocalizationBundle.message("dialog.json.diff.title")
@@ -182,7 +181,6 @@ class JsonDiffDialog(
             diffViewerPanel.removeAll()
             diffViewerPanel.revalidate()
             diffViewerPanel.repaint()
-            addToTabButton.isEnabled = false
             return
         }
 
@@ -198,7 +196,6 @@ class JsonDiffDialog(
             diffViewerPanel.add(errorLabel, BorderLayout.CENTER)
             diffViewerPanel.revalidate()
             diffViewerPanel.repaint()
-            addToTabButton.isEnabled = false
             return
         }
 
@@ -222,8 +219,6 @@ class JsonDiffDialog(
             diffViewerPanel.add(diffPanel.component, BorderLayout.CENTER)
             diffViewerPanel.revalidate()
             diffViewerPanel.repaint()
-
-            addToTabButton.isEnabled = true
         } catch (e: Exception) {
             // Handle error
             diffViewerPanel.removeAll()
@@ -233,7 +228,6 @@ class JsonDiffDialog(
             diffViewerPanel.add(errorLabel, BorderLayout.CENTER)
             diffViewerPanel.revalidate()
             diffViewerPanel.repaint()
-            addToTabButton.isEnabled = false
         }
     }
 
@@ -275,8 +269,6 @@ class JsonDiffDialog(
     override fun dispose() {
         super.dispose()
     }
-
-    override fun createCancelAction() = null
 
     override fun createActions() = arrayOf(getOKAction())
 }
