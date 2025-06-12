@@ -2,6 +2,21 @@
 
 # JSONinja Changelog
 
+## [1.1.0] - 2025-06-12
+
+### Added
+- JsonDiff Feature - New JSON comparison functionality 
+  - 3-way diff support for comprehensive JSON comparison 
+  - UI consistent with JetBrains' native Diff UI for familiar user experience 
+  - Quick action buttons for streamlined workflow 
+  - Auto-copy active JsonEditor content to left diff pane for easy comparison
+
+### Features
+- 3-way Diff: Compare JSON files with base, left, and right panels
+- Native UI Integration: Seamless integration with JetBrains Diff UI components
+- Quick Actions: Convenient action buttons for common diff operations
+- Smart Content Transfer: Automatically copies active JsonEditor content to left diff panel
+
 ## [1.0.6] - 2025-06-11
 
 ### Fixed
