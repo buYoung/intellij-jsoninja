@@ -29,4 +29,14 @@
         <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener"
                   topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
+
+    <actions>
+        <action id="com.livteam.jsoninja.ShowJsonDiffAction"
+                class="com.livteam.jsoninja.actions.ShowJsonDiffAction"
+                text="JSON Diff"
+                description="Compare two JSON files"
+                icon="/icons/diff.svg">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>
