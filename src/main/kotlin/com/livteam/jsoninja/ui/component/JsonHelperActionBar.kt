@@ -28,5 +28,10 @@ class JsonHelperActionBar : DefaultActionGroup() {
         add(UnescapeJsonAction(JsonHelperActionUtils.getIcon("/icons/unescape.svg")))
 
         add(GenerateRandomJsonAction(JsonHelperActionUtils.getIcon("/icons/random_json.svg")))
+
+        addSeparator()
+
+        // JSON Diff 액션 추가
+        add(ShowJsonDiffAction(JsonHelperActionUtils.getIcon("/icons/diff.svg")))
     }
 }
