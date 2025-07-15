@@ -14,14 +14,14 @@
 
 name: Build
 on:
-  # Trigger the workflow on pushes to only the 'main' branch (this avoids duplicate checks being run e.g., for dependabot pull requests)
+  # Trigger the workflow on version tags following semantic versioning
   push:
-    branches: [ main ]
-  # Trigger the workflow on any pull request
-  pull_request:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'          # v1.0.0
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'        # v1.0.0-beta.1, v1.0.0-rc.1
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
   
 jobs:
@@ -223,7 +223,7 @@ jobs:
   # If accepted and published, release workflow would be triggered
   releaseDraft:
     name: Release draft
-    if: github.event_name != 'pull_request'
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [ build, test, inspectCode, verify ]
     runs-on: ubuntu-latest
     permissions:
