@@ -132,4 +132,22 @@ class JsonFormatterServiceTest : BasePlatformTestCase() {
         assertFalse(sortedFormattedJson == unsortedFormattedJson)
         // Reset settings to default
     }
+
+    fun testFormatInvalidJsonWithTrailingContent() {
+        // Test the bug case: partially valid JSON with trailing invalid content
+        val partiallyValidJson = """{"test":1},"test""""
+        val result = jsonFormatterService.formatJson(partiallyValidJson, JsonFormatState.PRETTIFY)
+
+        // The formatter should return the original string unchanged when JSON is invalid
+        assertEquals(partiallyValidJson, result)
+
+        // Verify that this JSON is indeed considered invalid
+        assertFalse(jsonFormatterService.isValidJson(partiallyValidJson))
+
+        // Additional test cases for similar scenarios
+        val anotherInvalidJson = """[1,2,3]extra"""
+        val anotherResult = jsonFormatterService.formatJson(anotherInvalidJson, JsonFormatState.PRETTIFY)
+        assertEquals(anotherInvalidJson, anotherResult)
+        assertFalse(jsonFormatterService.isValidJson(anotherInvalidJson))
+    }
 }
