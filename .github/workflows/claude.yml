@@ -30,6 +30,31 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Cache dependencies
+        id: cache-deps # 스텝의 출력을 참조하기 위한 id
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            /var/cache/apt/archives
+          key: ${{ runner.os }}-deps-ripgrep-astgrep-v1 # 캐시를 식별하는 고유 키
+
+      - name: Install dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          echo "Cache not found. Installing dependencies."
+          # ripgrep 설치
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+          
+          # ast-grep 설치
+          npm install -g @ast-grep/cli
+
+      - name: Verify tools are installed
+        run: |
+          rg --version
+          sg --version
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@beta
@@ -53,10 +78,9 @@ jobs:
           # allowed_tools: "Bash(npm install),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*)"
           
           # Optional: Add custom instructions for Claude to customize its behavior for your project
-          # custom_instructions: |
-          #   Follow our coding standards
-          #   Ensure all new code has tests
-          #   Use TypeScript for new files
+          custom_instructions: |
+            Always check the .claude/search_tool.md file for project-specific instructions on rg and sg before starting your work.
+           
           
           # Optional: Custom environment variables for Claude
           # claude_env: |
