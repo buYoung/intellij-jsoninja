@@ -3,6 +3,8 @@ package com.livteam.jsoninja.actions
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.components.service
+import com.intellij.openapi.wm.RegisterToolWindowTask
+import com.intellij.openapi.wm.ToolWindowAnchor
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.wm.ToolWindowType
 import com.intellij.ui.content.ContentFactory
@@ -54,11 +56,12 @@ class ShowJsonDiffAction(private val icon: javax.swing.Icon) : AnAction(
         var diffToolWindow = toolWindowManager.getToolWindow("JSONinja-Diff")
         if (diffToolWindow == null) {
             // Register new tool window if it doesn't exist
-            diffToolWindow = toolWindowManager.registerToolWindow(
-                "JSONinja-Diff",
-                true,
-                com.intellij.openapi.wm.ToolWindowAnchor.BOTTOM
+            val registerTask = RegisterToolWindowTask(
+                id = "JSONinja-Diff",
+                anchor = ToolWindowAnchor.BOTTOM,
+                canCloseContent = true
             )
+            diffToolWindow = toolWindowManager.registerToolWindow(registerTask)
         }
         
         // Add content to tool window
@@ -70,6 +73,9 @@ class ShowJsonDiffAction(private val icon: javax.swing.Icon) : AnAction(
         
         // Show the tool window
         diffToolWindow.show()
+        
+        // Activate the tool window to bring it to front and give focus
+        diffToolWindow.activate(null)
     }
 
     override fun update(e: AnActionEvent) {

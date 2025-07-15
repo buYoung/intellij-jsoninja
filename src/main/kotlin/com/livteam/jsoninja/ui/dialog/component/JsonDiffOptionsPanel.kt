@@ -27,10 +27,6 @@ class JsonDiffOptionsPanel : JPanel(FlowLayout(FlowLayout.LEFT)) {
 
     fun isSemanticComparisonEnabled(): Boolean = semanticCheckbox.isSelected
 
-    fun setSemanticComparisonEnabled(enabled: Boolean) {
-        semanticCheckbox.isSelected = enabled
-    }
-
     fun addOptionsChangeListener(listener: OptionsChangeListener) {
         listeners.add(listener)
     }
