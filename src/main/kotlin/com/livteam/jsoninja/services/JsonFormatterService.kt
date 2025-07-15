@@ -51,7 +51,7 @@ class JsonFormatterService(private val project: Project) {
 
     /**
      * 들여쓰기 공백 수 설정
-     * 
+     *
      * @param size 들여쓰기 공백 수 (기본값: 2)
      * @return this (메서드 체이닝 지원)
      */
@@ -63,7 +63,7 @@ class JsonFormatterService(private val project: Project) {
 
     /**
      * 키 정렬 옵션 설정
-     * 
+     *
      * @param sort true면 키를 알파벳 순서로 정렬 (기본값: false)
      * @return this (메서드 체이닝 지원)
      */
@@ -75,7 +75,7 @@ class JsonFormatterService(private val project: Project) {
 
     /**
      * 모든 설정을 기본값으로 초기화
-     * 
+     *
      * @return this (메서드 체이닝 지원)
      */
     fun resetSettings(): JsonFormatterService {
@@ -88,7 +88,7 @@ class JsonFormatterService(private val project: Project) {
 
     /**
      * 현재 설정에 맞는 ObjectMapper 가져오기
-     * 
+     *
      * @param usesSorting 키 정렬 여부
      * @return 설정된 ObjectMapper
      */
@@ -102,7 +102,7 @@ class JsonFormatterService(private val project: Project) {
 
     /**
      * 현재 설정에 맞는 PrettyPrinter 생성
-     * 
+     *
      * @param formatState 포맷 상태
      * @return 설정된 CustomPrettyPrinter
      */
@@ -123,7 +123,7 @@ class JsonFormatterService(private val project: Project) {
 
     /**
      * JSON 문자열을 지정된 포맷 상태에 따라 포맷팅
-     * 
+     *
      * @param json 포맷팅할 JSON 문자열
      * @param formatState 포맷 상태
      * @return 포맷팅된 JSON 문자열, 포맷팅 실패 시 원본 반환
@@ -134,6 +134,12 @@ class JsonFormatterService(private val project: Project) {
         val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
 
         if (isEmptyJson) return json
+
+        // Check if JSON is valid before attempting to format
+        if (!isValidJson(json)) {
+            LOG.debug("Invalid JSON detected, returning original: $json")
+            return json
+        }
 
         return try {
             // 포맷 상태에 따라 설정 조정
@@ -162,10 +168,12 @@ class JsonFormatterService(private val project: Project) {
                     val prettyPrinter = createConfiguredPrettyPrinter(formatState)
                     mapper.writer(prettyPrinter).writeValueAsString(jsonNode)
                 }
+
                 JsonFormatState.PRETTIFY_SORTED -> {
                     val prettyPrinter = createConfiguredPrettyPrinter(formatState)
                     mapper.writer(prettyPrinter).writeValueAsString(mapper.treeToValue(jsonNode, Object::class.java))
                 }
+
                 JsonFormatState.UGLIFY -> {
                     mapper.writeValueAsString(jsonNode)
                 }
@@ -179,7 +187,7 @@ class JsonFormatterService(private val project: Project) {
 
     /**
      * JSON 문자열이 유효한지 검사
-     * 
+     *
      * @param json 검사할 JSON 문자열
      * @return 유효한 JSON이면 true, 아니면 false
      */
@@ -189,8 +197,14 @@ class JsonFormatterService(private val project: Project) {
         if (isEmptyJson) return false
 
         return try {
-            DEFAULT_MAPPER.readTree(json)
-            true
+            // Use JsonParser to validate the entire input string including trailing tokens
+            DEFAULT_MAPPER.factory.createParser(json).use { parser ->
+                // Parse the JSON value completely
+                parser.nextToken()
+                parser.skipChildren()
+                // Check if there are any trailing tokens after the JSON
+                parser.nextToken() == null
+            }
         } catch (e: Exception) {
             LOG.debug("유효하지 않은 JSON: ${e.message}")
             false
@@ -200,7 +214,7 @@ class JsonFormatterService(private val project: Project) {
     /**
      * 커스텀 PrettyPrinter 클래스
      * JSON 포맷팅 시 사용되는 들여쓰기 및 출력 형식 정의
-     * 
+     *
      * @param indentSize 들여쓰기 공백 수
      * @param useCompactArrays 배열을 압축 형식으로 출력할지 여부
      */
@@ -361,7 +375,7 @@ class JsonFormatterService(private val project: Project) {
         val result = StringBuilder(escapedBeautifiedJson.length)
         var i = 0
         while (i < escapedBeautifiedJson.length) {
-            var char = escapedBeautifiedJson[i]
+            val char = escapedBeautifiedJson[i]
             if (char == '\\') {
                 // 다음 문자가 있는지 확인 (이스케이프 시퀀스의 일부)
                 if (i + 1 < escapedBeautifiedJson.length) {
@@ -371,6 +385,7 @@ class JsonFormatterService(private val project: Project) {
                             result.append('\"')
                             i++ // 다음 문자까지 처리했으므로 인덱스 증가
                         }
+
                         '\\' -> { // \\ -> \
                             result.append('\\')
                             i++ // 다음 문자까지 처리했으므로 인덱스 증가
@@ -439,7 +454,7 @@ class JsonFormatterService(private val project: Project) {
     /**
      * 다중 이스케이프된 JSON 문자열을 완전히 언이스케이프 처리합니다.
      * 더 이상 이스케이프 문자가 없을 때까지 반복적으로 언이스케이프를 수행합니다.
-     * 
+     *
      * @param json 다중 이스케이프 처리된 JSON 문자열
      * @return 완전히 언이스케이프된 JSON 문자열
      */
@@ -463,7 +478,7 @@ class JsonFormatterService(private val project: Project) {
 
     /**
      * 문자열에 이스케이프 문자가 포함되어 있는지 확인합니다.
-     * 
+     *
      * @param text 확인할 문자열
      * @return 이스케이프 문자가 포함되어 있으면 true, 아니면 false
      */
