@@ -1,28 +1,27 @@
-package com.livteam.jsoninja.ui.dialog
+package com.livteam.jsoninja.ui.panel
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.Disposer
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.ui.dialog.component.*
 import java.awt.BorderLayout
-import java.awt.Dimension
-import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JSplitPane
 
-class JsonDiffDialog(
+/**
+ * Panel for JSON diff functionality that can be used in both dialogs and tool windows
+ */
+class JsonDiffPanel(
     private val project: Project,
     private val diffService: JsonDiffService,
-    private val currentJson: String? = null
-) : DialogWrapper(project), Disposable {
+    private val currentJson: String? = null,
+    parentDisposable: Disposable
+) : JPanel(BorderLayout()), Disposable {
 
     companion object {
-        private const val DIALOG_WIDTH = 800
-        private const val DIALOG_HEIGHT = 1200
         private const val SPLIT_DIVIDER_LOCATION = 400
         private const val SPLIT_RESIZE_WEIGHT = 0.4
     }
@@ -33,20 +32,11 @@ class JsonDiffDialog(
     private lateinit var actionHandler: DefaultEditorActionHandler
 
     init {
-        title = LocalizationBundle.message("dialog.json.diff.title")
-        setOKButtonText(LocalizationBundle.message("dialog.json.diff.close"))
-        init()
-
-        // Set dialog size
-        setSize(DIALOG_WIDTH, DIALOG_HEIGHT)
-
-        // Register for disposal
-        Disposer.register(myDisposable, this)
+        Disposer.register(parentDisposable, this)
+        initializeUI()
     }
 
-    override fun createCenterPanel(): JComponent {
-        val mainPanel = JPanel(BorderLayout())
-
+    private fun initializeUI() {
         // Initialize components
         initializeComponents()
 
@@ -57,7 +47,7 @@ class JsonDiffDialog(
 
         // Create split pane
         val splitPane = createSplitPane(editorsContainer)
-        mainPanel.add(splitPane, BorderLayout.CENTER)
+        add(splitPane, BorderLayout.CENTER)
 
         // Setup listeners
         setupListeners()
@@ -66,8 +56,6 @@ class JsonDiffDialog(
         if (editorPanel.getLeftContent().isNotBlank() && editorPanel.getRightContent().isNotBlank()) {
             updateDiff()
         }
-
-        return mainPanel
     }
 
     private fun initializeComponents() {
@@ -154,11 +142,7 @@ class JsonDiffDialog(
         }
     }
 
-
     override fun dispose() {
         // Cleanup resources if needed
-        super.dispose()
     }
-
-    override fun createActions() = arrayOf(getOKAction())
 }
