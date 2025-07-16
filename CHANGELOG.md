@@ -2,6 +2,34 @@
 
 # JSONinja Changelog
 
+## [1.2.0] - 2025-07-16
+
+### Added
+
+* **Improved JSON Diff feature** - New UI for direct comparison within tabs.
+  * Displays JSON diff in a tab instead of a dialog.
+  * Supports keyboard shortcuts (Close Tab: `Ctrl/Cmd+W`, Close Diff Window: `Shift+Escape`).
+  * Added actions to manage diff tabs (`CloseDiffTabAction`, `CloseDiffWindowAction`, `CloseTabAction`).
+* **Claude AI integration** - Code review and PR support via GitHub Actions.
+  * Added Claude Code Review workflow.
+  * Added Claude PR Assistant workflow.
+
+### Changed
+
+* **Complete overhaul of the JSON Diff UI/UX.**
+  * Refactored `JsonDiffDialog` into `JsonDiffPanel`.
+  * Improved usability with a tab-based interface.
+  * Moved keyboard shortcut handling to the IntelliJ Action system.
+* **Improved JSON parsing error handling.**
+  * Provides better error handling and user feedback.
+  * Enhanced code quality.
+
+### Fixed
+
+* Fixed JSON parsing errors.
+* Improved stability by refining the JSON Editor's UI structure.
+* Corrected the `PRETTIFY_SORTED` option in the JSON Formatter service to ensure it functions as intended.
+
 ## [1.1.0] - 2025-06-12
 
 ### Added
