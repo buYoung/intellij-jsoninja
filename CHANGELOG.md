@@ -2,7 +2,7 @@
 
 # JSONinja Changelog
 
-## [1.2.1] - 2025-07-16
+## [Unreleased] - 2025-07-16
 
 ### Fixed
 
