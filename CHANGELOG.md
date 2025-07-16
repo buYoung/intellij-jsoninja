@@ -4,47 +4,50 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Improved JSON Diff feature** (v1.2.0)
+  - JSON differences are now displayed in a tab instead of a dialog box.
+  - Supports keyboard shortcuts for closing the tab (`Ctrl/Cmd+W`) and the diff window (`Shift+Escape`).
+
+### Changed
+
+- **Complete overhaul of the JSON Diff UI/UX** (v1.2.0)
+  - Switched to a more intuitive tab-based interface for improved usability.
+- **Improved JSON parsing error handling** (v1.2.0)
+  - Provides clearer feedback and more helpful messages when a JSON file is invalid.
+
+### Fixed
+
+- Fixed errors that occurred when parsing certain JSON files. (v1.2.0)
+- Improved the overall stability of the JSON Editor. (v1.2.0)
+- Fixed the JSON diff tool window opening in the wrong way (v1.2.1)
+
 ## [1.2.1] - 2025-07-16
 
 ### Fixed
 
 - Fixed the JSON diff tool window opening in the wrong way
 
-### Added
-
-- Multi-tab interface - Work with multiple JSON documents simultaneously
-- JSON Prettify - Formatting for improved JSON data readability
-- JSON Uglify - Single-line compression functionality for JSON data
-- JSON Escape/Unescape - Process and restore JSON string escaping
-- JMES Path support - Search and filter specific values within complex JSON data
-- Advanced formatting options - Custom settings including indentation size, key sorting, etc. [WIP]
-- Tab management functions - Including tab addition, deletion, and event handling
-- User-friendly interface - Intuitive and efficient UI design
-
 ## [1.2.0] - 2025-07-16
 
 ### Added
 
-- **Improved JSON Diff feature** - New UI for direct comparison within tabs.
-  * Displays JSON diff in a tab instead of a dialog.
-  * Supports keyboard shortcuts (Close Tab: `Ctrl/Cmd+W`, Close Diff Window: `Shift+Escape`).
-  * Added actions to manage diff tabs (`CloseDiffTabAction`, `CloseDiffWindowAction`, `CloseTabAction`).
+- **Improved JSON Diff feature**
+  - JSON differences are now displayed in a tab instead of a dialog box.
+  - Supports keyboard shortcuts for closing the tab (`Ctrl/Cmd+W`) and the diff window (`Shift+Escape`).
 
 ### Changed
 
-- **Complete overhaul of the JSON Diff UI/UX.**
-  * Refactored `JsonDiffDialog` into `JsonDiffPanel`.
-  * Improved usability with a tab-based interface.
-  * Moved keyboard shortcut handling to the IntelliJ Action system.
-- **Improved JSON parsing error handling.**
-  * Provides better error handling and user feedback.
-  * Enhanced code quality.
+- **Complete overhaul of the JSON Diff UI/UX**
+  - Switched to a more intuitive tab-based interface for improved usability.
+- **Improved JSON parsing error handling**
+  - Provides clearer feedback and more helpful messages when a JSON file is invalid.
 
 ### Fixed
 
-- Fixed JSON parsing errors.
-- Improved stability by refining the JSON Editor's UI structure.
-- Corrected the `PRETTIFY_SORTED` option in the JSON Formatter service to ensure it functions as intended.
+- Fixed errors that occurred when parsing certain JSON files.
+- Improved the overall stability of the JSON Editor.
 
 ## [1.1.0] - 2025-06-12
 
@@ -108,10 +111,10 @@
 
 [Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.2.1...HEAD
 [1.2.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.6...v1.1.0
-[1.0.6]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.5...v1.0.6
-[1.0.5]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.4...v1.0.5
-[1.0.4]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.3...v1.0.4
-[1.0.3]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.2...v1.0.3
-[1.0.2]: https://github.com/buYoung/intellij-jsoninja/commits/v1.0.2
+[1.2.0]: https://github.com/buYoung/intellij-jsoninja/compare/1.1.0...1.2.0
+[1.1.0]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.6...1.1.0
+[1.0.6]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.5...1.0.6
+[1.0.5]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.4...1.0.5
+[1.0.4]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.3...1.0.4
+[1.0.3]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.2...1.0.3
+[1.0.2]: https://github.com/buYoung/intellij-jsoninja/commits/1.0.2
