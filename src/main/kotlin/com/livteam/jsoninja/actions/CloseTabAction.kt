@@ -2,7 +2,6 @@ package com.livteam.jsoninja.actions
 
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.wm.ToolWindowManager
 import com.livteam.jsoninja.ui.component.JsonHelperPanel
 
@@ -15,10 +14,6 @@ class CloseTabAction : AnAction(
     "Close current JSON editor tab",
     null
 ) {
-    companion object {
-        private val LOG = logger<CloseTabAction>()
-    }
-    
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("JSONinja") ?: return
@@ -29,24 +24,15 @@ class CloseTabAction : AnAction(
         
         val tabbedPane = panel.getTabbedPane()
         
-        // 디버깅을 위한 로그
-        val tabCount = tabbedPane.tabCount
-        val jsonTabCount = tabbedPane.getJsonTabCount()
-        val canClose = tabbedPane.canCloseCurrentTab()
-        val selectedComponent = tabbedPane.selectedComponent
-        
-        LOG.info("CloseTabAction - Total tabs: $tabCount, JSON tabs: $jsonTabCount, Can close: $canClose, Selected: ${selectedComponent?.name}")
-        
         // 탭 개수에 따라 다른 동작 수행
+        val canClose = tabbedPane.canCloseCurrentTab()
         if (canClose) {
             // 탭이 2개 이상일 때: 현재 탭만 닫기
-            LOG.info("Closing current tab")
             tabbedPane.closeCurrentTab()
         } else {
             // 탭이 1개일 때: Tool Window 자체를 닫기
             val selectedComponent = tabbedPane.selectedComponent
             if (selectedComponent != null && selectedComponent.name != "addNewTab") {
-                LOG.info("Hiding tool window")
                 toolWindow.hide()
             }
         }
