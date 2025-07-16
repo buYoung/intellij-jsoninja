@@ -2,6 +2,12 @@
 
 # JSONinja Changelog
 
+## [Unreleased] - 2025-07-16
+
+### Fixed
+
+* Fixed the JSON tool window opening in the wrong way
+
 ## [1.2.0] - 2025-07-16
 
 ### Added
@@ -10,9 +16,6 @@
   * Displays JSON diff in a tab instead of a dialog.
   * Supports keyboard shortcuts (Close Tab: `Ctrl/Cmd+W`, Close Diff Window: `Shift+Escape`).
   * Added actions to manage diff tabs (`CloseDiffTabAction`, `CloseDiffWindowAction`, `CloseTabAction`).
-* **Claude AI integration** - Code review and PR support via GitHub Actions.
-  * Added Claude Code Review workflow.
-  * Added Claude PR Assistant workflow.
 
 ### Changed
 
