@@ -52,6 +52,14 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     }
 
     /**
+     * TabbedPane 컴포넌트 반환
+     * @return JsonHelperTabbedPane 인스턴스
+     */
+    fun getTabbedPane(): JsonHelperTabbedPane {
+        return tabbedPane
+    }
+
+    /**
      * 새 탭 추가
      * @param content 초기 내용
      */

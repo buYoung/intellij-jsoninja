@@ -8,15 +8,12 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.util.Alarm
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.ui.dialog.component.*
 import java.awt.BorderLayout
-import java.awt.event.ActionEvent
-import java.awt.event.KeyEvent
 import javax.swing.*
 
 /**
@@ -67,9 +64,6 @@ class JsonDiffPanel(
 
         // Setup listeners
         setupListeners()
-        
-        // Setup keyboard shortcuts (ESC and Command+W/Ctrl+W)
-        setupKeyboardShortcuts()
 
         // Initial diff if both have content
         if (editorPanel.getLeftContent().isNotBlank() && editorPanel.getRightContent().isNotBlank()) {
@@ -216,47 +210,25 @@ class JsonDiffPanel(
     }
     
     /**
-     * Setup keyboard shortcuts (ESC and Command+W/Ctrl+W) to close tabs/window
-     * - If multiple tabs exist: close current tab only
-     * - If only one tab remains: close the entire window
+     * 현재 탭 또는 전체 창을 닫습니다.
+     * - 탭이 여러 개 있으면: 현재 탭만 닫기
+     * - 탭이 하나만 있으면: 전체 Tool Window 숨기기
+     * Action 시스템에서 호출하기 위한 공개 메서드입니다.
      */
-    private fun setupKeyboardShortcuts() {
-        // ESC key
-        val escapeStroke = KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0)
-        registerCloseAction(escapeStroke, "close-diff-window-escape")
-        
-        // Command+W (macOS) or Ctrl+W (Windows/Linux)
-        val closeTabModifier = if (SystemInfo.isMac) {
-            KeyEvent.META_DOWN_MASK
-        } else {
-            KeyEvent.CTRL_DOWN_MASK
-        }
-        val closeTabStroke = KeyStroke.getKeyStroke(KeyEvent.VK_W, closeTabModifier)
-        registerCloseAction(closeTabStroke, "close-diff-window-tab")
-    }
-    
-    /**
-     * Register a close action for the given keystroke
-     */
-    private fun registerCloseAction(keyStroke: KeyStroke, actionKey: String) {
-        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(keyStroke, actionKey)
-        getActionMap().put(actionKey, object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent) {
-                val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("JSONinja-Diff")
-                toolWindow?.let { tw ->
-                    val contentManager = tw.contentManager
-                    val currentContent = contentManager.contents.find { it.component === this@JsonDiffPanel }
-                    
-                    if (contentManager.contentCount > 1) {
-                        // Multiple tabs exist - close only the current tab
-                        currentContent?.let { contentManager.removeContent(it, true) }
-                    } else {
-                        // Only one tab remains - close the entire window
-                        tw.hide()
-                    }
-                }
+    fun closeCurrentTabOrWindow() {
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("JSONinja-Diff")
+        toolWindow?.let { tw ->
+            val contentManager = tw.contentManager
+            val currentContent = contentManager.contents.find { it.component === this@JsonDiffPanel }
+            
+            if (contentManager.contentCount > 1) {
+                // Multiple tabs exist - close only the current tab
+                currentContent?.let { contentManager.removeContent(it, true) }
+            } else {
+                // Only one tab remains - close the entire window
+                tw.hide()
             }
-        })
+        }
     }
 
     override fun dispose() {
