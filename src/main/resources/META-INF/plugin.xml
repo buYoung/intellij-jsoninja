@@ -14,6 +14,13 @@
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja"
                     icon="/META-INF/pluginIcon.svg"/>
+        
+        <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsonDiffToolWindowFactory" id="JSONinja-Diff"
+                    icon="/icons/diff.svg"
+                    anchor="bottom"
+                    secondary="true"
+                    canCloseContents="true"
+                    doNotActivateOnStart="true"/>
 
         <projectConfigurable
                 instance="com.livteam.jsoninja.settings.JsoninjaSettingsConfigurable"
