@@ -3,9 +3,14 @@ package com.livteam.jsoninja.actions
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.components.service
+import com.intellij.openapi.wm.RegisterToolWindowTask
+import com.intellij.openapi.wm.ToolWindowAnchor
+import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.wm.ToolWindowType
+import com.intellij.ui.content.ContentFactory
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonDiffService
-import com.livteam.jsoninja.ui.dialog.JsonDiffDialog
+import com.livteam.jsoninja.ui.panel.JsonDiffPanel
 
 /**
  * JSON 차이를 비교하는 액션 클래스
@@ -18,11 +23,11 @@ class ShowJsonDiffAction(private val icon: javax.swing.Icon) : AnAction(
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val jsonDiffService = project.service<JsonDiffService>()
+        val toolWindowManager = ToolWindowManager.getInstance(project)
 
         // Get current JSON from active tab
         var currentJson: String? = null
-        val toolWindow = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
-            .getToolWindow("JSONinja")
+        val toolWindow = toolWindowManager.getToolWindow("JSONinja")
 
         if (toolWindow != null && toolWindow.isVisible) {
             val content = toolWindow.contentManager.selectedContent
@@ -36,8 +41,41 @@ class ShowJsonDiffAction(private val icon: javax.swing.Icon) : AnAction(
             }
         }
 
-        val dialog = JsonDiffDialog(project, jsonDiffService, currentJson)
-        dialog.show()
+        // Create diff panel
+        val diffPanel = JsonDiffPanel(project, jsonDiffService, currentJson, project)
+        
+        // Create content for tool window
+        val contentFactory = ContentFactory.getInstance()
+        val content = contentFactory.createContent(
+            diffPanel,
+            LocalizationBundle.message("dialog.json.diff.title"),
+            false
+        )
+        
+        // Get or create tool window for diff
+        var diffToolWindow = toolWindowManager.getToolWindow("JSONinja-Diff")
+        if (diffToolWindow == null) {
+            // Register new tool window if it doesn't exist
+            val registerTask = RegisterToolWindowTask(
+                id = "JSONinja-Diff",
+                anchor = ToolWindowAnchor.BOTTOM,
+                canCloseContent = true
+            )
+            diffToolWindow = toolWindowManager.registerToolWindow(registerTask)
+        }
+        
+        // Add content to tool window
+        diffToolWindow.contentManager.addContent(content)
+        diffToolWindow.contentManager.setSelectedContent(content)
+        
+        // Set to WINDOWED mode for independent window
+        diffToolWindow.setType(ToolWindowType.WINDOWED, null)
+        
+        // Show the tool window
+        diffToolWindow.show()
+        
+        // Activate the tool window to bring it to front and give focus
+        diffToolWindow.activate(null)
     }
 
     override fun update(e: AnActionEvent) {

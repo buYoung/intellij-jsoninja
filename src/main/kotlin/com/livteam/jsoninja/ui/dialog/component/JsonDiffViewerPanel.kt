@@ -54,10 +54,6 @@ class JsonDiffViewerPanel(
         updateContent(errorLabel)
     }
 
-    fun showValidationError() {
-        showError(LocalizationBundle.message("dialog.json.diff.invalid.json.format"))
-    }
-
     fun clear() {
         removeAll()
         currentDiffPanel = null
@@ -72,6 +68,4 @@ class JsonDiffViewerPanel(
         revalidate()
         repaint()
     }
-
-    fun hasContent(): Boolean = currentDiffPanel != null
 }

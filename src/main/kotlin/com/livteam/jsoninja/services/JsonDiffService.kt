@@ -1,8 +1,6 @@
 package com.livteam.jsoninja.services
 
 import com.intellij.diff.DiffContentFactory
-import com.intellij.diff.DiffManager
-import com.intellij.diff.contents.DiffContent
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -15,72 +13,43 @@ class JsonDiffService(private val project: Project) {
     
     private val formatterService = project.service<JsonFormatterService>()
 
-    fun showJsonDiff(leftJson: String, rightJson: String, title: String? = null, semantic: Boolean = false) {
-        val diffTitle = title ?: LocalizationBundle.message("dialog.json.diff.title")
-        
-        val contentFactory = DiffContentFactory.getInstance()
-        
-        // Format JSON before showing diff
-        val leftFormatted = if (semantic) {
-            formatterService.formatJson(leftJson, JsonFormatState.PRETTIFY_SORTED)
-        } else {
-            formatterService.formatJson(leftJson, JsonFormatState.PRETTIFY)
-        }
-        
-        val rightFormatted = if (semantic) {
-            formatterService.formatJson(rightJson, JsonFormatState.PRETTIFY_SORTED)
-        } else {
-            formatterService.formatJson(rightJson, JsonFormatState.PRETTIFY)
-        }
-        
-        val leftContent = createDiffContent(leftFormatted)
-        val rightContent = createDiffContent(rightFormatted)
-        
-        val request = SimpleDiffRequest(
-            diffTitle, 
-            leftContent, 
-            rightContent,
-            LocalizationBundle.message("dialog.json.diff.left"),
-            LocalizationBundle.message("dialog.json.diff.right")
-        )
-        
-        DiffManager.getInstance().showDiff(project, request)
-    }
     
-    fun validateJson(json: String): Pair<Boolean, String?> {
+    /**
+     * Validates and formats JSON in a single operation to improve performance
+     * @param json The JSON string to validate and format
+     * @param semantic Whether to use semantic comparison (sorted keys)
+     * @return Pair of (isValid, formattedJson) - formattedJson is null if invalid
+     */
+    fun validateAndFormat(json: String, semantic: Boolean): Pair<Boolean, String?> {
         return try {
-            if (formatterService.isValidJson(json)) {
-                Pair(true, null)
-            } else {
-                Pair(false, LocalizationBundle.message("dialog.json.diff.invalid.json.format"))
-            }
+            // Single parsing operation for both validation and formatting
+            val formatState = if (semantic) JsonFormatState.PRETTIFY_SORTED else JsonFormatState.PRETTIFY
+            val formatted = formatterService.formatJson(json, formatState)
+            
+            // If formatting succeeds, the JSON is valid
+            Pair(true, formatted)
         } catch (e: Exception) {
-            Pair(false, e.message)
+            // If formatting fails, the JSON is invalid
+            Pair(false, null)
         }
     }
     
-    private fun createDiffContent(json: String): DiffContent {
-        return DiffContentFactory.getInstance().create(project, json, null, false)
-    }
+    private fun createDiffContent(json: String) =
+        DiffContentFactory.getInstance().create(project, json, null, false)
     
     fun createDiffRequest(leftJson: String, rightJson: String, title: String? = null, semantic: Boolean = false): SimpleDiffRequest {
         val diffTitle = title ?: LocalizationBundle.message("dialog.json.diff.title")
         
-        // Format JSON before showing diff
-        val leftFormatted = if (semantic) {
-            formatterService.formatJson(leftJson, JsonFormatState.PRETTIFY_SORTED)
-        } else {
-            formatterService.formatJson(leftJson, JsonFormatState.PRETTIFY)
-        }
+        // Use validateAndFormat for better performance
+        val (leftValid, leftFormatted) = validateAndFormat(leftJson, semantic)
+        val (rightValid, rightFormatted) = validateAndFormat(rightJson, semantic)
         
-        val rightFormatted = if (semantic) {
-            formatterService.formatJson(rightJson, JsonFormatState.PRETTIFY_SORTED)
-        } else {
-            formatterService.formatJson(rightJson, JsonFormatState.PRETTIFY)
-        }
+        // Use original JSON if formatting failed
+        val leftFinal = if (leftValid && leftFormatted != null) leftFormatted else leftJson
+        val rightFinal = if (rightValid && rightFormatted != null) rightFormatted else rightJson
         
-        val leftContent = createDiffContent(leftFormatted)
-        val rightContent = createDiffContent(rightFormatted)
+        val leftContent = createDiffContent(leftFinal)
+        val rightContent = createDiffContent(rightFinal)
         
         return SimpleDiffRequest(
             diffTitle, 

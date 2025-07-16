@@ -38,5 +38,37 @@
                 icon="/icons/diff.svg">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+        
+        <!-- JSONinja Tool Window Actions -->
+        <group id="JSONinja.ToolWindow.ActionGroup">
+            <action id="com.livteam.jsoninja.CloseTabAction"
+                    class="com.livteam.jsoninja.actions.CloseTabAction"
+                    text="Close Tab"
+                    description="Close current JSON editor tab">
+                <keyboard-shortcut first-keystroke="ctrl W" keymap="$default"/>
+                <keyboard-shortcut first-keystroke="meta W" keymap="Mac OS X" replace-all="true"/>
+                <keyboard-shortcut first-keystroke="meta W" keymap="Mac OS X 10.5+" replace-all="true"/>
+                <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+            </action>
+        </group>
+        
+        <!-- JSON Diff Tool Window Actions -->
+        <group id="JSONinja.DiffWindow.ActionGroup">
+            <action id="com.livteam.jsoninja.CloseDiffTabAction"
+                    class="com.livteam.jsoninja.actions.CloseDiffTabAction"
+                    text="Close Diff Tab"
+                    description="Close current JSON diff tab or window">
+                <keyboard-shortcut first-keystroke="ctrl W" keymap="$default"/>
+                <keyboard-shortcut first-keystroke="meta W" keymap="Mac OS X" replace-all="true"/>
+                <keyboard-shortcut first-keystroke="meta W" keymap="Mac OS X 10.5+" replace-all="true"/>
+            </action>
+            
+            <action id="com.livteam.jsoninja.CloseDiffWindowAction"
+                    class="com.livteam.jsoninja.actions.CloseDiffWindowAction"
+                    text="Close Diff Window"
+                    description="Close JSON diff window">
+                <keyboard-shortcut first-keystroke="ESCAPE" keymap="$default"/>
+            </action>
+        </group>
     </actions>
 </idea-plugin>

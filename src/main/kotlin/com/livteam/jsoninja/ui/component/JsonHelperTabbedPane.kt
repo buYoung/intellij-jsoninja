@@ -141,11 +141,7 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
                     if (closableTabIndex == -1) return@runWriteAction
 
                     // "+" 탭은 닫을 수 없도록 하고, 실제 JSON 탭이 1개만 남는 경우에도 닫지 않음
-                    val jsonTabCount = components.count {
-                        it.name != ADD_NEW_TAB_COMPONENT_NAME && it.name?.startsWith(TAB_TITLE_PREFIX) == true
-                    }
-
-                    if (jsonTabCount <= 1 && getComponentAt(closableTabIndex)?.name != ADD_NEW_TAB_COMPONENT_NAME) {
+                    if (getJsonTabCount() <= 1 && getComponentAt(closableTabIndex)?.name != ADD_NEW_TAB_COMPONENT_NAME) {
                         // 마지막 남은 실제 탭이거나, 실수로 "+"탭을 닫으려는 경우 방지
                         return@runWriteAction
                     }
@@ -341,5 +337,88 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
             editor.setOriginalJson(originalJson)
 
         }
+    }
+
+    /**
+     * 현재 선택된 탭을 닫습니다.
+     * Action 시스템에서 호출하기 위한 공개 메서드입니다.
+     * @return 탭이 성공적으로 닫혔으면 true, 닫을 수 없으면 false
+     */
+    fun closeCurrentTab(): Boolean {
+        val selectedComponent = selectedComponent
+        
+        // "+" 탭이거나 null인 경우 닫을 수 없음
+        if (selectedComponent == null || selectedComponent.name == ADD_NEW_TAB_COMPONENT_NAME) {
+            return false
+        }
+        
+        // 현재 선택된 탭의 인덱스
+        val selectedIndex = selectedIndex
+        if (selectedIndex == -1) {
+            return false
+        }
+        
+        // JSON 탭이 1개만 남은 경우 닫지 않음
+        if (getJsonTabCount() <= 1) {
+            return false
+        }
+        
+        // 닫을 탭의 이전 탭 인덱스 (선택할 탭)
+        val nextSelectedIndex = if (selectedIndex > 0) selectedIndex - 1 else 0
+        
+        // 탭 제거
+        removeTabAt(selectedIndex)
+        
+        // 닫은 후 적절한 탭 선택
+        if (tabCount > 0) {
+            // 이전 탭 또는 첫 번째 탭 선택
+            if (nextSelectedIndex < tabCount) {
+                this.selectedIndex = nextSelectedIndex
+            } else {
+                // 마지막 탭이 닫혔을 경우 새로운 마지막 탭 선택
+                this.selectedIndex = tabCount - 1
+            }
+        }
+        
+        return true
+    }
+
+    /**
+     * 탭을 닫을 수 있는지 확인합니다.
+     * @return 현재 탭을 닫을 수 있으면 true, 닫을 수 없으면 false
+     */
+    fun canCloseCurrentTab(): Boolean {
+        val selectedComponent = selectedComponent
+        
+        // "+" 탭이거나 null인 경우
+        if (selectedComponent == null || selectedComponent.name == ADD_NEW_TAB_COMPONENT_NAME) {
+            return false
+        }
+        
+        // 실제 JSON 탭 개수 계산 (tabCount에서 + 탭 제외)
+        var jsonTabCount = 0
+        for (i in 0 until tabCount) {
+            val component = getComponentAt(i)
+            if (component != null && component.name != ADD_NEW_TAB_COMPONENT_NAME) {
+                jsonTabCount++
+            }
+        }
+        
+        return jsonTabCount > 1
+    }
+    
+    /**
+     * 현재 JSON 탭의 개수를 반환합니다.
+     * @return JSON 탭 개수 ("+" 탭 제외)
+     */
+    fun getJsonTabCount(): Int {
+        var count = 0
+        for (i in 0 until tabCount) {
+            val component = getComponentAt(i)
+            if (component != null && component.name != ADD_NEW_TAB_COMPONENT_NAME) {
+                count++
+            }
+        }
+        return count
     }
 }
