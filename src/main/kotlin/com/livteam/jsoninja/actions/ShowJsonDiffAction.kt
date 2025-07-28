@@ -59,8 +59,8 @@ class ShowJsonDiffAction : AnAction {
         }
 
         // Create JSONs with default templates if no content
-        val leftJson = currentJson ?: ""
-        val rightJson = ""
+        val leftJson = currentJson ?: "{}"
+        val rightJson = "{}"
 
         // Get display mode from settings
         val displayMode = try {

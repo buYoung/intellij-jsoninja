@@ -21,6 +21,8 @@
                 displayName="JSONinja Settings"
                 groupId="tools"
                 nonDefaultProject="true"/>
+                
+        <diff.DiffExtension implementation="com.livteam.jsoninja.diff.JsonDiffExtension"/>
     </extensions>
 
     <applicationListeners>
