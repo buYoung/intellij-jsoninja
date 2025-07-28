@@ -2,6 +2,7 @@ package com.livteam.jsoninja.services
 
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.json.JsonFileType
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
@@ -34,8 +35,12 @@ class JsonDiffService(private val project: Project) {
         }
     }
     
-    private fun createDiffContent(json: String) =
-        DiffContentFactory.getInstance().create(project, json, null, false)
+    private fun createDiffContent(json: String, editable: Boolean = true) =
+        if (editable) {
+            DiffContentFactory.getInstance().createEditable(project, json, JsonFileType.INSTANCE)
+        } else {
+            DiffContentFactory.getInstance().create(project, json, JsonFileType.INSTANCE, false)
+        }
     
     fun createDiffRequest(leftJson: String, rightJson: String, title: String? = null, semantic: Boolean = false): SimpleDiffRequest {
         val diffTitle = title ?: LocalizationBundle.message("dialog.json.diff.title")

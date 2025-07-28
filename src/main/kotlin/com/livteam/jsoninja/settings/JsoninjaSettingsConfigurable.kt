@@ -9,6 +9,7 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.bind
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import javax.swing.*
 
 class JsoninjaSettingsConfigurable(private val project: Project) : Configurable {
@@ -19,6 +20,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
     private var sortKeysCheckBox: JBCheckBox? = null
     private var jsonFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
     private var pasteFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
+    private var diffDisplayModeComboBox: ComboBox<JsonDiffDisplayModeWrapper>? = null
     private var mainPanel: JPanel? = null
 
     // Wrapper class for JComboBox to display enum values nicely
@@ -36,6 +38,26 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
 
         override fun hashCode(): Int {
             return state.hashCode()
+        }
+    }
+    
+    // Wrapper class for JsonDiffDisplayMode
+    data class JsonDiffDisplayModeWrapper(val mode: JsonDiffDisplayMode) {
+        override fun toString(): String {
+            return when (mode) {
+                JsonDiffDisplayMode.EDITOR_TAB -> LocalizationBundle.message("settings.diff.display.editor.tab")
+                JsonDiffDisplayMode.WINDOW -> LocalizationBundle.message("settings.diff.display.window")
+            }
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is JsonDiffDisplayModeWrapper) return false
+            return mode == other.mode
+        }
+
+        override fun hashCode(): Int {
+            return mode.hashCode()
         }
     }
 
@@ -71,6 +93,22 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             val currentPasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
             val selectedPasteWrapper = allFormatStates.find { it.state == currentPasteFormatState }
             pasteFormatStateComboBox?.selectedItem = selectedPasteWrapper
+            
+            // Create diff display mode combobox
+            val diffDisplayModes = JsonDiffDisplayMode.entries
+                .map { JsonDiffDisplayModeWrapper(it) }
+                .toTypedArray()
+            
+            diffDisplayModeComboBox = ComboBox(diffDisplayModes)
+            
+            // Find the matching wrapper for the current diff display mode
+            val currentDiffDisplayMode = try {
+                JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
+            } catch (e: IllegalArgumentException) {
+                JsonDiffDisplayMode.EDITOR_TAB
+            }
+            val selectedDiffModeWrapper = diffDisplayModes.find { it.mode == currentDiffDisplayMode }
+            diffDisplayModeComboBox?.selectedItem = selectedDiffModeWrapper
 
             mainPanel = panel {
                 row(LocalizationBundle.message("settings.indent.label")) {
@@ -85,6 +123,9 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 row(LocalizationBundle.message("settings.paste.format.label")) {
                     cell(pasteFormatStateComboBox!!)
                 }
+                row(LocalizationBundle.message("settings.diff.display.label")) {
+                    cell(diffDisplayModeComboBox!!)
+                }
             }
         }
 
@@ -94,10 +135,16 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
     override fun isModified(): Boolean {
         val currentFormatState = JsonFormatState.fromString(settings.jsonFormatState)
         val currentPasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
+        val currentDiffDisplayMode = try {
+            JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
+        } catch (e: IllegalArgumentException) {
+            JsonDiffDisplayMode.EDITOR_TAB
+        }
         return indentSizeSpinner?.value != settings.indentSize ||
                 sortKeysCheckBox?.isSelected != settings.sortKeys ||
                 (jsonFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentFormatState.name ||
-                (pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentPasteFormatState.name
+                (pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentPasteFormatState.name ||
+                (diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper)?.mode?.name != currentDiffDisplayMode.name
     }
 
     override fun apply() {
@@ -107,6 +154,8 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         settings.jsonFormatState = selectedFormatWrapper?.state?.name ?: settings.jsonFormatState
         val selectedPasteFormatWrapper = pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper
         settings.pasteFormatState = selectedPasteFormatWrapper?.state?.name ?: settings.pasteFormatState
+        val selectedDiffModeWrapper = diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper
+        settings.diffDisplayMode = selectedDiffModeWrapper?.mode?.name ?: settings.diffDisplayMode
     }
 
     override fun reset() {
@@ -129,6 +178,18 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             .toTypedArray()
         val selectedPasteWrapper = allFormatStates.find { it.state == currentPasteFormatState }
         pasteFormatStateComboBox?.selectedItem = selectedPasteWrapper
+        
+        // Find the matching wrapper for the current diff display mode
+        val currentDiffDisplayMode = try {
+            JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
+        } catch (e: IllegalArgumentException) {
+            JsonDiffDisplayMode.EDITOR_TAB
+        }
+        val diffDisplayModes = JsonDiffDisplayMode.entries
+            .map { JsonDiffDisplayModeWrapper(it) }
+            .toTypedArray()
+        val selectedDiffModeWrapper = diffDisplayModes.find { it.mode == currentDiffDisplayMode }
+        diffDisplayModeComboBox?.selectedItem = selectedDiffModeWrapper
     }
 
     override fun disposeUIResources() {
@@ -137,5 +198,6 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         sortKeysCheckBox = null
         jsonFormatStateComboBox = null
         pasteFormatStateComboBox = null
+        diffDisplayModeComboBox = null
     }
 }
