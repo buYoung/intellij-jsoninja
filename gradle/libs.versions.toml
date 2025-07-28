@@ -1,7 +1,7 @@
 [versions]
 # libraries
 junit = "4.13.2"
-jackson-databind = "2.19.0"
+jackson-databind = "2.19.2"
 jackson-module-kotlin = "2.19.2"
 json-path = "2.9.0"
 datafaker = "2.4.3"
