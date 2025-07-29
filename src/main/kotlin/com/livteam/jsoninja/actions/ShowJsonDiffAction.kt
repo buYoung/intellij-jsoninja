@@ -8,7 +8,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.icons.AllIcons
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
@@ -16,6 +15,7 @@ import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.diff.JsonDiffRequestChain
 import com.livteam.jsoninja.ui.diff.JsonDiffVirtualFile
+import com.livteam.jsoninja.utils.JsonHelperUtils
 
 /**
  * JSON 차이를 비교하는 액션 클래스
@@ -40,24 +40,10 @@ class ShowJsonDiffAction : AnAction {
         val project = e.project ?: return
         val jsonDiffService = project.service<JsonDiffService>()
         val settings = JsoninjaSettingsState.getInstance(project)
-        val toolWindowManager = ToolWindowManager.getInstance(project)
 
-        // Get current JSON from active tab
-        var currentJson: String? = null
-        val toolWindow = toolWindowManager.getToolWindow("JSONinja")
-
-        if (toolWindow != null && toolWindow.isVisible) {
-            val content = toolWindow.contentManager.selectedContent
-            val component = content?.component
-
-            if (component is com.livteam.jsoninja.ui.component.JsonHelperPanel) {
-                val currentEditor = component.getCurrentEditor()
-                if (currentEditor != null) {
-                    currentJson = currentEditor.getText()
-                }
-            }
-        }
-
+        // Get current JSON from active tab using utility
+        val currentJson = JsonHelperUtils.getCurrentJsonFromToolWindow(project)
+        
         // Create JSONs with default templates if no content
         val leftJson = currentJson ?: "{}"
         val rightJson = "{}"

@@ -7,10 +7,10 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.wm.ToolWindowManager
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.ui.diff.JsonDiffVirtualFile
+import com.livteam.jsoninja.utils.JsonHelperUtils
 
 /**
  * Action to show JSON Diff in Editor Tab
@@ -23,24 +23,10 @@ class ShowJsonDiffInEditorTabAction : AnAction(
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val jsonDiffService = project.service<JsonDiffService>()
-        val toolWindowManager = ToolWindowManager.getInstance(project)
 
-        // Get current JSON from active tab
-        var currentJson: String? = null
-        val toolWindow = toolWindowManager.getToolWindow("JSONinja")
-
-        if (toolWindow != null && toolWindow.isVisible) {
-            val content = toolWindow.contentManager.selectedContent
-            val component = content?.component
-
-            if (component is com.livteam.jsoninja.ui.component.JsonHelperPanel) {
-                val currentEditor = component.getCurrentEditor()
-                if (currentEditor != null) {
-                    currentJson = currentEditor.getText()
-                }
-            }
-        }
-
+        // Get current JSON from active tab using utility
+        val currentJson = JsonHelperUtils.getCurrentJsonFromToolWindow(project)
+        
         // Create JSONs with default templates if no content
         val leftJson = currentJson ?: "{}"
         val rightJson = "{}"
