@@ -96,6 +96,13 @@ jobs:
 
           gh pr create \
             --title "Changelog update - \`$VERSION\`" \
-            --body "Current pull request contains patched \`CHANGELOG.md\` file for the \`$VERSION\` version." \
+            --body "## Changelog update for $VERSION
+
+This pull request updates the CHANGELOG.md file with the following changes:
+
+$CHANGELOG
+
+---
+*This PR was automatically created by the release workflow.*" \
             --label "$LABEL" \
             --head $BRANCH
