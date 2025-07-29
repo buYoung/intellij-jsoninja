@@ -23,6 +23,11 @@ class JsonDiffService(private val project: Project) {
      */
     fun validateAndFormat(json: String, semantic: Boolean): Pair<Boolean, String?> {
         return try {
+            // First check if JSON is valid
+            if (!formatterService.isValidJson(json)) {
+                return Pair(false, null)
+            }
+            
             // Single parsing operation for both validation and formatting
             val formatState = if (semantic) JsonFormatState.PRETTIFY_SORTED else JsonFormatState.PRETTIFY
             val formatted = formatterService.formatJson(json, formatState)
