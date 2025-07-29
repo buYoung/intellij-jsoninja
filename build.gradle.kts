@@ -108,7 +108,8 @@ intellijPlatform {
         // The pluginVersion is based on the SemVer (https://semver.org) and supports pre-release labels, like 2.1.7-alpha.3
         // Specify pre-release label to publish the plugin in a custom Release Channel automatically. Read more:
         // https://plugins.jetbrains.com/docs/intellij/deployment.html#specifying-a-release-channel
-        channels = providers.gradleProperty("pluginVersion").map { listOf(it.substringAfter('-', "").substringBefore('.').ifEmpty { "default" }) }
+        channels = providers.gradleProperty("pluginVersion")
+            .map { listOf(it.substringAfter('-', "").substringBefore('.').ifEmpty { "default" }) }
     }
 
     pluginVerification {
@@ -122,6 +123,10 @@ intellijPlatform {
 changelog {
     groups.empty()
     repositoryUrl = providers.gradleProperty("pluginRepositoryUrl")
+    // Configure header parser to handle both formats (with and without 'v' prefix)
+    headerParserRegex = Regex("""^##\s+\[?v?([\d.]+(?:-\w+)?)]?.*$""")
+    // Don't add 'v' prefix when generating links
+    versionPrefix = ""
 }
 
 // Configure Gradle Kover Plugin - read more: https://github.com/Kotlin/kotlinx-kover#configuration

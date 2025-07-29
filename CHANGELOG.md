@@ -2,6 +2,8 @@
 
 # JSONinja Changelog
 
+## [Unreleased]
+
 ## [1.2.2] - 2025-07-17
 
 ### Added
@@ -109,6 +111,7 @@
 
 - Support for IntelliJ 2025.1
 
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.2.2...HEAD
 [1.2.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/buYoung/intellij-jsoninja/compare/1.1.0...1.2.0
