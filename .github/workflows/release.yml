@@ -96,13 +96,16 @@ jobs:
 
           gh pr create \
             --title "Changelog update - \`$VERSION\`" \
-            --body "## Changelog update for $VERSION
-
-This pull request updates the CHANGELOG.md file with the following changes:
-
-$CHANGELOG
-
----
-*This PR was automatically created by the release workflow.*" \
+            --body "$(cat << 'EOM'
+          ## Changelog update for $VERSION
+          
+          This pull request updates the CHANGELOG.md file with the following changes:
+          
+          $CHANGELOG
+          
+          ---
+          *This PR was automatically created by the release workflow.*
+          EOM
+          )" \
             --label "$LABEL" \
             --head $BRANCH
