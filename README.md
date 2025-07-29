@@ -71,6 +71,17 @@ Inspired by the need for reliable JSON tools! When we faced compatibility challe
   <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install Plugin from Disk...</kbd>.
 
 
+## For Developers
+
+### Documentation
+- [Development Guide](docs/DEVELOPMENT_GUIDE.md) - How to set up and develop the plugin
+- [Project Structure](docs/PROJECT_STRUCTURE.md) - Understanding the codebase organization
+- [Technical Specification](docs/TECHNICAL_SPEC.md) - Detailed technical documentation
+- [Version Update Guide](docs/VERSION_UPDATE_GUIDE.md) - Step-by-step release process
+
+### Contributing
+We welcome contributions! Please check our development guides before submitting pull requests.
+
 ---
 This plugin is based on the [IntelliJ Platform Plugin Template][template].
 
