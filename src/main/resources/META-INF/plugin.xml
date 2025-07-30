@@ -15,19 +15,14 @@
         <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja"
                     icon="/META-INF/pluginIcon.svg"/>
 
-        <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsonDiffToolWindowFactory" id="JSONinja-Diff"
-                    icon="/icons/diff.svg"
-                    anchor="bottom"
-                    secondary="true"
-                    canCloseContents="true"
-                    doNotActivateOnStart="true"/>
-
         <projectConfigurable
                 instance="com.livteam.jsoninja.settings.JsoninjaSettingsConfigurable"
                 id="com.livteam.jsoninja.settings.JsoninjaSettingsConfigurable"
                 displayName="JSONinja Settings"
                 groupId="tools"
                 nonDefaultProject="true"/>
+                
+        <diff.DiffExtension implementation="com.livteam.jsoninja.diff.JsonDiffExtension"/>
     </extensions>
 
     <applicationListeners>
@@ -38,13 +33,30 @@
     </applicationListeners>
 
     <actions>
-        <action id="com.livteam.jsoninja.ShowJsonDiffAction"
-                class="com.livteam.jsoninja.actions.ShowJsonDiffAction"
-                text="JSON Diff"
-                description="Compare two JSON files"
-                icon="/icons/diff.svg">
+        <!-- JSON Diff Actions Group -->
+        <group id="JSONinja.DiffActionsGroup"
+               text="JSON Diff"
+               description="JSON diff operations"
+               icon="/icons/diff.svg"
+               popup="true">
+            <action id="com.livteam.jsoninja.ShowJsonDiffAction"
+                    class="com.livteam.jsoninja.actions.ShowJsonDiffAction"
+                    text="JSON Diff (Default)"
+                    description="Compare two JSON files using default settings"
+                    icon="/icons/diff.svg"/>
+            <separator/>
+            <action id="com.livteam.jsoninja.ShowJsonDiffInEditorTabAction"
+                    class="com.livteam.jsoninja.actions.ShowJsonDiffInEditorTabAction"
+                    text="JSON Diff (Editor Tab)"
+                    description="Compare two JSON files in editor tab"
+                    icon="AllIcons.Actions.SplitVertically"/>
+            <action id="com.livteam.jsoninja.ShowJsonDiffInWindowAction"
+                    class="com.livteam.jsoninja.actions.ShowJsonDiffInWindowAction"
+                    text="JSON Diff (Window)"
+                    description="Compare two JSON files in separate window"
+                    icon="AllIcons.Actions.MoveToWindow"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
+        </group>
 
         <!-- JSONinja Tool Window Actions -->
         <group id="JSONinja.ToolWindow.ActionGroup">
@@ -59,23 +71,5 @@
             </action>
         </group>
 
-        <!-- JSON Diff Tool Window Actions -->
-        <group id="JSONinja.DiffWindow.ActionGroup">
-            <action id="com.livteam.jsoninja.CloseDiffTabAction"
-                    class="com.livteam.jsoninja.actions.CloseDiffTabAction"
-                    text="Close Diff Tab"
-                    description="Close current JSON diff tab or window">
-                <keyboard-shortcut first-keystroke="ctrl W" keymap="$default"/>
-                <keyboard-shortcut first-keystroke="meta W" keymap="Mac OS X" replace-all="true"/>
-                <keyboard-shortcut first-keystroke="meta W" keymap="Mac OS X 10.5+" replace-all="true"/>
-            </action>
-
-            <action id="com.livteam.jsoninja.CloseDiffWindowAction"
-                    class="com.livteam.jsoninja.actions.CloseDiffWindowAction"
-                    text="Close Diff Window"
-                    description="Close JSON diff window">
-                <keyboard-shortcut first-keystroke="ESCAPE" keymap="$default"/>
-            </action>
-        </group>
     </actions>
 </idea-plugin>

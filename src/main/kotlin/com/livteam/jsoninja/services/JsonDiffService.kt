@@ -2,6 +2,7 @@ package com.livteam.jsoninja.services
 
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.json.JsonFileType
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
@@ -22,6 +23,11 @@ class JsonDiffService(private val project: Project) {
      */
     fun validateAndFormat(json: String, semantic: Boolean): Pair<Boolean, String?> {
         return try {
+            // First check if JSON is valid
+            if (!formatterService.isValidJson(json)) {
+                return Pair(false, null)
+            }
+            
             // Single parsing operation for both validation and formatting
             val formatState = if (semantic) JsonFormatState.PRETTIFY_SORTED else JsonFormatState.PRETTIFY
             val formatted = formatterService.formatJson(json, formatState)
@@ -34,8 +40,12 @@ class JsonDiffService(private val project: Project) {
         }
     }
     
-    private fun createDiffContent(json: String) =
-        DiffContentFactory.getInstance().create(project, json, null, false)
+    private fun createDiffContent(json: String, editable: Boolean = true) =
+        if (editable) {
+            DiffContentFactory.getInstance().createEditable(project, json, JsonFileType.INSTANCE)
+        } else {
+            DiffContentFactory.getInstance().create(project, json, JsonFileType.INSTANCE, false)
+        }
     
     fun createDiffRequest(leftJson: String, rightJson: String, title: String? = null, semantic: Boolean = false): SimpleDiffRequest {
         val diffTitle = title ?: LocalizationBundle.message("dialog.json.diff.title")
