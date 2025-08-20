@@ -4,7 +4,10 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2025-08-20
+
 ### Changed
+
 - Changed the JSON diff view from the tool window approach to allow viewing in an editor tab or a separate window.
 - Fixed bugs related to JSON diff.
 
@@ -115,13 +118,14 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/buYoung/intellij-jsoninja/compare/1.1.0...1.2.0
-[1.1.0]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.6...1.1.0
-[1.0.6]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.5...1.0.6
-[1.0.5]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.4...1.0.5
-[1.0.4]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.3...1.0.4
-[1.0.3]: https://github.com/buYoung/intellij-jsoninja/compare/1.0.2...1.0.3
-[1.0.2]: https://github.com/buYoung/intellij-jsoninja/commits/1.0.2
+[1.2.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.6...v1.1.0
+[1.0.6]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.5...v1.0.6
+[1.0.5]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.4...v1.0.5
+[1.0.4]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.3...v1.0.4
+[1.0.3]: https://github.com/buYoung/intellij-jsoninja/compare/v1.0.2...v1.0.3
+[1.0.2]: https://github.com/buYoung/intellij-jsoninja/commits/v1.0.2
