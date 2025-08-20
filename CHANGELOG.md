@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed
+- Changed the JSON diff view from the tool window approach to allow viewing in an editor tab or a separate window.
+- Fixed bugs related to JSON diff.
+
 ## [1.2.2] - 2025-07-17
 
 ### Added
