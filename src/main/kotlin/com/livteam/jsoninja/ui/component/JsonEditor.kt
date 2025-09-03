@@ -126,7 +126,7 @@ class JsonEditor(
 
                 val changeLength = event.newFragment.length
 
-                if (changeLength > 10) {
+                if (changeLength > 6) {
                     val insertedText = event.newFragment.toString()
                     ApplicationManager.getApplication().invokeLater({
                         handlePotentialPasteContent(insertedText)
@@ -149,7 +149,6 @@ class JsonEditor(
      * 붙여넣기 가능성이 있는 내용에 대한 포맷팅 처리
      */
     private fun handlePotentialPasteContent(insertedText: String) {
-        println("handlePotentialPasteContent : ${insertedText}")
         if (insertedText.isBlank()) return
 
         try {
