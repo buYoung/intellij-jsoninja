@@ -150,4 +150,83 @@ class JsonFormatterServiceTest : BasePlatformTestCase() {
         assertEquals(anotherInvalidJson, anotherResult)
         assertFalse(jsonFormatterService.isValidJson(anotherInvalidJson))
     }
+
+    fun testFormatJsonWithTrailingCommaInObject() {
+        // Test formatting JSON with trailing comma in object
+        val inputWithTrailingComma = """[{"items": 72183,}]"""
+        
+        // Should be considered valid JSON
+        assertTrue(jsonFormatterService.isValidJson(inputWithTrailingComma))
+        
+        // Should format correctly (trailing comma removed)
+        val prettified = jsonFormatterService.formatJson(inputWithTrailingComma, JsonFormatState.PRETTIFY)
+        assertTrue(prettified.contains("\n"))
+        assertTrue(prettified.contains("  "))
+        assertFalse(prettified.contains(",}"))
+        assertTrue(prettified.contains("72183"))
+        
+        // Test uglify mode
+        val uglified = jsonFormatterService.formatJson(inputWithTrailingComma, JsonFormatState.UGLIFY)
+        assertEquals("""[{"items":72183}]""", uglified)
+    }
+
+    fun testFormatJsonWithTrailingCommaInObjectAndArray() {
+        // Test formatting JSON with trailing commas in both object and array
+        val inputWithTrailingCommas = """[{"items": 72183,},]"""
+        
+        // Should be considered valid JSON
+        assertTrue(jsonFormatterService.isValidJson(inputWithTrailingCommas))
+        
+        // Should format correctly (trailing commas removed)
+        val prettified = jsonFormatterService.formatJson(inputWithTrailingCommas, JsonFormatState.PRETTIFY)
+        assertTrue(prettified.contains("\n"))
+        assertTrue(prettified.contains("  "))
+        assertFalse(prettified.contains(",}"))
+        assertFalse(prettified.contains(",]"))
+        assertTrue(prettified.contains("72183"))
+        
+        // Test uglify mode
+        val uglified = jsonFormatterService.formatJson(inputWithTrailingCommas, JsonFormatState.UGLIFY)
+        assertEquals("""[{"items":72183}]""", uglified)
+    }
+
+    fun testFormatSimpleObjectWithTrailingComma() {
+        // Test simple object with trailing comma
+        val inputWithTrailingComma = """{"a":1,}"""
+        
+        // Should be considered valid JSON
+        assertTrue(jsonFormatterService.isValidJson(inputWithTrailingComma))
+        
+        // Should format correctly
+        val uglified = jsonFormatterService.formatJson(inputWithTrailingComma, JsonFormatState.UGLIFY)
+        assertEquals("""{"a":1}""", uglified)
+        
+        val prettified = jsonFormatterService.formatJson(inputWithTrailingComma, JsonFormatState.PRETTIFY)
+        assertTrue(prettified.contains("\n"))
+        assertFalse(prettified.contains(",}"))
+    }
+
+    fun testFormatArrayWithTrailingComma() {
+        // Test array with trailing comma
+        val inputWithTrailingComma = """[1,2,3,]"""
+        
+        // Should be considered valid JSON
+        assertTrue(jsonFormatterService.isValidJson(inputWithTrailingComma))
+        
+        // Should format correctly
+        val uglified = jsonFormatterService.formatJson(inputWithTrailingComma, JsonFormatState.UGLIFY)
+        assertEquals("[1,2,3]", uglified)
+    }
+
+    fun testInvalidJsonWithTrailingTokensStillFails() {
+        // Ensure FAIL_ON_TRAILING_TOKENS still works (not related to commas inside JSON)
+        val inputWithTrailingTokens = """{"a":1} junk"""
+        
+        // Should be considered invalid
+        assertFalse(jsonFormatterService.isValidJson(inputWithTrailingTokens))
+        
+        // Should return original when formatting fails
+        val result = jsonFormatterService.formatJson(inputWithTrailingTokens, JsonFormatState.PRETTIFY)
+        assertEquals(inputWithTrailingTokens, result)
+    }
 }

@@ -3,6 +3,7 @@ package com.livteam.jsoninja.services
 import com.intellij.openapi.components.Service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.core.JsonGenerator
+import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.SerializationFeature
@@ -32,13 +33,15 @@ class JsonFormatterService(private val project: Project) {
             configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
             configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
             configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
+            // 파서 레벨 기능 - trailing comma 허용
+            configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, true)
         }
 
         private val SORTED_MAPPER = DEFAULT_MAPPER.copy().apply {
             configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
         }
 
-        private val NON_SORTED_MAPPER = ObjectMapper().apply {
+        private val NON_SORTED_MAPPER = DEFAULT_MAPPER.copy().apply {
             configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, false)
         }
 
