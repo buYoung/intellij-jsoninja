@@ -31,17 +31,17 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
 /**
- * Extension for JSON diff viewer that provides automatic JSON formatting.
+ * 자동 JSON 포맷팅을 제공하는 JSON diff viewer extension.
  * 
- * This extension detects JSON content in diff viewers and applies automatic formatting
- * with performance optimizations including:
- * - Fast JSON content detection with early exits
- * - Per-document state tracking to prevent memory leaks
- * - Debounced formatting to avoid excessive processing
- * - Re-entrant update protection
+ * 이 extension은 diff viewer에서 JSON content를 감지하고 다음 성능 최적화를 포함한
+ * 자동 포맷팅을 적용합니다:
+ * - 조기 종료를 통한 빠른 JSON content 감지
+ * - memory leak 방지를 위한 document별 state 추적
+ * - 과도한 처리를 방지하는 debounced 포맷팅
+ * - 재진입 update 보호
  * 
- * Threading: All document operations are performed on EDT. Heavy JSON parsing
- * is moved to background threads where possible.
+ * Threading: 모든 document 작업은 EDT에서 수행됩니다. 무거운 JSON parsing은
+ * 가능한 경우 background thread로 이동됩니다.
  */
 class JsonDiffExtension : DiffExtension() {
     
@@ -52,8 +52,8 @@ class JsonDiffExtension : DiffExtension() {
     }
     
     /**
-     * Lightweight per-document state to optimize processing and prevent memory leaks.
-     * Access should be synchronized through documentStates map.
+     * 처리를 최적화하고 memory leak을 방지하기 위한 경량 document별 state.
+     * documentStates map을 통해 동기화된 access가 이루어져야 합니다.
      */
     private data class DocumentState(
         var lastContentHash: Int = 0,
@@ -70,19 +70,19 @@ class JsonDiffExtension : DiffExtension() {
     companion object {
         private val LOG = Logger.getInstance(JsonDiffExtension::class.java)
         
-        // Synchronized WeakHashMap to track per-document state without strong references
+        // 강한 참조 없이 document별 state를 추적하는 동기화된 WeakHashMap
         private val documentStates = Collections.synchronizedMap(WeakHashMap<Document, DocumentState>())
         
         /**
-         * Get or create document state for the given document.
-         * Thread-safe access to per-document state.
+         * 주어진 document에 대한 document state를 가져오거나 생성합니다.
+         * document별 state에 대한 thread-safe access.
          */
         private fun getDocumentState(document: Document): DocumentState {
             return documentStates.computeIfAbsent(document) { DocumentState() }
         }
     }
     override fun onViewerCreated(viewer: FrameDiffTool.DiffViewer, context: DiffContext, request: DiffRequest) {
-        // Only apply to EditorDiffViewer (text diffs)
+        // EditorDiffViewer(text diff)에만 적용
         if (viewer !is EditorDiffViewer) {
             LOG.debug("Skipping non-EditorDiffViewer: ${viewer.javaClass.simpleName}")
             return
@@ -94,7 +94,7 @@ class JsonDiffExtension : DiffExtension() {
             return
         }
 
-        // Get project and services
+        // project와 service들 가져오기
         val project = context.project
         if (project == null) {
             LOG.debug("No project available in DiffContext, skipping JSON diff extension")
@@ -105,7 +105,7 @@ class JsonDiffExtension : DiffExtension() {
         val settings = JsoninjaSettingsState.getInstance(project)
         val projectName = project.name
 
-        // Determine if both sides are JSON; final validation goes through JsonFormatterService.isValidJson
+        // 양쪽 모두 JSON인지 판단; 최종 검증은 JsonFormatterService.isValidJson을 통해 진행
         val startTime = System.currentTimeMillis()
         val jsonContentResults = editors.map { editor -> 
             isJsonContent(editor, formatterService, projectName, settings) to editor 
@@ -122,7 +122,7 @@ class JsonDiffExtension : DiffExtension() {
             return
         }
         
-        // Check for large files and show warning if needed (only if warnings are enabled)
+        // 대용량 파일 확인 및 필요시 경고 표시 (warning이 활성된 경우에만)
         if (settings.showLargeFileWarning) {
             val thresholdBytes = settings.largeFileThresholdMB * 1024 * 1024L
             val largeFileDetected = jsonContentResults.any { (_, editor) ->
@@ -135,7 +135,7 @@ class JsonDiffExtension : DiffExtension() {
                 val largestFileSize = largestEditor?.document?.textLength?.toLong() ?: 0L
                 val fileName = largestEditor?.virtualFile?.name
                 
-                // Show warning dialog and respect user's choice
+                // 경고 dialog를 표시하고 사용자의 선택을 존중
                 val shouldProceed = LargeFileWarningDialog.showWarningIfNeeded(
                     project, 
                     largestFileSize, 
@@ -151,7 +151,7 @@ class JsonDiffExtension : DiffExtension() {
             }
         }
 
-        // Install listeners for both editors
+        // 양쪽 editor에 listener 설치
         editors.forEach { editor ->
             installAutoFormatter(project, editor, viewer, formatterService, settings)
         }
@@ -160,27 +160,27 @@ class JsonDiffExtension : DiffExtension() {
     }
 
     /**
-     * Determines if editor content is JSON using a fast, multi-phase approach.
-     * Final validation always goes through JsonFormatterService.isValidJson as required.
+     * 빠르고 다단계 접근 방식을 사용하여 editor content가 JSON인지 판단합니다.
+     * 최종 검증은 항상 요구사항대로 JsonFormatterService.isValidJson을 통해 진행됩니다.
      * 
-     * @param editor The editor to check
-     * @param formatterService Service for JSON validation
-     * @param projectName Project name for logging context
-     * @return true if content is detected as JSON
+     * @param editor 확인할 editor
+     * @param formatterService JSON 검증을 위한 service
+     * @param projectName logging context를 위한 project 이름
+     * @return content가 JSON으로 감지되면 true
      */
     private fun isJsonContent(editor: Editor, formatterService: JsonFormatterService, projectName: String, settings: JsoninjaSettingsState): Boolean {
         val document = editor.document
         val state = getDocumentState(document)
         val fileName = editor.virtualFile?.name ?: "<unknown>"
         
-        // Check cached detection result first
+        // cached 감지 결과 먼저 확인
         if (state.detectionResult != JsonDetectionResult.UNKNOWN) {
             LOG.debug("Using cached JSON detection result for '$fileName': ${state.detectionResult}")
             return state.detectionResult == JsonDetectionResult.YES
         }
         
         try {
-            // Phase 1: Fast path - file type check
+            // 1단계: 빠른 경로 - 파일 타입 확인
             if (editor.virtualFile?.fileType == JsonFileType.INSTANCE) {
                 LOG.debug("File '$fileName' detected as JSON via file type")
                 state.detectionResult = JsonDetectionResult.YES
@@ -194,17 +194,17 @@ class JsonDiffExtension : DiffExtension() {
                 return false
             }
             
-            // Phase 2: Size check - only if warnings are enabled
+            // 2단계: 크기 확인 - warning이 활성된 경우에만
             if (settings.showLargeFileWarning) {
                 val thresholdBytes = settings.largeFileThresholdMB * 1024 * 1024L
                 if (text.length > thresholdBytes) {
                     LOG.debug("File '$fileName' larger than threshold (${text.length / (1024*1024)} MB vs ${settings.largeFileThresholdMB} MB), will show warning later")
-                    // Don't reject here - let the warning dialog handle it later
-                    // Continue with JSON detection for now
+                    // 여기서 거절하지 말고 - 나중에 warning dialog이 처리하도록 함
+                    // 지금은 JSON 감지를 계속 진행
                 }
             }
 
-            // Phase 3: Heuristic check
+            // 3단계: 휴리스틱 확인
             val trimmed = text.trim()
             if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) {
                 LOG.debug("File '$fileName' does not start with JSON delimiters")
@@ -212,7 +212,7 @@ class JsonDiffExtension : DiffExtension() {
                 return false
             }
 
-            // Phase 4: Mandatory validation via JsonFormatterService
+            // 4단계: JsonFormatterService를 통한 필수 검증
             val isValid = formatterService.isValidJson(trimmed)
             state.detectionResult = if (isValid) JsonDetectionResult.YES else JsonDetectionResult.NO
             
@@ -233,12 +233,12 @@ class JsonDiffExtension : DiffExtension() {
         }
     }
     /**
-     * Installs document change listener with optimized debouncing and small edit detection.
+     * 최적화된 debouncing과 소규모 편집 감지를 통해 document 변경 listener를 설치합니다.
      * 
-     * @param project The project context
-     * @param editor The editor to monitor
-     * @param viewer The diff viewer for disposal registration
-     * @param formatterService Service for JSON formatting
+     * @param project project context
+     * @param editor 모니터링할 editor
+     * @param viewer disposal 등록을 위한 diff viewer
+     * @param formatterService JSON 포맷팅을 위한 service
      */
     private fun installAutoFormatter(
         project: Project,
@@ -254,7 +254,7 @@ class JsonDiffExtension : DiffExtension() {
 
         val documentListener = object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
-                // Skip if this change originated from our own formatter
+                // 이 변경이 우리 자체 formatter에서 발생한 경우 스킵
                 if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
                     LOG.debug("Skipping self-update for '$fileName'")
                     return
@@ -270,7 +270,7 @@ class JsonDiffExtension : DiffExtension() {
                 state.lastEditSize = editSize
                 state.lastChangeTime = currentTime
                 
-                // Skip small whitespace-only edits
+                // 소규모 공백 전용 편집 스킵
                 if (editSize <= Constants.SMALL_EDIT_THRESHOLD) {
                     val changedText = event.newFragment.toString()
                     if (changedText.isBlank() || changedText.all { it.isWhitespace() }) {
@@ -279,13 +279,13 @@ class JsonDiffExtension : DiffExtension() {
                     }
                 }
                 
-                // Large files are handled by the warning dialog at viewer creation time
-                // No need for hard limits here - user has already consented or warnings are disabled
+                // 대용량 파일은 viewer 생성 시점에서 warning dialog이 처리
+                // 여기서 하드 리미트가 필요 없음 - 사용자가 이미 동의했거나 warning이 비활성화됨
 
-                // Cancel any pending formatting
+                // 대기 중인 포맷팅 취소
                 alarm.cancelAllRequests()
 
-                // Schedule new formatting with debounce
+                // debounce로 새로운 포맷팅 예약
                 alarm.addRequest({
                     if (!project.isDisposed) {
                         scheduleJsonFormatting(project, document, formatterService, fileName)
@@ -296,23 +296,23 @@ class JsonDiffExtension : DiffExtension() {
 
         document.addDocumentListener(documentListener)
 
-        // Remove listener and cleanup when viewer is disposed
+        // viewer가 dispose될 때 listener 제거 및 정리
         Disposer.register(viewer) {
             document.removeDocumentListener(documentListener)
             alarm.cancelAllRequests()
-            // Let WeakHashMap naturally clean up document state
+            // WeakHashMap이 자연스럽게 document state를 정리하도록 함
             LOG.debug("Disposed JSON diff extension for '$fileName'")
         }
 
-        // Format initially if there's content
+        // content가 있으면 초기 포맷팅 수행
         if (document.text.isNotBlank()) {
             scheduleJsonFormatting(project, document, formatterService, fileName)
         }
     }
 
     /**
-     * Schedules JSON formatting work on a background thread, then applies changes on EDT.
-     * Uses ReadAction for safe document access and WriteCommandAction for changes.
+     * background thread에서 JSON 포맷팅 작업을 예약하고, 다음 EDT에서 변경사항을 적용합니다.
+     * 안전한 document access를 위해 ReadAction을, 변경을 위해 WriteCommandAction을 사용합니다.
      */
     private fun scheduleJsonFormatting(
         project: Project,
@@ -333,15 +333,15 @@ class JsonDiffExtension : DiffExtension() {
     }
     
     /**
-     * Performs JSON formatting computation in background thread.
-     * Returns null if formatting should be skipped or failed.
+     * background thread에서 JSON 포맷팅 연산을 수행합니다.
+     * 포맷팅을 스킵하거나 실패한 경우 null을 반환합니다.
      */
     private fun formatJsonInBackground(
         document: Document,
         formatterService: JsonFormatterService,
         fileName: String
     ): String? {
-        // Avoid re-entrant updates
+        // 재진입 update 방지
         if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
             LOG.debug("Skipping formatting due to change guard for '$fileName'")
             return null
@@ -360,7 +360,7 @@ class JsonDiffExtension : DiffExtension() {
             return null
         }
         
-        // Check content hash to avoid unnecessary work
+        // 불필요한 작업을 방지하기 위해 content hash 확인
         val contentHash = trimmed.hashCode()
         if (state.lastContentHash == contentHash) {
             LOG.debug("Document '$fileName' content unchanged, skipping formatting")
@@ -369,7 +369,7 @@ class JsonDiffExtension : DiffExtension() {
 
         return try {
             val startTime = System.currentTimeMillis()
-            // JsonFormatterService internally validates via isValidJson as required
+            // JsonFormatterService는 요구사항대로 내부적으로 isValidJson을 통해 검증
             val formatted = formatterService.formatJson(trimmed, JsonFormatState.PRETTIFY)
             val formatTime = System.currentTimeMillis() - startTime
             
@@ -382,14 +382,14 @@ class JsonDiffExtension : DiffExtension() {
             if (formatted != trimmed) formatted else null
             
         } catch (e: ProcessCanceledException) {
-            // Re-throw cancellation to properly handle background task interruption
+            // background task 중단을 적절히 처리하기 위해 취소 예외를 다시 던짐
             throw e
         } catch (e: JsonProcessingException) {
             LOG.debug("JSON processing failed for '$fileName': ${e.message}")
             null
         } catch (e: OutOfMemoryError) {
             LOG.error("OutOfMemoryError during JSON formatting for '$fileName' (${document.textLength} chars)", e)
-            // Set flag to prevent retries for this document
+            // 이 document에 대한 재시도를 방지하는 flag 설정
             state.detectionResult = JsonDetectionResult.NO
             null
         } catch (e: IOException) {
@@ -402,7 +402,7 @@ class JsonDiffExtension : DiffExtension() {
     }
     
     /**
-     * Applies formatted JSON result to document on EDT with proper write action and guards.
+     * 적절한 write action과 guard와 함께 EDT에서 포맷팅된 JSON 결과를 document에 적용합니다.
      */
     private fun applyJsonFormatting(
         project: Project,
@@ -414,7 +414,7 @@ class JsonDiffExtension : DiffExtension() {
         
         val state = getDocumentState(document)
         
-        // Final guard check on EDT
+        // EDT에서의 최종 guard 확인
         if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true || state.isSelfUpdate.get()) {
             LOG.debug("Skipping document update due to guard for '$fileName'")
             return

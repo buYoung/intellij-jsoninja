@@ -12,8 +12,8 @@ import java.text.DecimalFormat
 import javax.swing.JComponent
 
 /**
- * Dialog to warn users about large JSON files that may impact performance.
- * Provides an option to remember the user's preference and not show the warning again.
+ * 성능에 영향을 줄 수 있는 대용량 JSON 파일에 대해 사용자에게 경고하는 Dialog.
+ * 사용자의 선호도를 기억하고 다시 경고를 표시하지 않는 옵션을 제공합니다.
  */
 class LargeFileWarningDialog(
     private val project: Project,
@@ -26,12 +26,12 @@ class LargeFileWarningDialog(
 
     companion object {
         /**
-         * Shows the large file warning dialog if warnings are enabled in settings.
+         * setting에서 warning이 활성된 경우 대용량 파일 경고 dialog를 표시합니다.
          *
-         * @param project The current project
-         * @param fileSizeBytes Size of the file in bytes
-         * @param fileName Optional file name for context
-         * @return true if user chose to proceed, false if cancelled or warnings are disabled
+         * @param project 현재 project
+         * @param fileSizeBytes 파일 크기 (byte 단위)
+         * @param fileName context를 위한 선택적 파일 이름
+         * @return 사용자가 계속 진행을 선택한 경우 true, 취소하거나 warning이 비활성화된 경우 false
          */
         fun showWarningIfNeeded(
             project: Project,
@@ -41,7 +41,7 @@ class LargeFileWarningDialog(
             val settings = JsoninjaSettingsState.getInstance(project)
             val thresholdBytes = settings.largeFileThresholdMB * 1024 * 1024L
 
-            // If file is smaller than threshold or warnings are disabled, proceed
+            // 파일이 임계값보다 작거나 warning이 비활성화된 경우 계속 진행
             if (fileSizeBytes < thresholdBytes || !settings.showLargeFileWarning) {
                 return true
             }
@@ -97,7 +97,7 @@ class LargeFileWarningDialog(
     }
 
     override fun doOKAction() {
-        // If user checked "don't show again", disable warnings in settings
+        // 사용자가 "다시 표시하지 않기"를 체크한 경우, setting에서 warning 비활성화
         if (dontShowAgainCheckBox.isSelected) {
             settings.showLargeFileWarning = false
         }
