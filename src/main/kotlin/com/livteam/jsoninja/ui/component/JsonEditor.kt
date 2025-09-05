@@ -9,18 +9,11 @@ import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.Document
-import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
-import com.intellij.openapi.editor.actionSystem.EditorActionHandler
-import com.intellij.openapi.editor.actionSystem.EditorActionManager
-import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
-import com.intellij.openapi.actionSystem.DataContext
-import com.intellij.openapi.actionSystem.IdeActions
-import com.intellij.openapi.editor.Caret
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiFileFactory
@@ -32,7 +25,6 @@ import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import javax.swing.JPanel
 import java.awt.BorderLayout
-import java.awt.datatransfer.DataFlavor
 
 /**
  * JSON Document 생성을 위한 인터페이스
@@ -64,6 +56,7 @@ class JsonEditor(
 ) : JPanel(), Disposable {
     companion object {
         private const val EMPTY_TEXT = ""
+        private const val PASTE_DETECTION_THRESHOLD = 6
 
         /**
          * 국제화를 지원하기위해 const val 대신 var로 사용
@@ -109,94 +102,75 @@ class JsonEditor(
     private var originalJson: String = ""
     private var onContentChangeCallback: ((String) -> Unit)? = null
     private var isSettingText = false
-
-    // 원래 Paste 핸들러를 저장하기 위한 변수
-    private var originalPasteHandler: EditorActionHandler? = null
-    private val pasteActionId = IdeActions.ACTION_EDITOR_PASTE
+    private var lastClipboardContent = ""
 
     private val editor: EditorTextField = createJsonEditor()
-    private val editorActionManager = EditorActionManager.getInstance()
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val settings = JsoninjaSettingsState.getInstance(project)
 
     init {
         initializeUI()
         setupContentChangeListener()
-
+        setupClipboardMonitoring()
     }
 
     /**
-     * EditorActionHandler를 교체하여 붙여넣기 이벤트를 감지하는 내부 클래스
+     * 향상된 자동 포맷팅 설정 - Document listener 기반
      */
-    private inner class CustomPasteHandler(private val originalHandler: EditorActionHandler?) : EditorActionHandler() {
-        override fun doExecute(editor: Editor, caret: Caret?, dataContext: DataContext?) {
-            if (editor !== this@JsonEditor.editor.editor) {
-                originalHandler?.execute(editor, caret, dataContext)
-                return
-            }
+    private fun setupClipboardMonitoring() {
+        // 추가적인 document listener를 통해 paste 감지
+        val documentListener = object : com.intellij.openapi.editor.event.DocumentListener {
 
-            val clipboardText = try {
-                CopyPasteManager.getInstance().getContents<String>(DataFlavor.stringFlavor)
-            } catch (e: Exception) {
-                println("Failed to get clipboard content: ${e.message}")
-                originalHandler?.execute(editor, caret, dataContext)
-                ""
-            }
+            override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
+                if (isSettingText) return
 
-            if (clipboardText == null) {
-                originalHandler?.execute(editor, caret, dataContext)
-                return
-            }
+                val insertedText = event.newFragment.toString()
+                val changeLength = insertedText.length
+                if (changeLength <= 0) return
 
-            val isEmptyClipboard = clipboardText.isBlank() || clipboardText.isEmpty()
-
-            if (isEmptyClipboard) {
-                // 포맷팅 대상 아니거나 실패 시 원래 핸들러 실행
-                originalHandler?.execute(editor, caret, dataContext)
-                return
-            }
-
-            try {
-                // Use the paste format setting from settings
-                val pasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
-                val formattedText = formatterService.formatJson(clipboardText, pasteFormatState)
-
-                if (formattedText == clipboardText) {
-                    originalHandler?.execute(editor, caret, dataContext)
-                    return
+                if (changeLength > PASTE_DETECTION_THRESHOLD) {
+                    val offset = event.offset
+                    ApplicationManager.getApplication().invokeLater({
+                        handlePotentialPasteContent(insertedText, offset, changeLength)
+                    }, ModalityState.defaultModalityState())
                 }
-
-                // WriteCommandAction 내에서 Document API 사용하여 수정
-                WriteCommandAction.runWriteCommandAction(project) {
-                    val document: Document = editor.document
-                    val selectionModel = editor.selectionModel
-
-                    if (selectionModel.hasSelection()) {
-                        val start: Int = selectionModel.selectionStart
-                        val end: Int = selectionModel.selectionEnd
-                        document.replaceString(start, end, formattedText)
-                    } else {
-                        val offset: Int = editor.caretModel.offset
-                        document.insertString(offset, formattedText)
-                        selectionModel.setSelection(offset, offset + formattedText.length)
-                    }
-
-                    // 선택 해제 (선택 교체 후 필요시)
-                    selectionModel.removeSelection()
-                }
-                return
-            } catch (e: Exception) {
-                originalHandler?.execute(editor, caret, dataContext)
-                return
             }
         }
 
-        override fun isEnabledForCaret(editor: Editor, caret: Caret, dataContext: DataContext?): Boolean {
-            return originalHandler?.isEnabled(editor, caret, dataContext) ?: super.isEnabledForCaret(
-                editor,
-                caret,
-                dataContext
-            )
+        // Document listener 등록
+        editor.addDocumentListener(documentListener)
+
+        // Disposer 등록으로 정리
+        com.intellij.openapi.util.Disposer.register(this) {
+            editor.removeDocumentListener(documentListener)
+        }
+    }
+
+    /**
+     * 붙여넣기 가능성이 있는 내용에 대한 포맷팅 처리
+     */
+    private fun handlePotentialPasteContent(insertedText: String, offset: Int, newLength: Int) {
+        val isValidJson = formatterService.isValidJson(insertedText)
+        if (!isValidJson) {
+            return
+        }
+
+        try {
+            WriteCommandAction.runWriteCommandAction(project) {
+                val pasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
+                val formattedText = formatterService.formatJson(insertedText, pasteFormatState)
+
+                val doc = editor.document
+                val start = offset
+                val end = offset + newLength
+
+                if (start >= 0 && end >= start && end <= doc.textLength) {
+                    doc.replaceString(start, end, formattedText)
+                    editor.editor?.caretModel?.moveToOffset(start + formattedText.length)
+                }
+            }
+        } catch (e: Exception) {
+            // 포맷팅 실패 시 무시
         }
     }
 
@@ -204,41 +178,24 @@ class JsonEditor(
      * 에디터 내용 변경 리스너 설정
      */
     private fun setupContentChangeListener() {
-        editor.addDocumentListener(object : com.intellij.openapi.editor.event.DocumentListener {
+        val contentChangeListener = object : com.intellij.openapi.editor.event.DocumentListener {
             override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
                 val content = editor.text
                 if (isSettingText) {
                     return
                 }
-
                 onContentChangeCallback?.invoke(content)
             }
-        })
-    }
+        }
 
-    /**
-     * 붙여넣기 액션 핸들러 설정 (ActionHandler 교체 방식)
-     */
-    private fun setupPasteListener() {
-        // 이미 핸들러가 교체되었다면 중복 실행 방지
-        if (originalPasteHandler == null) {
-            originalPasteHandler = editorActionManager.getActionHandler(pasteActionId)
-            editorActionManager.setActionHandler(pasteActionId, CustomPasteHandler(originalPasteHandler))
+        editor.addDocumentListener(contentChangeListener)
+
+        // Disposer 등록으로 정리
+        com.intellij.openapi.util.Disposer.register(this) {
+            editor.removeDocumentListener(contentChangeListener)
         }
     }
 
-    /**
-     * 원래 붙여넣기 핸들러 복원
-     */
-    private fun restoreOriginalPasteHandler() {
-        if (originalPasteHandler != null) {
-            // 현재 핸들러가 우리가 설치한 핸들러인지 확인 후 복원 (안전 장치)
-            if (editorActionManager.getActionHandler(pasteActionId) is CustomPasteHandler) {
-                editorActionManager.setActionHandler(pasteActionId, originalPasteHandler!!)
-            }
-            originalPasteHandler = null
-        }
-    }
 
     private fun createJsonEditor(): EditorTextField {
         val document = documentCreator.createDocument(EMPTY_TEXT, project)
@@ -262,26 +219,6 @@ class JsonEditor(
         }
     }
 
-
-    override fun addNotify() {
-        super.addNotify()
-        // 컴포넌트가 화면에 표시될 준비가 되면 내부 Editor가 생성되었을 가능성이 높음
-        // 이 시점에 리스너 설정 시도
-        if (editor.editor == null) {
-            println("Editor not ready at addNotify for ActionHandler setup.")
-            return
-        }
-
-        setupPasteListener()
-    }
-
-    // removeNotify는 컴포넌트가 화면 계층에서 제거될 때 호출됨
-    override fun removeNotify() {
-        // 핸들러 복원 시점을 dispose 대신 removeNotify로 변경하여
-        // 컴포넌트가 화면에서 사라질 때 원래대로 돌려놓도록 함
-        restoreOriginalPasteHandler()
-        super.removeNotify()
-    }
 
     private fun EditorSettings.applyEditorSettings() {
         isLineNumbersShown = true
@@ -343,7 +280,6 @@ class JsonEditor(
     }
 
     override fun dispose() {
-        restoreOriginalPasteHandler()
         removeAll()
     }
 }
