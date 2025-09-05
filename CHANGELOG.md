@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### Added
+- JSON with trailing commas is now handled correctly during formatting.
+
+### Fixed
+- Stabilized paste behavior and optimized IDE-wide event handling (#81).
+- Improved overall stability of the JSON Editor.
+
+### Changed
+- Optimized JSON diff performance and improved change detection accuracy.
+- Added user warnings when processing large files.
+- Enhanced multilingual support (Korean/English).
+- General improvements to JSON validation and formatting logic.
+
+
 ## [1.3.0] - 2025-08-20
 
 ### Changed
