@@ -119,20 +119,20 @@ class JsonEditor(
     private fun setupClipboardMonitoring() {
         // 추가적인 document listener를 통해 paste 감지
         val documentListener = object : com.intellij.openapi.editor.event.DocumentListener {
-            private var pendingFormatting = false
 
             override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
-                if (isSettingText || pendingFormatting) return
+                if (isSettingText) return
 
                 val changeLength = event.newFragment.length
+                if (changeLength <= 0) return
 
                 if (changeLength > 6) {
                     val insertedText = event.newFragment.toString()
+                    val offset = event.offset
                     ApplicationManager.getApplication().invokeLater({
-                        handlePotentialPasteContent(insertedText)
+                        handlePotentialPasteContent(insertedText, offset, changeLength)
                     }, ModalityState.defaultModalityState())
                 }
-
             }
         }
 
@@ -148,29 +148,24 @@ class JsonEditor(
     /**
      * 붙여넣기 가능성이 있는 내용에 대한 포맷팅 처리
      */
-    private fun handlePotentialPasteContent(insertedText: String) {
-        if (insertedText.isBlank()) return
+    private fun handlePotentialPasteContent(insertedText: String, offset: Int, newLength: Int) {
+        val isValidJson = formatterService.isValidJson(insertedText)
+        if (!isValidJson) {
+            return
+        }
 
         try {
-            // JSON인지 간단히 확인
-            val trimmed = insertedText.trim()
-            if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-                return
-            }
+            WriteCommandAction.runWriteCommandAction(project) {
+                val pasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
+                val formattedText = formatterService.formatJson(insertedText, pasteFormatState)
 
-            val pasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
-            val formattedText = formatterService.formatJson(insertedText, pasteFormatState)
+                val doc = editor.document
+                val start = offset
+                val end = offset + newLength
 
-            // 포맷팅이 실제로 변경되었을 때만 적용
-            if (formattedText != insertedText && formattedText.trim() != insertedText.trim()) {
-                WriteCommandAction.runWriteCommandAction(project) {
-                    val currentText = editor.text
-                    val newText = currentText.replace(insertedText, formattedText)
-                    if (newText != currentText) {
-                        isSettingText = true
-                        editor.text = newText
-                        isSettingText = false
-                    }
+                if (start >= 0 && end >= start && end <= doc.textLength) {
+                    doc.replaceString(start, end, formattedText)
+                    editor.editor?.caretModel?.moveToOffset(start + formattedText.length)
                 }
             }
         } catch (e: Exception) {
