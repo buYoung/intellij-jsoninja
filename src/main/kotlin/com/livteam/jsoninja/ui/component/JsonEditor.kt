@@ -56,6 +56,7 @@ class JsonEditor(
 ) : JPanel(), Disposable {
     companion object {
         private const val EMPTY_TEXT = ""
+        private const val PASTE_DETECTION_THRESHOLD = 6
 
         /**
          * 국제화를 지원하기위해 const val 대신 var로 사용
@@ -123,11 +124,11 @@ class JsonEditor(
             override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
                 if (isSettingText) return
 
-                val changeLength = event.newFragment.length
+                val insertedText = event.newFragment.toString()
+                val changeLength = insertedText.length
                 if (changeLength <= 0) return
 
-                if (changeLength > 6) {
-                    val insertedText = event.newFragment.toString()
+                if (changeLength > PASTE_DETECTION_THRESHOLD) {
                     val offset = event.offset
                     ApplicationManager.getApplication().invokeLater({
                         handlePotentialPasteContent(insertedText, offset, changeLength)
