@@ -23,6 +23,8 @@ import com.intellij.openapi.util.Key
 import com.intellij.util.Alarm
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.settings.JsoninjaSettingsState
+import com.livteam.jsoninja.ui.dialogs.LargeFileWarningDialog
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
@@ -46,8 +48,6 @@ class JsonDiffExtension : DiffExtension() {
     private object Constants {
         const val DEBOUNCE_DELAY = 300 // milliseconds
         const val SMALL_EDIT_THRESHOLD = 3 // characters
-        const val MAX_BYTES_FOR_JSON_DETECTION = 1_500_000 // 1.5 MB
-        const val MAX_BYTES_FOR_JSON_PROCESSING = 2_000_000 // 2 MB
         val CHANGE_GUARD_KEY: Key<Boolean> = Key.create("JSONINJA_DIFF_CHANGE_GUARD")
     }
     
@@ -102,22 +102,58 @@ class JsonDiffExtension : DiffExtension() {
         }
         
         val formatterService = project.service<JsonFormatterService>()
+        val settings = JsoninjaSettingsState.getInstance(project)
         val projectName = project.name
 
         // Determine if both sides are JSON; final validation goes through JsonFormatterService.isValidJson
         val startTime = System.currentTimeMillis()
-        val isJsonDiff = editors.all { editor -> isJsonContent(editor, formatterService, projectName) }
+        val jsonContentResults = editors.map { editor -> 
+            isJsonContent(editor, formatterService, projectName, settings) to editor 
+        }
         val detectionTime = System.currentTimeMillis() - startTime
         
         if (LOG.isDebugEnabled) {
-            LOG.debug("JSON detection completed in ${detectionTime}ms for project '$projectName', result: $isJsonDiff")
+            LOG.debug("JSON detection completed in ${detectionTime}ms for project '$projectName'")
         }
         
-        if (!isJsonDiff) return
+        val isJsonDiff = jsonContentResults.all { it.first }
+        if (!isJsonDiff) {
+            LOG.debug("Not all editors contain JSON content, skipping JSON diff extension")
+            return
+        }
+        
+        // Check for large files and show warning if needed (only if warnings are enabled)
+        if (settings.showLargeFileWarning) {
+            val thresholdBytes = settings.largeFileThresholdMB * 1024 * 1024L
+            val largeFileDetected = jsonContentResults.any { (_, editor) ->
+                editor.document.textLength.toLong() >= thresholdBytes
+            }
+            
+            if (largeFileDetected) {
+                val largestFile = jsonContentResults.maxByOrNull { (_, editor) -> editor.document.textLength }
+                val largestEditor = largestFile?.second
+                val largestFileSize = largestEditor?.document?.textLength?.toLong() ?: 0L
+                val fileName = largestEditor?.virtualFile?.name
+                
+                // Show warning dialog and respect user's choice
+                val shouldProceed = LargeFileWarningDialog.showWarningIfNeeded(
+                    project, 
+                    largestFileSize, 
+                    fileName
+                )
+                
+                if (!shouldProceed) {
+                    LOG.debug("User cancelled large file JSON diff processing for '$fileName'")
+                    return
+                }
+                
+                LOG.debug("User confirmed large file JSON diff processing for '$fileName' (${largestFileSize / (1024*1024)} MB)")
+            }
+        }
 
         // Install listeners for both editors
         editors.forEach { editor ->
-            installAutoFormatter(project, editor, viewer, formatterService)
+            installAutoFormatter(project, editor, viewer, formatterService, settings)
         }
         
         LOG.debug("JSON diff extension activated for project '$projectName' with ${editors.size} editors")
@@ -132,7 +168,7 @@ class JsonDiffExtension : DiffExtension() {
      * @param projectName Project name for logging context
      * @return true if content is detected as JSON
      */
-    private fun isJsonContent(editor: Editor, formatterService: JsonFormatterService, projectName: String): Boolean {
+    private fun isJsonContent(editor: Editor, formatterService: JsonFormatterService, projectName: String, settings: JsoninjaSettingsState): Boolean {
         val document = editor.document
         val state = getDocumentState(document)
         val fileName = editor.virtualFile?.name ?: "<unknown>"
@@ -158,11 +194,14 @@ class JsonDiffExtension : DiffExtension() {
                 return false
             }
             
-            // Phase 2: Size check
-            if (text.length > Constants.MAX_BYTES_FOR_JSON_DETECTION) {
-                LOG.debug("File '$fileName' too large (${text.length} bytes) for JSON detection, skipping")
-                state.detectionResult = JsonDetectionResult.NO
-                return false
+            // Phase 2: Size check - only if warnings are enabled
+            if (settings.showLargeFileWarning) {
+                val thresholdBytes = settings.largeFileThresholdMB * 1024 * 1024L
+                if (text.length > thresholdBytes) {
+                    LOG.debug("File '$fileName' larger than threshold (${text.length / (1024*1024)} MB vs ${settings.largeFileThresholdMB} MB), will show warning later")
+                    // Don't reject here - let the warning dialog handle it later
+                    // Continue with JSON detection for now
+                }
             }
 
             // Phase 3: Heuristic check
@@ -205,7 +244,8 @@ class JsonDiffExtension : DiffExtension() {
         project: Project,
         editor: Editor,
         viewer: FrameDiffTool.DiffViewer,
-        formatterService: JsonFormatterService
+        formatterService: JsonFormatterService,
+        settings: JsoninjaSettingsState
     ) {
         val document = editor.document
         val state = getDocumentState(document)
@@ -239,11 +279,8 @@ class JsonDiffExtension : DiffExtension() {
                     }
                 }
                 
-                // Skip if document is too large for processing
-                if (document.textLength > Constants.MAX_BYTES_FOR_JSON_PROCESSING) {
-                    LOG.debug("Document '$fileName' too large (${document.textLength} chars) for JSON processing")
-                    return
-                }
+                // Large files are handled by the warning dialog at viewer creation time
+                // No need for hard limits here - user has already consented or warnings are disabled
 
                 // Cancel any pending formatting
                 alarm.cancelAllRequests()

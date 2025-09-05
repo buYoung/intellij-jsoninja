@@ -21,6 +21,8 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
     private var jsonFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
     private var pasteFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
     private var diffDisplayModeComboBox: ComboBox<JsonDiffDisplayModeWrapper>? = null
+    private var largeFileThresholdSpinner: JSpinner? = null
+    private var showLargeFileWarningCheckBox: JBCheckBox? = null
     private var mainPanel: JPanel? = null
 
     // Wrapper class for JComboBox to display enum values nicely
@@ -69,6 +71,8 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         if (mainPanel == null) {
             indentSizeSpinner = JSpinner(SpinnerNumberModel(settings.indentSize, 0, 32, 1))
             sortKeysCheckBox = JBCheckBox(LocalizationBundle.message("settings.sortkeys.label"), settings.sortKeys)
+            largeFileThresholdSpinner = JSpinner(SpinnerNumberModel(settings.largeFileThresholdMB, 1, 100, 1))
+            showLargeFileWarningCheckBox = JBCheckBox(LocalizationBundle.message("settings.show.large.file.warning.label"), settings.showLargeFileWarning)
 
             // Filter out UGLIFY for default format dropdown
             val defaultFormatStates = JsonFormatState.entries
@@ -126,6 +130,13 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 row(LocalizationBundle.message("settings.diff.display.label")) {
                     cell(diffDisplayModeComboBox!!)
                 }
+                separator()
+                row(LocalizationBundle.message("settings.large.file.threshold.label")) {
+                    cell(largeFileThresholdSpinner!!)
+                }
+                row {
+                    cell(showLargeFileWarningCheckBox!!)
+                }
             }
         }
 
@@ -144,7 +155,9 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 sortKeysCheckBox?.isSelected != settings.sortKeys ||
                 (jsonFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentFormatState.name ||
                 (pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentPasteFormatState.name ||
-                (diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper)?.mode?.name != currentDiffDisplayMode.name
+                (diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper)?.mode?.name != currentDiffDisplayMode.name ||
+                largeFileThresholdSpinner?.value != settings.largeFileThresholdMB ||
+                showLargeFileWarningCheckBox?.isSelected != settings.showLargeFileWarning
     }
 
     override fun apply() {
@@ -156,6 +169,8 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         settings.pasteFormatState = selectedPasteFormatWrapper?.state?.name ?: settings.pasteFormatState
         val selectedDiffModeWrapper = diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper
         settings.diffDisplayMode = selectedDiffModeWrapper?.mode?.name ?: settings.diffDisplayMode
+        settings.largeFileThresholdMB = largeFileThresholdSpinner?.value as? Int ?: settings.largeFileThresholdMB
+        settings.showLargeFileWarning = showLargeFileWarningCheckBox?.isSelected ?: settings.showLargeFileWarning
     }
 
     override fun reset() {
@@ -190,6 +205,9 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             .toTypedArray()
         val selectedDiffModeWrapper = diffDisplayModes.find { it.mode == currentDiffDisplayMode }
         diffDisplayModeComboBox?.selectedItem = selectedDiffModeWrapper
+        
+        largeFileThresholdSpinner?.value = settings.largeFileThresholdMB
+        showLargeFileWarningCheckBox?.isSelected = settings.showLargeFileWarning
     }
 
     override fun disposeUIResources() {
@@ -199,5 +217,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         jsonFormatStateComboBox = null
         pasteFormatStateComboBox = null
         diffDisplayModeComboBox = null
+        largeFileThresholdSpinner = null
+        showLargeFileWarningCheckBox = null
     }
 }

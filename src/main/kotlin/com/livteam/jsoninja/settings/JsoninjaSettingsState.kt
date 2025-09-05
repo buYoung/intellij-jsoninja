@@ -16,7 +16,9 @@ data class JsoninjaSettingsState(
     var sortKeys: Boolean = false,
     var jsonFormatState: String = JsonFormatState.PRETTIFY.name, // Store enum as string
     var pasteFormatState: String = JsonFormatState.PRETTIFY.name, // Format state for paste operations
-    var diffDisplayMode: String = JsonDiffDisplayMode.WINDOW.name // Diff display mode preference
+    var diffDisplayMode: String = JsonDiffDisplayMode.WINDOW.name, // Diff display mode preference
+    var largeFileThresholdMB: Int = 2, // Threshold in MB for large file warning
+    var showLargeFileWarning: Boolean = true // Whether to show warning for large files
 ) : PersistentStateComponent<JsoninjaSettingsState> {
 
     override fun getState(): JsoninjaSettingsState {
@@ -29,6 +31,8 @@ data class JsoninjaSettingsState(
         this.jsonFormatState = state.jsonFormatState
         this.pasteFormatState = state.pasteFormatState
         this.diffDisplayMode = state.diffDisplayMode
+        this.largeFileThresholdMB = state.largeFileThresholdMB
+        this.showLargeFileWarning = state.showLargeFileWarning
     }
 
     companion object {
