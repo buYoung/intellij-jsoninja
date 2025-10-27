@@ -4,7 +4,7 @@ junit = "4.13.2"
 jackson-databind = "2.19.2"
 jackson-module-kotlin = "2.20.0"
 json-path = "2.9.0"
-datafaker = "2.4.3"
+datafaker = "2.5.3"
 
 # plugins
 changelog = "2.4.0"
