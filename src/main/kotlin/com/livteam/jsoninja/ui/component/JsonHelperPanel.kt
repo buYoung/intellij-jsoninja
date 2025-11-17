@@ -13,7 +13,7 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 
 class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true), Disposable {
-    private val tabbedPane = JsonHelperTabbedPane(project, this)
+    private val tabbedPane = JsonHelperTabbedPane(project, this, this)
     private var isJmesQueryInProgress = false
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val helperService = project.getService(JsonHelperService::class.java)
@@ -109,7 +109,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         val currentEditor = getCurrentEditor() ?: return
 
         ApplicationManager.getApplication().runWriteAction {
-            val processedJson = formatterService.formatJson(data, JsonFormatState.PRETTIFY)
+            val processedJson = formatterService.formatJson(data, getJsonFormatState())
             currentEditor.setText(processedJson)
         }
 
@@ -133,6 +133,13 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
             // 언이스케이프된 텍스트로 포맷팅 수행
             formatterService.formatJson(textToFormat, formatState)
         }
+    }
+
+    /**
+     * 현재 선택된 에디터의 JSON을 기본 설정에 맞춰 포맷합니다.
+     */
+    fun formatJson() {
+        formatJson(getJsonFormatState())
     }
 
     /**
