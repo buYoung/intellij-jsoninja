@@ -23,15 +23,6 @@ JSON Ninja (JSONinja) is a powerful IntelliJ IDEA plugin for JSON processing bui
 
 # Build plugin distribution ZIP
 ./gradlew buildPlugin
-
-# Clean and rebuild everything
-./gradlew clean build
-
-# Verify plugin compatibility with target IDEs
-./gradlew verifyPlugin
-
-# List available IntelliJ Platform releases
-./gradlew printProductsReleases
 ```
 
 ### Testing & Quality
@@ -50,30 +41,6 @@ JSON Ninja (JSONinja) is a powerful IntelliJ IDEA plugin for JSON processing bui
 
 # Generate searchable options index
 ./gradlew buildSearchableOptions
-```
-
-### Development Workflow
-```bash
-# Patch plugin.xml with version and changelog
-./gradlew patchChangelog
-
-# Instrument code for IDE compatibility
-./gradlew instrumentCode
-
-# Prepare sandbox environment
-./gradlew prepareSandbox
-
-# Run UI tests (if implemented)
-./gradlew runIdeForUiTests
-```
-
-### Publishing
-```bash
-# Sign plugin (requires CERTIFICATE_CHAIN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD env vars)
-./gradlew signPlugin
-
-# Publish to JetBrains Marketplace (requires PUBLISH_TOKEN env var)
-./gradlew publishPlugin
 ```
 
 ## Architecture Overview
@@ -142,12 +109,6 @@ The plugin registers these IntelliJ Platform extension points:
 - JUnit 4 for testing
 - IntelliJ Platform SDK 2024.3 (IC type)
 
-### IDE Setup
-1. Import project as Gradle project in IntelliJ IDEA
-2. Ensure Project SDK is JDK 17+
-3. Gradle sync should configure Kotlin automatically
-4. Use `./gradlew runIde` to launch sandbox for testing
-
 ## Testing Strategy
 
 Tests are organized under `src/test/kotlin/com/livteam/jsoninja/`:
@@ -161,49 +122,6 @@ Run specific service tests:
 ./gradlew test --tests "*JmesPathServiceTest*"  
 ./gradlew test --tests "*JsonDiffServiceTest*"
 ```
-
-## Troubleshooting
-
-### Common Issues
-- **Gradle sync failures**: Clear Gradle cache with `./gradlew clean --refresh-dependencies`
-- **IDE version compatibility**: Check `pluginSinceBuild`/`pluginUntilBuild` in `gradle.properties`
-- **Kotlin compiler issues**: Verify JVM toolchain version matches project requirements
-- **Plugin not loading**: Check `build/idea-sandbox/system/log/idea.log` for errors
-
-### Debug Mode
-```bash
-# Run sandbox IDE with debug output
-./gradlew runIde --debug-jvm
-
-# Enable plugin debug logging in sandbox
-# Add to sandbox IDE: Help > Diagnostic Tools > Debug Log Settings
-# Enter: com.livteam.jsoninja
-```
-
-### Build Performance
-The project uses Gradle configuration cache and build cache. If experiencing slow builds:
-```bash
-# Verify cache settings in gradle.properties
-grep -E "org.gradle.(configuration-)?cache" gradle.properties
-
-# Clean and rebuild with fresh cache
-./gradlew clean build --refresh-dependencies
-```
-
-## Release Process
-
-1. **Version Update**: Update `pluginVersion` in `gradle.properties`
-2. **Changelog**: Update `CHANGELOG.md` with new version details  
-3. **Build & Test**: Run full verification suite
-4. **Plugin Verification**: Test with multiple IDE versions via `verifyPlugin`
-5. **Signing**: Configure signing certificates as environment variables
-6. **Publishing**: Deploy to JetBrains Marketplace
-
-**Required Environment Variables for Release:**
-- `CERTIFICATE_CHAIN` - Plugin signing certificate chain
-- `PRIVATE_KEY` - Private key for plugin signing  
-- `PRIVATE_KEY_PASSWORD` - Password for private key
-- `PUBLISH_TOKEN` - JetBrains Marketplace API token
 
 ## Code Quality Standards
 
