@@ -2,6 +2,7 @@ package com.livteam.jsoninja.actions
 
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ApplicationManager
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.RandomJsonDataCreator // 이 서비스가 존재하거나 수정될 것이라고 가정합니다.
 import com.livteam.jsoninja.ui.dialog.GenerateJsonDialog
@@ -23,9 +24,12 @@ class GenerateRandomJsonAction(private val icon: javax.swing.Icon) : AnAction(
             // TODO: config를 사용하도록 RandomJsonDataCreator 수정 필요
             // 현재는 임시로 기존 기본 생성기를 사용합니다.
             val creator = RandomJsonDataCreator() // 최종적으로는 여기에 config를 전달해야 합니다.
-            val randomJson = creator.generateConfiguredJsonString(config, prettyPrint = false) //
 
-            panel.setRandomJsonData(randomJson)
+            ApplicationManager.getApplication().executeOnPooledThread {
+                val randomJson = creator.generateConfiguredJsonString(config, prettyPrint = false) //
+
+                panel.setRandomJsonData(randomJson)
+            }
         }
     }
 

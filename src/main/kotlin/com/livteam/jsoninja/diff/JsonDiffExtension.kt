@@ -336,9 +336,7 @@ class JsonDiffExtension : DiffExtension() {
         ApplicationManager.getApplication().executeOnPooledThread {
             val formattedResult = formatJsonInBackground(document, formatterService, fileName)
             if (formattedResult != null && !project.isDisposed) {
-                ApplicationManager.getApplication().invokeLater({
-                    applyJsonFormatting(project, document, formattedResult, fileName)
-                }, ModalityState.defaultModalityState())
+                applyJsonFormatting(project, document, formattedResult, fileName)
             }
         }
     }

@@ -130,9 +130,9 @@ class JsonEditor(
 
                 if (changeLength > PASTE_DETECTION_THRESHOLD) {
                     val offset = event.offset
-                    ApplicationManager.getApplication().invokeLater({
+                    WriteCommandAction.runWriteCommandAction(project) {
                         handlePotentialPasteContent(insertedText, offset, changeLength)
-                    }, ModalityState.defaultModalityState())
+                    }
                 }
             }
         }
@@ -244,12 +244,10 @@ class JsonEditor(
      */
     fun setText(text: String) {
         isSettingText = true
-        ApplicationManager.getApplication().invokeLater({
-            WriteCommandAction.runWriteCommandAction(project) {
-                editor.text = text
-                isSettingText = false
-            }
-        }, ModalityState.any())
+        WriteCommandAction.runWriteCommandAction(project) {
+            editor.text = text
+            isSettingText = false
+        }
     }
 
     /**

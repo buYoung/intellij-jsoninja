@@ -2,7 +2,7 @@ package com.livteam.jsoninja.ui.component
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.livteam.jsoninja.model.JsonFormatState
@@ -100,7 +100,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         val processedJson = processor(jsonText)
 
         // 에디터에 처리된 JSON 설정
-        ApplicationManager.getApplication().runWriteAction {
+        WriteCommandAction.runWriteCommandAction(project) {
             currentEditor.setText(processedJson)
         }
     }
@@ -108,7 +108,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     fun setRandomJsonData(data: String) {
         val currentEditor = getCurrentEditor() ?: return
 
-        ApplicationManager.getApplication().runWriteAction {
+        WriteCommandAction.runWriteCommandAction(project) {
             val processedJson = formatterService.formatJson(data, getJsonFormatState())
             currentEditor.setText(processedJson)
         }
