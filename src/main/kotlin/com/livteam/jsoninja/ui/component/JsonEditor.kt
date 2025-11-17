@@ -142,6 +142,8 @@ class JsonEditor(
 
         // Disposer 등록으로 정리
         com.intellij.openapi.util.Disposer.register(this) {
+            // JsonHelperTabbedPane이 상위 탭 Disposable에 이 JsonEditor를 연결하므로,
+            // 탭이나 툴 윈도우가 닫힐 때 이 정리 로직이 호출된다.
             editor.removeDocumentListener(documentListener)
         }
     }
@@ -192,6 +194,7 @@ class JsonEditor(
 
         // Disposer 등록으로 정리
         com.intellij.openapi.util.Disposer.register(this) {
+            // 상위 탭 Disposable 체인 덕분에 listener는 탭 수명과 함께 해제된다.
             editor.removeDocumentListener(contentChangeListener)
         }
     }
