@@ -10,6 +10,7 @@ import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import javax.swing.JComponent
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.logger
 import java.awt.event.KeyEvent.*
 
@@ -26,7 +27,7 @@ class JmesPathComponent(private val project: Project) {
     private var lastQuery: String = ""
     private var parentPanel: JsonHelperPanel? = null
 
-    private val jmesPathService =  project.getService(JMESPathService::class.java)
+    private val jmesPathService = project.getService(JMESPathService::class.java)
     private val jsonFormatterService = project.getService(JsonFormatterService::class.java)
 
     init {
@@ -66,13 +67,13 @@ class JmesPathComponent(private val project: Project) {
         val isOriginalJsonEmpty = originalJsonTrim.isBlank() || originalJsonTrim.isEmpty()
         // 검색 전 콜백 호출
         onBeforeSearchCallback?.invoke()
-        
+
         // 원본 JSON이 비어있으면 검색 중단
         if (isOriginalJsonEmpty || !isValidJson(originalJson)) {
             LOG.warn("원본 JSON이 비어있거나 유효하지 않습니다.")
             return
         }
-        
+
         // 입력값이 없으면 원본 JSON을 보여줌
         if (query.isEmpty()) {
             onSearchCallback?.invoke(originalJson, originalJson)
@@ -87,7 +88,7 @@ class JmesPathComponent(private val project: Project) {
                     LOG.warn("유효하지 않은 JMESPath 표현식: $query")
                     return@executeOnPooledThread
                 }
-                
+
                 val result = jmesPathService.query(originalJson, query)
 
                 // UI 업데이트는 EDT에서 수행
@@ -128,7 +129,7 @@ class JmesPathComponent(private val project: Project) {
     fun setOnSearchCallback(callback: (String, String) -> Unit) {
         onSearchCallback = callback
     }
-    
+
     /**
      * 검색 전 실행될 콜백 설정
      * @param callback 검색 전 콜백 함수
@@ -154,9 +155,9 @@ class JmesPathComponent(private val project: Project) {
         if (originalJson == json) {
             return
         }
-        
+
         originalJson = json
-        
+
         // 원본 JSON이 변경되면 현재 쿼리를 다시 실행
         val currentQuery = jmesPathField.text.trim()
         if (currentQuery.isNotEmpty()) {

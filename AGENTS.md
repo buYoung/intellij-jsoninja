@@ -131,3 +131,19 @@ The project follows "clean code" principles as specified in `.windsurfrules`. Ke
 - Comprehensive unit test coverage for all services
 - Proper error handling and logging via IntelliJ diagnostic logger
 - Resource management and thread safety in concurrent operations
+- This operation must comply with the threading and write rules described in the "Threading & Write Rules" section.
+
+## Threading & Write Rules
+
+**Write + Undo**: `WriteCommandAction.runWriteCommandAction(project) { }`
+**Write, No Undo**: `invokeLater { }`  
+**Background → Write + Undo**: `executeOnPooledThread { compute(); WriteCommandAction.runWriteCommandAction(project) { } }`
+**Background → Write, No Undo**: `executeOnPooledThread { compute(); invokeLater { } }`
+**Background Only**: `executeOnPooledThread { compute() }`
+
+### ModalityState (for invokeLater)
+
+**Default (modal-aware)**: `invokeLater { }` or `invokeLater(ModalityState.defaultModalityState()) { }`
+**Ignore modals**: `invokeLater(ModalityState.NON_MODAL) { }`
+**Always run**: `invokeLater(ModalityState.any()) { }`
+**Current context**: `invokeLater(ModalityState.current()) { }`
