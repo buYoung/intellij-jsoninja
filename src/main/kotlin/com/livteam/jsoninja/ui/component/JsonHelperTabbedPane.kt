@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -48,11 +49,11 @@ class JsonHelperTabbedPane(
                 return;
             }
 
-            ApplicationManager.getApplication().invokeLater({
+            invokeLater {
                 runWriteAction {
                     addNewTabFromPlusTab()
                 }
-            }, ModalityState.defaultModalityState())
+            }
         }
     }
 
@@ -73,12 +74,12 @@ class JsonHelperTabbedPane(
      * 초기 탭을 설정합니다.
      */
     fun setupInitialTabs() {
-        ApplicationManager.getApplication().invokeLater({
+        invokeLater {
             runWriteAction {
                 addNewTabInternal(0)
                 addPlusTab()
             }
-        }, ModalityState.defaultModalityState())
+        }
     }
 
     /**
@@ -143,13 +144,13 @@ class JsonHelperTabbedPane(
         }
 
         override fun mouseClicked(e: MouseEvent) {
-            ApplicationManager.getApplication().invokeLater({
+            invokeLater {
                 runWriteAction {
                     val closableTabIndex = indexOfComponent(tabContentComponent)
                     if (closableTabIndex == -1) return@runWriteAction
                     closeTabAt(closableTabIndex)
                 }
-            }, ModalityState.defaultModalityState())
+            }
         }
     }
 
@@ -377,12 +378,12 @@ class JsonHelperTabbedPane(
      */
     fun canCloseCurrentTab(): Boolean {
         val selectedComponent = selectedComponent
-        
+
         // "+" 탭이거나 null인 경우
         if (selectedComponent == null || selectedComponent.name == ADD_NEW_TAB_COMPONENT_NAME) {
             return false
         }
-        
+
         // 실제 JSON 탭 개수 계산 (tabCount에서 + 탭 제외)
         var jsonTabCount = 0
         for (i in 0 until tabCount) {
@@ -391,10 +392,10 @@ class JsonHelperTabbedPane(
                 jsonTabCount++
             }
         }
-        
+
         return jsonTabCount > 1
     }
-    
+
     /**
      * 현재 JSON 탭의 개수를 반환합니다.
      * @return JSON 탭 개수 ("+" 탭 제외)

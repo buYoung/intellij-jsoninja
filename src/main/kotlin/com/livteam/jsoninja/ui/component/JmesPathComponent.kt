@@ -47,9 +47,10 @@ class JmesPathComponent(private val project: Project) {
                     // 쿼리가 비어있으면 원본 JSON으로 돌아감
                     if (query.isEmpty()) {
                         lastQuery = ""
-                        ApplicationManager.getApplication().invokeLater({
+
+                        invokeLater(ModalityState.any()) {
                             onSearchCallback?.invoke(originalJson, originalJson)
-                        }, ModalityState.any())
+                        }
                     } else {
                         lastQuery = query
                         performSearch(query)
@@ -92,7 +93,7 @@ class JmesPathComponent(private val project: Project) {
                 val result = jmesPathService.query(originalJson, query)
 
                 // UI 업데이트는 EDT에서 수행
-                ApplicationManager.getApplication().invokeLater({
+                invokeLater(ModalityState.any()) {
                     if (result == null) {
                         return@invokeLater
                     }
@@ -105,7 +106,7 @@ class JmesPathComponent(private val project: Project) {
 
                     // 결과가 있는 경우만 출력 업데이트
                     onSearchCallback?.invoke(originalJson, result)
-                }, ModalityState.any())
+                }
             } catch (e: Exception) {
                 LOG.error("JMESPath 쿼리 실행 중 오류 발생", e)
                 // 예외 발생 시에도 이전 상태 유지

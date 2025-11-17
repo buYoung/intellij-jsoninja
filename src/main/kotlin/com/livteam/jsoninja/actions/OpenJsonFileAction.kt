@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.livteam.jsoninja.LocalizationBundle
@@ -35,7 +36,7 @@ class OpenJsonFileAction : AnAction(
 
         fileChooser?.let { virtualFile ->
             val content = String(virtualFile.contentsToByteArray())
-            ApplicationManager.getApplication().runWriteAction {
+            runWriteAction {
                 panel.addNewTab(content)
             }
         }

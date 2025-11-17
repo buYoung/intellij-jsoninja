@@ -135,6 +135,7 @@ The project follows "clean code" principles as specified in `.windsurfrules`. Ke
 
 ## Threading & Write Rules
 
+**Write Only**: `runWriteAction { }`
 **Write + Undo**: `WriteCommandAction.runWriteCommandAction(project) { }`
 **Write, No Undo**: `invokeLater { }`  
 **Background → Write + Undo**: `executeOnPooledThread { compute(); WriteCommandAction.runWriteCommandAction(project) { } }`
