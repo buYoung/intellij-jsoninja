@@ -1,10 +1,12 @@
 package com.livteam.jsoninja.ui.component
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
 import com.livteam.jsoninja.LocalizationBundle
@@ -24,12 +26,16 @@ import javax.swing.event.ChangeListener
  * JSON Helper 플러그인의 탭 컴포넌트를 관리하는 클래스입니다.
  * 탭의 생성, 삭제, 이벤트 처리를 담당합니다.
  */
-class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
+class JsonHelperTabbedPane(
+    private val project: Project,
+    private val parentDisposable: Disposable
+) : JBTabbedPane() {
     private var tabCounter = 1
     private var onTabSelectedListener: ((JsonEditor?) -> Unit)? = null
     private var onTabContentChangedListener: ((String) -> Unit)? = null
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val jsonHelperService = project.getService(JsonHelperService::class.java)
+    private val tabDisposables = mutableMapOf<Component, Disposable>()
 
     companion object {
         private const val ADD_NEW_TAB_COMPONENT_NAME = "addNewTab"
@@ -58,6 +64,10 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
         }
         // TabbedPane에 "+" 탭 기능 마우스 리스너 추가
         addMouseListener(plusTabMouseAdapter)
+
+        Disposer.register(parentDisposable) {
+            tabDisposables.clear()
+        }
     }
 
     /**
@@ -136,32 +146,9 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
         override fun mouseClicked(e: MouseEvent) {
             ApplicationManager.getApplication().invokeLater({
                 runWriteAction {
-                    // "+" 탭을 제외하고 최소 1개의 JSON 탭은 유지
                     val closableTabIndex = indexOfComponent(tabContentComponent)
                     if (closableTabIndex == -1) return@runWriteAction
-
-                    // "+" 탭은 닫을 수 없도록 하고, 실제 JSON 탭이 1개만 남는 경우에도 닫지 않음
-                    if (getJsonTabCount() <= 1 && getComponentAt(closableTabIndex)?.name != ADD_NEW_TAB_COMPONENT_NAME) {
-                        // 마지막 남은 실제 탭이거나, 실수로 "+"탭을 닫으려는 경우 방지
-                        return@runWriteAction
-                    }
-
-                    // 닫을 탭의 이전 탭 인덱스 (선택할 탭)
-                    val nextSelectedIndex = if (closableTabIndex > 0) closableTabIndex - 1 else 0
-
-                    // 탭 제거
-                    removeTabAt(closableTabIndex)
-
-                    // 닫은 후 적절한 탭 선택
-                    if (tabCount > 0) {
-                        // 이전 탭 또는 첫 번째 탭 선택
-                        if (nextSelectedIndex < tabCount) {
-                            selectedIndex = nextSelectedIndex
-                        } else {
-                            // 마지막 탭이 닫혔을 경우 새로운 마지막 탭 선택
-                            selectedIndex = tabCount - 1
-                        }
-                    }
+                    closeTabAt(closableTabIndex)
                 }
             }, ModalityState.defaultModalityState())
         }
@@ -232,6 +219,10 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
             name = title // 탭 제목을 패널 이름으로 사용하여 식별 가능하게 함
         }
 
+        val tabDisposable = Disposer.newDisposable("JsonHelperTab-$title")
+        Disposer.register(parentDisposable, tabDisposable)
+        Disposer.register(tabDisposable, editor)
+
         // 2. JmesPathComponent 생성 및 상단에 추가
         val jmesPathComponent = JmesPathComponent(project)
         tabContentPanel.add(jmesPathComponent.getComponent(), BorderLayout.NORTH)
@@ -240,6 +231,8 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
         tabContentPanel.add(editor, BorderLayout.CENTER)
 
         setupJmesPathComponent(jmesPathComponent, editor, initialJson = content)
+
+        tabDisposables[tabContentPanel] = tabDisposable
 
         // 4. 수정된 tabContentPanel을 탭에 추가
         insertTab(title, null, tabContentPanel, null, index)
@@ -345,42 +338,38 @@ class JsonHelperTabbedPane(private val project: Project) : JBTabbedPane() {
      * @return 탭이 성공적으로 닫혔으면 true, 닫을 수 없으면 false
      */
     fun closeCurrentTab(): Boolean {
-        val selectedComponent = selectedComponent
-        
-        // "+" 탭이거나 null인 경우 닫을 수 없음
-        if (selectedComponent == null || selectedComponent.name == ADD_NEW_TAB_COMPONENT_NAME) {
+        return closeTabAt(selectedIndex)
+    }
+
+    private fun closeTabAt(index: Int, enforceMinimumJsonTab: Boolean = true): Boolean {
+        if (index < 0 || index >= tabCount) {
             return false
         }
-        
-        // 현재 선택된 탭의 인덱스
-        val selectedIndex = selectedIndex
-        if (selectedIndex == -1) {
+
+        val component = getComponentAt(index)
+        if (component == null || component.name == ADD_NEW_TAB_COMPONENT_NAME) {
             return false
         }
-        
-        // JSON 탭이 1개만 남은 경우 닫지 않음
-        if (getJsonTabCount() <= 1) {
+
+        if (enforceMinimumJsonTab && getJsonTabCount() <= 1) {
             return false
         }
-        
-        // 닫을 탭의 이전 탭 인덱스 (선택할 탭)
-        val nextSelectedIndex = if (selectedIndex > 0) selectedIndex - 1 else 0
-        
-        // 탭 제거
-        removeTabAt(selectedIndex)
-        
-        // 닫은 후 적절한 탭 선택
+
+        val nextSelectedIndex = if (index > 0) index - 1 else 0
+
+        disposeTabComponent(component)
+        removeTabAt(index)
+
         if (tabCount > 0) {
-            // 이전 탭 또는 첫 번째 탭 선택
-            if (nextSelectedIndex < tabCount) {
-                this.selectedIndex = nextSelectedIndex
-            } else {
-                // 마지막 탭이 닫혔을 경우 새로운 마지막 탭 선택
-                this.selectedIndex = tabCount - 1
-            }
+            selectedIndex = if (nextSelectedIndex < tabCount) nextSelectedIndex else tabCount - 1
         }
-        
+
         return true
+    }
+
+    private fun disposeTabComponent(component: Component?) {
+        if (component == null) return
+        tabDisposables.remove(component)?.let { Disposer.dispose(it) }
     }
 
     /**

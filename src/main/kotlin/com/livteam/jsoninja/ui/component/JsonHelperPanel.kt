@@ -1,18 +1,19 @@
 package com.livteam.jsoninja.ui.component
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.services.JsonHelperService
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
-import com.intellij.openapi.application.ApplicationManager
-import com.livteam.jsoninja.services.JsonFormatterService
-import com.livteam.jsoninja.services.JsonHelperService
 
-class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true) {
-    private val tabbedPane = JsonHelperTabbedPane(project)
+class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true), Disposable {
+    private val tabbedPane = JsonHelperTabbedPane(project, this)
     private var isJmesQueryInProgress = false
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val helperService = project.getService(JsonHelperService::class.java)
@@ -150,5 +151,9 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         processEditorText { jsonText ->
             formatterService.unescapeJson(jsonText)
         }
+    }
+
+    override fun dispose() {
+        // JsonHelperTabbedPane와 하위 탭 Disposable 들의 부모 역할만 수행하므로 별도 작업 없음
     }
 }
