@@ -11,7 +11,6 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
-import com.livteam.jsoninja.services.JsonHelperService
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Cursor
@@ -28,13 +27,13 @@ import javax.swing.event.ChangeListener
  */
 class JsonHelperTabbedPane(
     private val project: Project,
-    private val parentDisposable: Disposable
+    private val parentDisposable: Disposable,
+    private val helperPanel: JsonHelperPanel
 ) : JBTabbedPane() {
     private var tabCounter = 1
     private var onTabSelectedListener: ((JsonEditor?) -> Unit)? = null
     private var onTabContentChangedListener: ((String) -> Unit)? = null
     private val formatterService = project.getService(JsonFormatterService::class.java)
-    private val jsonHelperService = project.getService(JsonHelperService::class.java)
     private val tabDisposables = mutableMapOf<Component, Disposable>()
 
     companion object {
@@ -315,7 +314,7 @@ class JsonHelperTabbedPane(
 
         jmesPathComponent.setOnSearchCallback { originalJson, resultJson ->
             // JMESPath 검색 결과 처리
-            val jsonFormatState = jsonHelperService.getJsonFormatState()
+            val jsonFormatState = helperPanel.getJsonFormatState()
             val formattedJson = formatterService.formatJson(resultJson, jsonFormatState)
 
             // 결과를 에디터에 표시 (이때 에디터의 onContentChangeCallback이 호출될 수 있음)
