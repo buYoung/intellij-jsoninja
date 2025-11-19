@@ -110,7 +110,7 @@ class JsonFormatterService(private val project: Project) {
      * @return 설정된 CustomPrettyPrinter
      */
     private fun createConfiguredPrettyPrinter(formatState: JsonFormatState): DefaultPrettyPrinter {
-        val currentIndentSize = settings.indentSize // 현재 서비스의 indentSize 사용
+        val currentIndentSize = settings.indentSize
         val useEffectiveCompactArrays = formatState.usesCompactArrays()
         val cacheKey = Pair(currentIndentSize, useEffectiveCompactArrays)
 
