@@ -23,6 +23,8 @@
                 nonDefaultProject="true"/>
 
         <diff.DiffExtension implementation="com.livteam.jsoninja.diff.JsonDiffExtension"/>
+        
+        <copyPastePreProcessor implementation="com.livteam.jsoninja.extensions.JsoninjaPastePreProcessor"/>
     </extensions>
 
     <applicationListeners>

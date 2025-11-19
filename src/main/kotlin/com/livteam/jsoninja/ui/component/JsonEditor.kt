@@ -4,8 +4,6 @@ import com.intellij.json.JsonFileType
 import com.intellij.ide.highlighter.HighlighterFactory
 import com.intellij.json.JsonLanguage
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.Document
@@ -20,11 +18,10 @@ import com.intellij.psi.PsiFileFactory
 import com.intellij.ui.EditorTextField
 import com.intellij.util.LocalTimeCounter
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.model.JsonFormatState
-import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import javax.swing.JPanel
 import java.awt.BorderLayout
+import com.intellij.openapi.util.Key
 
 /**
  * JSON Document 생성을 위한 인터페이스
@@ -46,6 +43,7 @@ class SimpleJsonDocumentCreator : JsonDocumentCreator {
     }
 }
 
+
 /**
  * JSON 편집을 위한 커스텀 에디터 컴포넌트
  * IntelliJ의 EditorTextField를 활용하여 JSON 문법 지원 및 편집 기능을 제공
@@ -56,7 +54,8 @@ class JsonEditor(
 ) : JPanel(), Disposable {
     companion object {
         private const val EMPTY_TEXT = ""
-        private const val PASTE_DETECTION_THRESHOLD = 6
+        
+        val JSONINJA_EDITOR_KEY = Key.create<Boolean>("JSONINJA_EDITOR_KEY")
 
         /**
          * 국제화를 지원하기위해 const val 대신 var로 사용
@@ -95,85 +94,22 @@ class JsonEditor(
                 PsiDocumentManager.getInstance(notNullProject).getDocument(psiFile)
             }
 
-            return document ?: EditorFactory.getInstance().createDocument(value)
+            val finalDocument = document ?: EditorFactory.getInstance().createDocument(value)
+            finalDocument.putUserData(JSONINJA_EDITOR_KEY, true)
+            return finalDocument
         }
     }
 
     private var originalJson: String = ""
     private var onContentChangeCallback: ((String) -> Unit)? = null
     private var isSettingText = false
-    private var lastClipboardContent = ""
 
     private val editor: EditorTextField = createJsonEditor()
-    private val formatterService = project.getService(JsonFormatterService::class.java)
     private val settings = JsoninjaSettingsState.getInstance(project)
 
     init {
         initializeUI()
         setupContentChangeListener()
-        setupClipboardMonitoring()
-    }
-
-    /**
-     * 향상된 자동 포맷팅 설정 - Document listener 기반
-     */
-    private fun setupClipboardMonitoring() {
-        // 추가적인 document listener를 통해 paste 감지
-        val documentListener = object : com.intellij.openapi.editor.event.DocumentListener {
-
-            override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
-                if (isSettingText) return
-
-                val insertedText = event.newFragment.toString()
-                val changeLength = insertedText.length
-                if (changeLength <= 0) return
-
-                if (changeLength > PASTE_DETECTION_THRESHOLD) {
-                    val offset = event.offset
-                    WriteCommandAction.runWriteCommandAction(project) {
-                        handlePotentialPasteContent(insertedText, offset, changeLength)
-                    }
-                }
-            }
-        }
-
-        // Document listener 등록
-        editor.addDocumentListener(documentListener)
-
-        // Disposer 등록으로 정리
-        com.intellij.openapi.util.Disposer.register(this) {
-            // JsonHelperTabbedPane이 상위 탭 Disposable에 이 JsonEditor를 연결하므로,
-            // 탭이나 툴 윈도우가 닫힐 때 이 정리 로직이 호출된다.
-            editor.removeDocumentListener(documentListener)
-        }
-    }
-
-    /**
-     * 붙여넣기 가능성이 있는 내용에 대한 포맷팅 처리
-     */
-    private fun handlePotentialPasteContent(insertedText: String, offset: Int, newLength: Int) {
-        val isValidJson = formatterService.isValidJson(insertedText)
-        if (!isValidJson) {
-            return
-        }
-
-        try {
-            WriteCommandAction.runWriteCommandAction(project) {
-                val pasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
-                val formattedText = formatterService.formatJson(insertedText, pasteFormatState)
-
-                val doc = editor.document
-                val start = offset
-                val end = offset + newLength
-
-                if (start >= 0 && end >= start && end <= doc.textLength) {
-                    doc.replaceString(start, end, formattedText)
-                    editor.editor?.caretModel?.moveToOffset(start + formattedText.length)
-                }
-            }
-        } catch (e: Exception) {
-            // 포맷팅 실패 시 무시
-        }
     }
 
     /**
