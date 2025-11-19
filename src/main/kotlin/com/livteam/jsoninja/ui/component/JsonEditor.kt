@@ -6,6 +6,7 @@ import com.intellij.json.JsonLanguage
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
@@ -21,7 +22,21 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import javax.swing.JPanel
 import java.awt.BorderLayout
+import com.intellij.openapi.util.SystemInfo
+import com.intellij.openapi.editor.event.EditorMouseMotionListener
+import com.intellij.openapi.editor.event.EditorMouseEvent
+import com.intellij.openapi.editor.ex.EditorEx
+import com.livteam.jsoninja.util.JsonPathHelper
 import com.intellij.openapi.util.Key
+import javax.swing.SwingUtilities
+
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.ui.PopupHandler
+import com.livteam.jsoninja.actions.CopyJsonQueryAction
+import com.livteam.jsoninja.model.JsonQueryType
 
 /**
  * JSON Document 생성을 위한 인터페이스
@@ -42,7 +57,6 @@ class SimpleJsonDocumentCreator : JsonDocumentCreator {
         // 하위 클래스에서 필요시 구현
     }
 }
-
 
 /**
  * JSON 편집을 위한 커스텀 에디터 컴포넌트
@@ -110,6 +124,55 @@ class JsonEditor(
     init {
         initializeUI()
         setupContentChangeListener()
+        setupMouseListener()
+    }
+
+    private fun setupMouseListener() {
+        EditorFactory.getInstance().eventMulticaster.addEditorMouseMotionListener(object : EditorMouseMotionListener {
+            override fun mouseMoved(e: EditorMouseEvent) {
+                if (e.editor.project != project) return
+
+                // Check if the event comes from our editor
+                // We check if the editor component is a child of this JsonEditor panel
+                if (!SwingUtilities.isDescendingFrom(e.editor.component, this@JsonEditor)) {
+                    return
+                }
+
+                val event = e.mouseEvent
+                val isModifierDown = if (SystemInfo.isMac) event.isMetaDown else event.isControlDown
+
+                if (isModifierDown) {
+                    val offset = e.offset
+                    val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(e.editor.document)
+                    if (psiFile != null) {
+                        val element = psiFile.findElementAt(offset)
+
+                        if (element != null) {
+                            val queryType = JsonQueryType.fromString(settings.jsonQueryType)
+                            val path = when (queryType) {
+                                JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
+                                JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
+                            }
+
+                            if (path != null) {
+                                val label = when (queryType) {
+                                    JsonQueryType.JMESPATH -> "JMESPath"
+                                    JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
+                                }
+                                val text = "<html>$label: <b>$path</b></html>"
+                                (e.editor as? EditorEx)?.contentComponent?.toolTipText = text
+                            } else {
+                                (e.editor as? EditorEx)?.contentComponent?.toolTipText = null
+                            }
+                        }
+                    } else {
+                        (e.editor as? EditorEx)?.contentComponent?.toolTipText = null
+                    }
+                } else {
+                    (e.editor as? EditorEx)?.contentComponent?.toolTipText = null
+                }
+            }
+        }, this)
     }
 
     /**
@@ -151,6 +214,35 @@ class JsonEditor(
                 editor.isEmbeddedIntoDialogWrapper = true
                 editor.setHorizontalScrollbarVisible(true)
                 editor.setVerticalScrollbarVisible(true)
+
+                // Install context menu handler
+                val actionManager = ActionManager.getInstance()
+                val group = DefaultActionGroup()
+
+                // Add Copy and Paste actions
+                val copyAction = actionManager.getAction(IdeActions.ACTION_COPY)
+                if (copyAction != null) {
+                    group.add(copyAction)
+                }
+
+                val pasteAction = actionManager.getAction(IdeActions.ACTION_PASTE)
+                if (pasteAction != null) {
+                    group.add(pasteAction)
+                }
+
+                // Add Copy JSON Query action
+                val copyJsonQueryAction = CopyJsonQueryAction()
+                copyJsonQueryAction.templatePresentation.text = LocalizationBundle.message("action.copy.json.query")
+                copyJsonQueryAction.templatePresentation.description = LocalizationBundle.message("action.copy.json.query.description")
+                
+                if (group.childrenCount > 0) {
+                    group.addSeparator()
+                }
+                group.add(copyJsonQueryAction)
+
+                if (group.childrenCount > 0) {
+                    PopupHandler.installPopupMenu(editor.contentComponent, group, "JSONinja.EditorPopupGroup")
+                }
             }
             setPlaceholder(PLACEHOLDER_TEXT)
             putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)

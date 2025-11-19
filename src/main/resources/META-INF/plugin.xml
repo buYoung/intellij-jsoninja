@@ -73,5 +73,17 @@
             </action>
         </group>
 
+        <action id="com.livteam.jsoninja.actions.CopyJsonQueryAction"
+                class="com.livteam.jsoninja.actions.CopyJsonQueryAction"
+                text="Copy JSON Query"
+                description="Copy JSON path of selected element">
+            <resource-bundle>messages.LocalizationBundle</resource-bundle>
+            <override-text place="EditorPopup" use-text-of-place="true"/>
+        </action>
+
+        <group id="JSONinja.EditorPopupGroup" text="JSONinja" popup="false">
+             <reference id="com.livteam.jsoninja.actions.CopyJsonQueryAction"/>
+        </group>
+
     </actions>
 </idea-plugin>
