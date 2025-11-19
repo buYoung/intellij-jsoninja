@@ -4,6 +4,7 @@ junit = "4.13.2"
 jackson-databind = "2.20.1"
 jackson-module-kotlin = "2.20.1"
 json-path = "2.10.0"
+jmespath-jackson = "0.6.0"
 datafaker = "2.5.3"
 
 # plugins
@@ -18,6 +19,7 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 jacksonDatabind = {  group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson-databind" }
 jacksonModuleKotlin = { group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version.ref = "jackson-module-kotlin" }
 jsonPath = { group = "com.jayway.jsonpath", name = "json-path", version.ref = "json-path" }
+jmespathJackson = { group = "io.burt", name = "jmespath-jackson", version.ref = "jmespath-jackson" }
 dataFaker = { group = "net.datafaker", name = "datafaker", version.ref = "datafaker" }
 
 [plugins]

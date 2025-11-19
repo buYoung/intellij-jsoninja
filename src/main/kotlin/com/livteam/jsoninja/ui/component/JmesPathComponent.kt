@@ -4,7 +4,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.SearchTextField
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.services.JMESPathService
+import com.livteam.jsoninja.services.JsonQueryService
 import com.livteam.jsoninja.services.JsonFormatterService
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
@@ -27,7 +27,7 @@ class JmesPathComponent(private val project: Project) {
     private var lastQuery: String = ""
     private var parentPanel: JsonHelperPanel? = null
 
-    private val jmesPathService = project.getService(JMESPathService::class.java)
+    private val jsonQueryService = project.getService(JsonQueryService::class.java)
     private val jsonFormatterService = project.getService(JsonFormatterService::class.java)
 
     init {
@@ -85,12 +85,12 @@ class JmesPathComponent(private val project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 // 쿼리 유효성 먼저 검사
-                if (!jmesPathService.isValidExpression(query)) {
-                    LOG.warn("유효하지 않은 JMESPath 표현식: $query")
+                if (!jsonQueryService.isValidExpression(query)) {
+                    LOG.warn("유효하지 않은 쿼리 표현식: $query")
                     return@executeOnPooledThread
                 }
 
-                val result = jmesPathService.query(originalJson, query)
+                val result = jsonQueryService.query(originalJson, query)
 
                 // UI 업데이트는 EDT에서 수행
                 invokeLater(ModalityState.any()) {
@@ -101,14 +101,14 @@ class JmesPathComponent(private val project: Project) {
                     if (result.isEmpty()) {
                         // 결과가 null인 경우(쿼리 실패) 아무 작업도 수행하지 않음
                         // 이전 상태를 유지하기 위해 콜백을 호출하지 않음
-                        LOG.warn("JMESPath 쿼리 결과가 없습니다: $query")
+                        LOG.warn("쿼리 결과가 없습니다: $query")
                     }
 
                     // 결과가 있는 경우만 출력 업데이트
                     onSearchCallback?.invoke(originalJson, result)
                 }
             } catch (e: Exception) {
-                LOG.error("JMESPath 쿼리 실행 중 오류 발생", e)
+                LOG.error("쿼리 실행 중 오류 발생", e)
                 // 예외 발생 시에도 이전 상태 유지
             }
         }

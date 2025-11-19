@@ -10,6 +10,7 @@ import com.intellij.ui.dsl.builder.bind
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
+import com.livteam.jsoninja.model.JsonQueryType
 import javax.swing.*
 
 class JsoninjaSettingsConfigurable(private val project: Project) : Configurable {
@@ -21,6 +22,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
     private var jsonFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
     private var pasteFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
     private var diffDisplayModeComboBox: ComboBox<JsonDiffDisplayModeWrapper>? = null
+    private var jsonQueryTypeComboBox: ComboBox<JsonQueryTypeWrapper>? = null
     private var largeFileThresholdSpinner: JSpinner? = null
     private var showLargeFileWarningCheckBox: JBCheckBox? = null
     private var mainPanel: JPanel? = null
@@ -60,6 +62,26 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
 
         override fun hashCode(): Int {
             return mode.hashCode()
+        }
+    }
+
+    // Wrapper class for JsonQueryType
+    data class JsonQueryTypeWrapper(val type: JsonQueryType) {
+        override fun toString(): String {
+            return when (type) {
+                JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
+                JsonQueryType.JMESPATH -> "JMESPath"
+            }
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is JsonQueryTypeWrapper) return false
+            return type == other.type
+        }
+
+        override fun hashCode(): Int {
+            return type.hashCode()
         }
     }
 
@@ -114,6 +136,15 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             val selectedDiffModeWrapper = diffDisplayModes.find { it.mode == currentDiffDisplayMode }
             diffDisplayModeComboBox?.selectedItem = selectedDiffModeWrapper
 
+            // Create json query type combobox
+            val jsonQueryTypes = JsonQueryType.entries
+                .map { JsonQueryTypeWrapper(it) }
+                .toTypedArray()
+            jsonQueryTypeComboBox = ComboBox(jsonQueryTypes)
+            val currentJsonQueryType = JsonQueryType.fromString(settings.jsonQueryType)
+            val selectedJsonQueryTypeWrapper = jsonQueryTypes.find { it.type == currentJsonQueryType }
+            jsonQueryTypeComboBox?.selectedItem = selectedJsonQueryTypeWrapper
+
             mainPanel = panel {
                 row(LocalizationBundle.message("settings.indent.label")) {
                     cell(indentSizeSpinner!!)
@@ -129,6 +160,9 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 }
                 row(LocalizationBundle.message("settings.diff.display.label")) {
                     cell(diffDisplayModeComboBox!!)
+                }
+                row(LocalizationBundle.message("settings.query.type.label")) {
+                    cell(jsonQueryTypeComboBox!!)
                 }
                 separator()
                 row(LocalizationBundle.message("settings.large.file.threshold.label")) {
@@ -151,11 +185,13 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         } catch (e: IllegalArgumentException) {
             JsonDiffDisplayMode.EDITOR_TAB
         }
+        val currentJsonQueryType = JsonQueryType.fromString(settings.jsonQueryType)
         return indentSizeSpinner?.value != settings.indentSize ||
                 sortKeysCheckBox?.isSelected != settings.sortKeys ||
                 (jsonFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentFormatState.name ||
                 (pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentPasteFormatState.name ||
                 (diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper)?.mode?.name != currentDiffDisplayMode.name ||
+                (jsonQueryTypeComboBox?.selectedItem as? JsonQueryTypeWrapper)?.type?.name != currentJsonQueryType.name ||
                 largeFileThresholdSpinner?.value != settings.largeFileThresholdMB ||
                 showLargeFileWarningCheckBox?.isSelected != settings.showLargeFileWarning
     }
@@ -169,6 +205,8 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         settings.pasteFormatState = selectedPasteFormatWrapper?.state?.name ?: settings.pasteFormatState
         val selectedDiffModeWrapper = diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper
         settings.diffDisplayMode = selectedDiffModeWrapper?.mode?.name ?: settings.diffDisplayMode
+        val selectedJsonQueryTypeWrapper = jsonQueryTypeComboBox?.selectedItem as? JsonQueryTypeWrapper
+        settings.jsonQueryType = selectedJsonQueryTypeWrapper?.type?.name ?: settings.jsonQueryType
         settings.largeFileThresholdMB = largeFileThresholdSpinner?.value as? Int ?: settings.largeFileThresholdMB
         settings.showLargeFileWarning = showLargeFileWarningCheckBox?.isSelected ?: settings.showLargeFileWarning
     }
@@ -206,6 +244,14 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         val selectedDiffModeWrapper = diffDisplayModes.find { it.mode == currentDiffDisplayMode }
         diffDisplayModeComboBox?.selectedItem = selectedDiffModeWrapper
         
+        // Find the matching wrapper for the current json query type
+        val currentJsonQueryType = JsonQueryType.fromString(settings.jsonQueryType)
+        val jsonQueryTypes = JsonQueryType.entries
+            .map { JsonQueryTypeWrapper(it) }
+            .toTypedArray()
+        val selectedJsonQueryTypeWrapper = jsonQueryTypes.find { it.type == currentJsonQueryType }
+        jsonQueryTypeComboBox?.selectedItem = selectedJsonQueryTypeWrapper
+
         largeFileThresholdSpinner?.value = settings.largeFileThresholdMB
         showLargeFileWarningCheckBox?.isSelected = settings.showLargeFileWarning
     }
@@ -217,6 +263,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         jsonFormatStateComboBox = null
         pasteFormatStateComboBox = null
         diffDisplayModeComboBox = null
+        jsonQueryTypeComboBox = null
         largeFileThresholdSpinner = null
         showLargeFileWarningCheckBox = null
     }

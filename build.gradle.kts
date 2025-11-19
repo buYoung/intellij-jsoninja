@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.jacksonDatabind)
     implementation(libs.jacksonModuleKotlin)
     implementation(libs.jsonPath)
+    implementation(libs.jmespathJackson)
     implementation(libs.dataFaker)
 
     testImplementation(libs.junit)

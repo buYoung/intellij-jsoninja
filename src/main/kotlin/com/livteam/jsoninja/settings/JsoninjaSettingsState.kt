@@ -8,6 +8,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.components.service
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
+import com.livteam.jsoninja.model.JsonQueryType
 
 @Service(Service.Level.PROJECT)
 @State(name = "JsoninjaSettingsState", storages = [Storage("jsoninja.xml")])
@@ -17,6 +18,7 @@ data class JsoninjaSettingsState(
     var jsonFormatState: String = JsonFormatState.PRETTIFY.name, // Store enum as string
     var pasteFormatState: String = JsonFormatState.PRETTIFY.name, // Format state for paste operations
     var diffDisplayMode: String = JsonDiffDisplayMode.WINDOW.name, // Diff display mode preference
+    var jsonQueryType: String = JsonQueryType.JAYWAY_JSONPATH.name, // Query type preference
     var largeFileThresholdMB: Int = 2, // Threshold in MB for large file warning
     var showLargeFileWarning: Boolean = true // Whether to show warning for large files
 ) : PersistentStateComponent<JsoninjaSettingsState> {
@@ -31,6 +33,7 @@ data class JsoninjaSettingsState(
         this.jsonFormatState = state.jsonFormatState
         this.pasteFormatState = state.pasteFormatState
         this.diffDisplayMode = state.diffDisplayMode
+        this.jsonQueryType = state.jsonQueryType
         this.largeFileThresholdMB = state.largeFileThresholdMB
         this.showLargeFileWarning = state.showLargeFileWarning
     }
