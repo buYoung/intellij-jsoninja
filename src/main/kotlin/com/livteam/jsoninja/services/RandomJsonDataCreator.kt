@@ -1,8 +1,7 @@
 package com.livteam.jsoninja.services
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
-import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.intellij.openapi.components.service
 import com.livteam.jsoninja.ui.dialog.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.RootType
 import net.datafaker.Faker
@@ -22,8 +21,7 @@ class RandomJsonDataCreator (
     private val nullProbability: Double = 0.1,
     private val faker: Faker = Faker(Locale.ENGLISH)
 ) {
-    private val objectMapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
-        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+    private val mapper = service<JsonObjectMapperService>().objectMapper
 
     // 개발 친화적인 공통 키 목록 확장
     private val commonKeys = listOf(
@@ -48,9 +46,13 @@ class RandomJsonDataCreator (
         }
         // ... (ObjectMapper 로직 동일)
         return if (prettyPrint) {
-            objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(generatedData)
+            mapper.writerWithDefaultPrettyPrinter()
+                .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS) // Maintain original behavior locally
+                .writeValueAsString(generatedData)
         } else {
-            objectMapper.writeValueAsString(generatedData)
+            mapper.writer()
+                .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .writeValueAsString(generatedData)
         }
     }
 

@@ -1,7 +1,7 @@
 package com.livteam.jsoninja.services
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.jayway.jsonpath.Configuration
@@ -17,7 +17,7 @@ import io.burt.jmespath.jackson.JacksonRuntime
 @Service(Service.Level.PROJECT)
 class JsonQueryService(private val project: Project) {
     private val LOG = logger<JsonQueryService>()
-    private val objectMapper = ObjectMapper()
+    private val objectMapper = service<JsonObjectMapperService>().objectMapper
     
     // Jayway JsonPath 설정 (기본 JsonSmartProvider 사용)
     private val jsonPathConfiguration = Configuration.builder()

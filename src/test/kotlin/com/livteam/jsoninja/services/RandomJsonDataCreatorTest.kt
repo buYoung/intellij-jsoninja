@@ -2,6 +2,7 @@ package com.livteam.jsoninja.services
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.intellij.openapi.components.service
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.livteam.jsoninja.services.RandomJsonDataCreator
 import com.livteam.jsoninja.ui.dialog.JsonGenerationConfig
@@ -9,11 +10,12 @@ import com.livteam.jsoninja.ui.dialog.RootType
 
 class RandomJsonDataCreatorTest : BasePlatformTestCase() {
     private lateinit var randomJsonDataCreator: RandomJsonDataCreator
-    private val objectMapper = ObjectMapper()
+    private lateinit var objectMapper: ObjectMapper
     
     override fun setUp() {
         super.setUp()
         randomJsonDataCreator = RandomJsonDataCreator()
+        objectMapper = service<JsonObjectMapperService>().objectMapper
     }
     
     fun testGenerateConfiguredJsonString_Object() {

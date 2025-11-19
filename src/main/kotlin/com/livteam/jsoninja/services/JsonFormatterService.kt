@@ -1,6 +1,7 @@
 package com.livteam.jsoninja.services
 
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.JsonParser
@@ -23,30 +24,20 @@ import java.util.concurrent.ConcurrentHashMap
 class JsonFormatterService(private val project: Project) {
     private val LOG = logger<JsonFormatterService>()
     private val settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
+    
+    private val defaultMapper = service<JsonObjectMapperService>().objectMapper
+    
+    private val sortedMapper = defaultMapper.copy().apply {
+        configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+    }
+
+    private val nonSortedMapper = defaultMapper.copy().apply {
+        configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, false)
+    }
 
     companion object {
-        // 성능 향상을 위한 싱글톤 ObjectMapper 인스턴스
-        private val DEFAULT_MAPPER = ObjectMapper().apply {
-            // 직렬화 설정
-            configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
-            // 역직렬화 설정
-            configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
-            configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
-            // 파서 레벨 기능 - trailing comma 허용
-            configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, true)
-        }
-
-        private val SORTED_MAPPER = DEFAULT_MAPPER.copy().apply {
-            configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
-        }
-
-        private val NON_SORTED_MAPPER = DEFAULT_MAPPER.copy().apply {
-            configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, false)
-        }
-
         private val prettyPrinterCache = ConcurrentHashMap<Pair<Int, Boolean>, DefaultPrettyPrinter>()
-
+        
         // 기본 들여쓰기 공백 수
         private const val DEFAULT_INDENT_SIZE = 2
     }
@@ -97,9 +88,9 @@ class JsonFormatterService(private val project: Project) {
      */
     private fun getConfiguredMapper(usesSorting: Boolean): ObjectMapper {
         if (usesSorting) {
-            return SORTED_MAPPER
+            return sortedMapper
         } else {
-            return NON_SORTED_MAPPER
+            return nonSortedMapper
         }
     }
 
@@ -201,7 +192,7 @@ class JsonFormatterService(private val project: Project) {
 
         return try {
             // Use JsonParser to validate the entire input string including trailing tokens
-            DEFAULT_MAPPER.factory.createParser(json).use { parser ->
+            defaultMapper.factory.createParser(json).use { parser ->
                 // Parse the JSON value completely
                 parser.nextToken()
                 parser.skipChildren()
@@ -301,7 +292,7 @@ class JsonFormatterService(private val project: Project) {
             }
 
             // Use Jackson to properly escape the JSON string
-            val escaped = DEFAULT_MAPPER.writeValueAsString(json)
+            val escaped = defaultMapper.writeValueAsString(json)
             // Remove the enclosing quotes that Jackson adds
             return escaped.substring(1, escaped.length - 1)
         } catch (e: Exception) {
@@ -336,7 +327,7 @@ class JsonFormatterService(private val project: Project) {
             // Add quotes to make it a valid JSON string
             val quoted = "\"$json\""
             // Use Jackson to properly unescape the JSON string
-            return DEFAULT_MAPPER.readValue(quoted, String::class.java)
+            return defaultMapper.readValue(quoted, String::class.java)
         } catch (e: Exception) {
             LOG.warn("JSON 언이스케이프 처리 실패: ${e.message}")
             return json
