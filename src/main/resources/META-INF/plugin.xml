@@ -96,7 +96,6 @@
         <action id="com.livteam.jsoninja.action.CopyJsonQueryAction"
                 class="com.livteam.jsoninja.actions.CopyJsonQueryAction"
         >
-            <override-text place="EditorPopup" use-text-of-place="true"/>
         </action>
 
         <group id="com.livteam.jsoninja.action.group.EditorPopup" popup="false">
