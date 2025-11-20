@@ -22,16 +22,16 @@ class JsonHelperActionBar : DefaultActionGroup() {
         addSeparator()
 
         // JSON 변환 관련 액션 추가
-        add(PrettifyJsonAction(JsonHelperActionUtils.getIcon("/icons/prettify.svg")))
-        add(UglifyJsonAction(JsonHelperActionUtils.getIcon("/icons/uglify.svg")))
-        add(EscapeJsonAction(JsonHelperActionUtils.getIcon("/icons/escape.svg")))
-        add(UnescapeJsonAction(JsonHelperActionUtils.getIcon("/icons/unescape.svg")))
+        add(PrettifyJsonAction())
+        add(UglifyJsonAction())
+        add(EscapeJsonAction())
+        add(UnescapeJsonAction())
 
-        add(GenerateRandomJsonAction(JsonHelperActionUtils.getIcon("/icons/random_json.svg")))
+        add(GenerateRandomJsonAction())
 
         addSeparator()
 
         // JSON Diff 액션 추가
-        add(ShowJsonDiffAction(JsonHelperActionUtils.getIcon("/icons/diff.svg")))
+        add(ShowJsonDiffAction())
     }
 }

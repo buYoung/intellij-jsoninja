@@ -21,21 +21,11 @@ import com.livteam.jsoninja.utils.JsonHelperUtils
  * JSON 차이를 비교하는 액션 클래스
  * Editor Tab 또는 Window 방식으로 diff를 표시합니다.
  */
-class ShowJsonDiffAction : AnAction {
-    // 파라미터 없는 생성자 (plugin.xml에서 사용)
-    constructor() : super(
-        LocalizationBundle.message("action.show.json.diff"),
-        LocalizationBundle.message("action.show.json.diff.description"),
-        AllIcons.Actions.Diff
-    )
-
-    // 아이콘을 받는 생성자 (프로그래밍 방식으로 사용)
-    constructor(icon: javax.swing.Icon) : super(
-        LocalizationBundle.message("action.show.json.diff"),
-        LocalizationBundle.message("action.show.json.diff.description"),
-        icon
-    )
-
+class ShowJsonDiffAction : AnAction(
+    LocalizationBundle.message("action.show.json.diff"),
+    LocalizationBundle.message("action.show.json.diff.description"),
+    JsonHelperActionUtils.getIcon("/icons/diff.svg")
+) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val jsonDiffService = project.service<JsonDiffService>()

@@ -7,6 +7,8 @@ import com.intellij.openapi.project.Project
 import com.jayway.jsonpath.Configuration
 import com.jayway.jsonpath.JsonPath
 import com.jayway.jsonpath.Option
+import com.jayway.jsonpath.spi.json.JacksonJsonProvider
+import com.jayway.jsonpath.spi.mapper.JacksonMappingProvider
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import io.burt.jmespath.jackson.JacksonRuntime
@@ -19,8 +21,10 @@ class JsonQueryService(private val project: Project) {
     private val LOG = logger<JsonQueryService>()
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
     
-    // Jayway JsonPath 설정 (기본 JsonSmartProvider 사용)
+    // Jayway JsonPath 설정 (Jackson 사용)
     private val jsonPathConfiguration = Configuration.builder()
+        .jsonProvider(JacksonJsonProvider(objectMapper))
+        .mappingProvider(JacksonMappingProvider(objectMapper))
         .options(Option.SUPPRESS_EXCEPTIONS)
         .build()
 

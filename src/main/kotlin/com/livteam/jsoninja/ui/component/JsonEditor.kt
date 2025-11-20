@@ -241,7 +241,7 @@ class JsonEditor(
                 group.add(copyJsonQueryAction)
 
                 if (group.childrenCount > 0) {
-                    PopupHandler.installPopupMenu(editor.contentComponent, group, "JSONinja.EditorPopupGroup")
+                    PopupHandler.installPopupMenu(editor.contentComponent, group, "com.livteam.jsoninja.action.group.EditorPopup")
                 }
             }
             setPlaceholder(PLACEHOLDER_TEXT)

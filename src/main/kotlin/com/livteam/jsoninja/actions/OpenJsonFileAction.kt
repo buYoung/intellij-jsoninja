@@ -41,4 +41,8 @@ class OpenJsonFileAction : AnAction(
             }
         }
     }
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
+    }
 }

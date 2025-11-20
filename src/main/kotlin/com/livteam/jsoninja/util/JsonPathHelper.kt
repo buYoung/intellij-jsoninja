@@ -1,6 +1,7 @@
 package com.livteam.jsoninja.util
 
 import com.intellij.json.psi.*
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiElement
 
 object JsonPathHelper {
@@ -60,21 +61,16 @@ object JsonPathHelper {
     }
 
     private fun addPropertyPath(parts: MutableList<String>, name: String, isJmes: Boolean) {
-        if (isJmes) {
-            if (needsQuotes(name)) {
-                val escapedName = name.replace("\"", "\\\"")
+        if (needsQuotes(name)) {
+            val escapedName = StringUtil.escapeStringCharacters(name)
+            if (isJmes) {
                 parts.add(".\\\"$escapedName\\\"")
             } else {
-                parts.add(".$name")
+                // JsonPath: Use bracket notation with double quotes ["key"] for consistency and robust escaping
+                parts.add("[\"$escapedName\"]")
             }
         } else {
-            // JsonPath
-            if (needsQuotes(name)) {
-                val escapedName = name.replace("'", "\\'")
-                parts.add("['$escapedName']")
-            } else {
-                parts.add(".$name")
-            }
+            parts.add(".$name")
         }
     }
 

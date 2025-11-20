@@ -26,7 +26,7 @@ class JsoninjaToolWindowFactory : ToolWindowFactory {
         
         // Register actions with the component
         val actionManager = ActionManager.getInstance()
-        actionManager.getAction("com.livteam.jsoninja.CloseTabAction")?.let { action ->
+        actionManager.getAction("com.livteam.jsoninja.action.CloseTabAction")?.let { action ->
             action.registerCustomShortcutSet(action.shortcutSet, jsonHelperPanel)
         }
         

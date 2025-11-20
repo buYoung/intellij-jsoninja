@@ -9,14 +9,18 @@ import com.livteam.jsoninja.ui.component.JsonHelperPanel
 /**
  * JSON을 압축하는 액션 클래스입니다.
  */
-class UglifyJsonAction(private val icon: javax.swing.Icon) : AnAction(
+class UglifyJsonAction : AnAction(
     LocalizationBundle.message("uglify"),
     LocalizationBundle.message("uglifyDescription"),
-    icon
+    JsonHelperActionUtils.getIcon("/icons/uglify.svg")
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
         // UGLIFY는 설정 UI에서 선택할 수 없으므로 기본 포맷 상태는 변경하지 않는다.
         panel.formatJson(JsonFormatState.UGLIFY)
+    }
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
     }
 }

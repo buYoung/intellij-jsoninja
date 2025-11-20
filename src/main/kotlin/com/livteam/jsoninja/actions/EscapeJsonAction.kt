@@ -8,13 +8,17 @@ import com.livteam.jsoninja.ui.component.JsonHelperPanel
 /**
  * JSON을 이스케이프 처리하는 액션 클래스입니다.
  */
-class EscapeJsonAction(private val icon: javax.swing.Icon) : AnAction(
+class EscapeJsonAction : AnAction(
     LocalizationBundle.message("escape"),
     LocalizationBundle.message("escapeDescription"),
-    icon
+    JsonHelperActionUtils.getIcon("/icons/escape.svg")
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
         panel.escapeJson()
+    }
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
     }
 }
