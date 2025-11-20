@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+### Added
+- JSON Query Inspector
+    - Quick View: Hold `Cmd` (macOS) or `Ctrl` (Windows) and hover over any value to instantly see its JSON query path in a tooltip.
+    - Copy Path: Right-click a value and select “Copy JSON Query” to copy the path to your clipboard.
+- Query Language Support: You can now choose your preferred query syntax (Jayway JsonPath or JMESPath) in the settings. The "Copy JSON Query" feature follows this setting.
+
+### Changed
+- Smart Paste: Pasting JSON content now triggers auto-formatting. For large datasets, a progress bar is displayed to ensure the editor remains responsive.
+- UI Improvements: The toolbar and context menu have been reorganized for better accessibility, and action labels are now fully localized.
+- Consistent Formatting: Formatting logic and query behaviors have been unified to strictly adhere to your configured settings.
+
+### Fixed
+- Indentation: Fixed an issue where indent size settings were not consistently applied during pasting or formatting.
+- Editor Stability: improved undo/redo handling and resolved potential glitches to ensure a smoother editing experience.
+- Bug Fixes:
+    - Corrected various Korean translation errors.
+    - Resolved rare formatter errors and internal exceptions for better overall reliability.
+
 ## [1.3.1] - 2025-09-05
 
 ### Added
