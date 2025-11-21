@@ -8,8 +8,8 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.intellij.icons.AllIcons
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
@@ -24,7 +24,7 @@ import com.livteam.jsoninja.utils.JsonHelperUtils
 class ShowJsonDiffAction : AnAction(
     LocalizationBundle.message("action.show.json.diff"),
     LocalizationBundle.message("action.show.json.diff.description"),
-    JsonHelperActionUtils.getIcon("/icons/diff.svg")
+    JsoninjaIcons.DiffIcon
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
