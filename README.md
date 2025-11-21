@@ -17,8 +17,12 @@ JSON Ninja is a JSON processing plugin for JetBrains IDEs. This plugin provides 
 - **JSON Uglify**: Compresses JSON data into a single line
 - **JSON Escape**: Escapes JSON strings
 - **JSON Unescape**: Restores escaped JSON strings to their original form
-- **JMES Path**: Advanced search and filtering within JSON data using JMES Path
-- **JSON Generator**: Generates JSON data
+- **JMES Path / Jayway JsonPath**: Advanced search and filtering within JSON data, selectable query engine
+- **JSON Diff Viewer**: Compare JSON in editor tab or window view with auto-formatting and optional key sorting
+- **Multi-tab JSON Editor**: Add/close tabs and manage multiple JSON documents in the tool window
+- **JSON Generator**: Generates JSON data with configurable root type, depth, property/element counts
+- **Copy JSON Query**: Copy JsonPath/JMESPath for the element under cursor from the editor context menu or hover tooltip
+- **Large File Guardrails**: Paste pre-processing and diff formatting honor size checks with optional warnings
 
 ## Development Checklist
 - [x] Created project using [IntelliJ Platform Plugin Template][template].
@@ -40,9 +44,12 @@ Key Features:
 • JSON Prettify: Format JSON data for improved readability  
 • JSON Uglify: Compress JSON data into a single line for transmission or storage  
 • JSON Escape/Unescape: Process and restore escaped JSON strings  
-• JMES Path Support: Find and filter specific values within complex JSON data  
+• JMES Path / Jayway JsonPath Support: Find and filter specific values within complex JSON data  
+• JSON Diff Viewer: Show diffs in an editor tab or a separate window with automatic formatting  
 • Multi-tab Interface: Work with multiple JSON documents simultaneously  
-• Advanced Formatting Options: Customize indentation size, key sorting, and more
+• JSON Generator: Configure root type, depth, and counts to generate sample JSON  
+• Copy JSON Query: Quickly copy JsonPath/JMESPath for the current cursor position  
+• Advanced Formatting Options: Customize indentation size, key sorting, compact arrays, and paste formatting
 
 [Under Development]  
 • Enhanced JSON Validation  

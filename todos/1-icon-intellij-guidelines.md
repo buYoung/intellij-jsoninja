@@ -1,0 +1,13 @@
+- Priority: 1
+- 목표: 플러그인 아이콘을 IntelliJ 공식 권장 사양에 맞게 변환 및 적용
+- 조사 메모:
+  - IntelliJ 아이콘 가이드: IDE 2020.1+부터 `pluginIcon.svg`(색상), `pluginIcon_dark.svg`(다크) 필요.
+  - 크기/격자: 40dp 기준(벽면 40x40, 키라인 32x32), 여백 일관성 중요. 벡터(SVG) 사용, 비트맵 금지.
+  - 컬러: 다크/라이트 모두 대비 확보, 배경 투명. 블랙/화이트 강한 대비 피하고, 단색/두 톤 선호.
+  - 파일 위치: `resources/META-INF/pluginIcon.svg`, `pluginIcon_dark.svg` (또는 `resources/icons/` 아래에서 `plugin.xml`에 경로 지정).
+  - 스케일 팩터: SVG가 권장. PNG 폴백 필요 시 40px(@1x)/80px(@2x)/120px(@3x).
+- 다음 작업:
+  - 기존 아이콘 자산 위치/포맷 확인(`resources/**`).
+  - 새 SVG 생성 또는 리터치: 40x40 온-그리드, 키라인 32x32 준수.
+  - 라이트/다크 버전 모두 제작 후 `plugin.xml` 경로 확인 및 반영.
+  - IDE에서 표시 확인(`./gradlew runIde`) 후 대비/크기 검증.

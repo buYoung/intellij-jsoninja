@@ -17,8 +17,12 @@ JSON Ninja는 JetBrains IDE를 위한 JSON 처리 플러그인입니다. 이 플
 - **JSON Uglify**: JSON 데이터를 한 줄로 압축
 - **JSON Escape**: JSON 문자열 이스케이프 처리
 - **JSON Unescape**: 이스케이프된 JSON 문자열을 원래 형태로 복원
-- **JMES Path**: JSON 데이터 내에서 JMES Path를 사용한 고급 검색 및 필터링 기능
-- **JSON Generator**: JSON 데이터를 생성
+- **JMES Path / Jayway JsonPath**: JSON 데이터 내에서 선택 가능한 쿼리 엔진으로 고급 검색 및 필터링
+- **JSON Diff Viewer**: 에디터 탭 또는 별도 창에서 자동 포맷팅·정렬 옵션을 포함한 JSON 비교
+- **멀티탭 JSON 에디터**: 툴 윈도우에서 탭 추가/닫기로 여러 JSON 문서를 동시에 관리
+- **JSON Generator**: 루트 타입, 깊이, 속성/요소 개수를 설정해 샘플 JSON 생성
+- **Copy JSON Query**: 커서 위치 요소의 JsonPath/JMESPath를 컨텍스트 메뉴/hover로 빠르게 복사
+- **대용량 처리 가드레일**: 붙여넣기 전처리와 Diff 포맷팅 시 크기 검증 및 선택적 경고 지원
 
 ## 개발 체크리스트
 - [x] [IntelliJ Platform Plugin Template][template] 프로젝트 생성 완료
@@ -40,9 +44,12 @@ JSON 데이터 조작을 위한 고급 도구를 제공하여, 개발 워크플�
 • JSON Prettify: 가독성 향상을 위한 JSON 데이터 포맷팅  
 • JSON Uglify: 전송이나 저장을 위해 JSON 데이터를 한 줄로 압축  
 • JSON Escape/Unescape: 이스케이프된 JSON 문자열 처리 및 복원  
-• JMES Path 지원: 복잡한 JSON 데이터 내에서 특정 값 검색 및 필터링  
+• JMES Path / Jayway JsonPath 지원: 복잡한 JSON 데이터 내에서 특정 값 검색 및 필터링  
+• JSON Diff Viewer: 자동 포맷팅과 함께 에디터 탭/별도 창에서 비교  
 • 멀티탭 인터페이스: 여러 JSON 문서를 동시에 작업  
-• 고급 포맷팅 옵션: 들여쓰기 크기, 키 정렬 등 사용자 정의 기능  
+• JSON Generator: 루트 타입, 깊이, 속성/요소 개수를 설정해 샘플 JSON 생성  
+• Copy JSON Query: 현재 커서 위치의 JsonPath/JMESPath를 빠르게 복사  
+• 고급 포맷팅 옵션: 들여쓰기 크기, 키 정렬, compact 배열, 붙여넣기 포맷 지정  
 
 [개발 중인 기능]
 • JSON 스키마 지원  
