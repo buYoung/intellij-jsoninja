@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Revamped Icons: Updated all plugin icons to high-resolution SVGs. Enjoy a crisp and consistent look in both Light and Dark themes.
+- New UI Support: Fully optimized for IntelliJ’s New UI, providing a seamless and modern visual experience.
+
 ## [1.4.0] - 2025-11-20
 
 ### Added
