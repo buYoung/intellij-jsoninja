@@ -3,6 +3,7 @@ package com.livteam.jsoninja.actions
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.icons.JsoninjaIcons
 
 /**
  * JSON을 이쁘게 포맷팅하는 액션 클래스입니다.
@@ -10,7 +11,7 @@ import com.livteam.jsoninja.LocalizationBundle
 class PrettifyJsonAction : AnAction(
     LocalizationBundle.message("prettify"),
     LocalizationBundle.message("prettifyDescription"),
-    JsonHelperActionUtils.getIcon("/icons/prettify.svg")
+    JsoninjaIcons.PrettyIcon
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return

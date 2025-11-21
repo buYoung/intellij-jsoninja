@@ -3,6 +3,7 @@ package com.livteam.jsoninja.actions
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.ui.component.JsonHelperPanel
 
@@ -12,7 +13,7 @@ import com.livteam.jsoninja.ui.component.JsonHelperPanel
 class UglifyJsonAction : AnAction(
     LocalizationBundle.message("uglify"),
     LocalizationBundle.message("uglifyDescription"),
-    JsonHelperActionUtils.getIcon("/icons/uglify.svg")
+    JsoninjaIcons.UglyIcon
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return

@@ -12,8 +12,9 @@
     <resource-bundle>messages.LocalizationBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
+        <iconMapper mappingFile="JSONinjaIconMappings.json"/>
         <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja"
-                    icon="/META-INF/pluginIcon.svg"/>
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.ToolWindowIcon"/>
 
         <projectConfigurable
                 instance="com.livteam.jsoninja.settings.JsoninjaSettingsConfigurable"
@@ -23,7 +24,7 @@
                 nonDefaultProject="true"/>
 
         <diff.DiffExtension implementation="com.livteam.jsoninja.diff.JsonDiffExtension"/>
-        
+
         <copyPastePreProcessor implementation="com.livteam.jsoninja.extensions.JsoninjaPastePreProcessor"/>
     </extensions>
 
@@ -99,7 +100,7 @@
         </action>
 
         <group id="com.livteam.jsoninja.action.group.EditorPopup" popup="false">
-             <reference ref="com.livteam.jsoninja.action.CopyJsonQueryAction"/>
+            <reference ref="com.livteam.jsoninja.action.CopyJsonQueryAction"/>
         </group>
 
     </actions>
