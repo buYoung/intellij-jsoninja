@@ -42,6 +42,9 @@ import kotlin.math.abs
  *
  * Threading: 모든 document 작업은 EDT에서 수행됩니다. 무거운 JSON parsing은
  * 가능한 경우 background thread로 이동됩니다.
+ *
+ * Note: JSONL, JSON5 파일 지원은 현재 제한적입니다.
+ * 내용이 표준 JSON(strict)을 따르는 경우에만 자동 포맷팅이 동작합니다.
  */
 class JsonDiffExtension : DiffExtension() {
 
@@ -191,6 +194,10 @@ class JsonDiffExtension : DiffExtension() {
 
         try {
             // 1단계: 빠른 경로 - 파일 타입 확인
+            // Note: JSONL, JSON5 등의 파일은 여기서 JsonFileType.INSTANCE와 일치하지 않을 수 있습니다.
+            // 이 경우 아래의 내용 기반 검사(isValidJson)를 통해 JSON 여부를 판단하게 됩니다.
+            // 단, 현재 JsonFormatterService.isValidJson은 strict JSON만 허용하므로,
+            // 표준 JSON 문법을 따르지 않는 JSON5나 여러 객체가 있는 JSONL은 지원되지 않을 수 있습니다.
             if (editor.virtualFile?.fileType == JsonFileType.INSTANCE) {
                 LOG.debug("File '$fileName' detected as JSON via file type")
                 state.detectionResult = JsonDetectionResult.YES

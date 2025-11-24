@@ -19,7 +19,7 @@ object JsonPathHelper {
     private fun buildPath(element: PsiElement, isJmes: Boolean): String? {
         var current: PsiElement? = element
         
-        // Navigate up from leaf tokens to a structural JSON element
+        // leaf token에서 시작해 구조적 JSON 요소를 찾을 때까지 상위로 이동
         while (current != null && current !is JsonValue && current !is JsonProperty && current !is JsonFile) {
             current = current.parent
         }
@@ -35,11 +35,11 @@ object JsonPathHelper {
             val parent = current.parent
             
             if (current is JsonProperty) {
-                // We are at a property. This edge (Parent -> Property) defines the key.
+                // 현재 property이며, 이 경로(Parent -> Property)가 key를 결정
                 val name = current.name
                 addPropertyPath(parts, name, isJmes)
             } else if (parent is JsonArray && current is JsonValue) {
-                // We are a value in an array. This edge (Array -> Value) defines the index.
+                // 배열 안의 value이므로 이 경로(Array -> Value)에서 index를 계산
                 val index = parent.valueList.indexOf(current)
                 if (index >= 0) {
                     parts.add("[$index]")
@@ -66,7 +66,7 @@ object JsonPathHelper {
             if (isJmes) {
                 parts.add(".\\\"$escapedName\\\"")
             } else {
-                // JsonPath: Use bracket notation with double quotes ["key"] for consistency and robust escaping
+                // JsonPath에서는 일관성과 안전한 escaping을 위해 bracket 표기법 ["key"]을 사용
                 parts.add("[\"$escapedName\"]")
             }
         } else {
@@ -75,8 +75,8 @@ object JsonPathHelper {
     }
 
     private fun needsQuotes(name: String): Boolean {
-        // Simple check: if it contains anything other than alphanumeric or underscore, or starts with digit
-        // This is a simplification but covers most cases.
+        // 알파벳·숫자·밑줄 외 문자가 있거나 숫자로 시작하면 true
+        // 단순화된 검증이지만 대부분의 경우를 커버
         return !IDENTIFIER_REGEX.matches(name)
     }
 }

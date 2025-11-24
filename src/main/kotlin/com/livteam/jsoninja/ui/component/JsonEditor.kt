@@ -11,6 +11,9 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.fileTypes.UnknownFileType
+import com.livteam.jsoninja.utils.JsonHelperUtils
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.psi.PsiDocumentManager
@@ -42,15 +45,15 @@ import com.livteam.jsoninja.model.JsonQueryType
  * JSON Document 생성을 위한 인터페이스
  */
 interface JsonDocumentCreator {
-    fun createDocument(value: String, project: Project?): Document
+    fun createDocument(value: String, project: Project?, extension: String? = null): Document
 }
 
 /**
  * PsiFile 기반의 JSON Document 생성 구현체
  */
 class SimpleJsonDocumentCreator : JsonDocumentCreator {
-    override fun createDocument(value: String, project: Project?): Document {
-        return JsonEditor.createJsonDocument(value, project, this)
+    override fun createDocument(value: String, project: Project?, extension: String?): Document {
+        return JsonEditor.createJsonDocument(value, project, extension, this)
     }
 
     fun customizePsiFile(file: PsiFile) {
@@ -64,6 +67,8 @@ class SimpleJsonDocumentCreator : JsonDocumentCreator {
  */
 class JsonEditor(
     private val project: Project,
+    private val extension: String? = null,
+    private val initialContent: String = "",
     private val documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
 ) : JPanel(), Disposable {
     companion object {
@@ -82,10 +87,26 @@ class JsonEditor(
         fun createJsonDocument(
             value: String,
             project: Project?,
+            extension: String?,
             documentCreator: SimpleJsonDocumentCreator
         ): Document {
             val language = JsonLanguage.INSTANCE
-            val fileType = language.associatedFileType ?: JsonFileType.INSTANCE
+            val defaultJsonFileType = language.associatedFileType ?: JsonFileType.INSTANCE
+
+            // 확장자가 지정되지 않은 경우 콘텐츠 기반 감지 또는 기본값(JSON5) 사용
+            var targetExtension = extension
+            if (targetExtension == null) {
+                targetExtension = if (JsonHelperUtils.isJsonL(value)) "jsonl" else "json5"
+            }
+
+            val fileTypeCandidate = FileTypeManager.getInstance().getFileTypeByExtension(targetExtension)
+            
+            // 해당 확장자의 FileType이 없으면(Unknown) 기본 JSON으로 폴백
+            val (finalFileType, finalExtension) = if (fileTypeCandidate is UnknownFileType) {
+                defaultJsonFileType to defaultJsonFileType.defaultExtension
+            } else {
+                fileTypeCandidate to targetExtension
+            }
 
             val notNullProject = project ?: ProjectManager.getInstance().defaultProject
             val factory = PsiFileFactory.getInstance(notNullProject)
@@ -93,8 +114,8 @@ class JsonEditor(
             val stamp = LocalTimeCounter.currentTime()
             val psiFile = ReadAction.compute<PsiFile, RuntimeException> {
                 factory.createFileFromText(
-                    "Dummy." + fileType.defaultExtension,
-                    fileType,
+                    "Dummy.$finalExtension",
+                    finalFileType,
                     value,
                     stamp,
                     true,
@@ -200,8 +221,19 @@ class JsonEditor(
 
 
     private fun createJsonEditor(): EditorTextField {
-        val document = documentCreator.createDocument(EMPTY_TEXT, project)
-        val fileType = JsonLanguage.INSTANCE.associatedFileType ?: JsonFileType.INSTANCE
+        // 확장자 결정 로직: 명시된 확장자가 없으면 콘텐츠 기반 감지 또는 기본값(JSON5)
+        val targetExtension = extension ?: if (JsonHelperUtils.isJsonL(initialContent)) "jsonl" else "json5"
+        
+        // 결정된 확장자로 Document 생성
+        val document = documentCreator.createDocument(initialContent, project, targetExtension)
+        
+        // EditorTextField 생성을 위한 FileType 결정
+        val fileTypeCandidate = FileTypeManager.getInstance().getFileTypeByExtension(targetExtension)
+        val fileType = if (fileTypeCandidate is UnknownFileType) {
+            JsonLanguage.INSTANCE.associatedFileType ?: JsonFileType.INSTANCE
+        } else {
+            fileTypeCandidate
+        }
 
         return EditorTextField(document, project, fileType, false, false).apply {
 

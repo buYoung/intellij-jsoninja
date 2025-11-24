@@ -113,16 +113,16 @@ class JsonHelperTabbedPane(
     /**
      * + 탭을 클릭했을 때 새 탭을 추가하는 로직
      */
-    fun addNewTabFromPlusTab(content: String = "") {
+    fun addNewTabFromPlusTab(content: String = "", extension: String? = null) {
         val plusTabIndex = indexOfComponent(components.find { it.name == ADD_NEW_TAB_COMPONENT_NAME })
 
         if (plusTabIndex != -1) {
             // 새 탭을 "+" 탭 바로 앞에 추가하고 선택
-            addNewTabInternal(plusTabIndex, content)
+            addNewTabInternal(plusTabIndex, content, extension)
             // 새로 추가된 탭을 선택하는 것은 addNewTabInternal에서 처리
         } else {
             // "+" 탭을 찾지 못한 경우 (예외적 상황), 그냥 새 탭을 마지막에 추가
-            addNewTabInternal(tabCount, content)
+            addNewTabInternal(tabCount, content, extension)
             // 새로 추가된 탭을 선택하는 것은 addNewTabInternal에서 처리
         }
     }
@@ -181,8 +181,8 @@ class JsonHelperTabbedPane(
      * 새로운 JsonEditor 인스턴스를 생성하고 초기화합니다.
      * 내용 변경 시 onTabContentChangedListener를 호출하도록 콜백을 설정합니다.
      */
-    private fun createEditor(): JsonEditor {
-        return JsonEditor(project).apply {
+    private fun createEditor(content: String, extension: String? = null): JsonEditor {
+        return JsonEditor(project, extension, content).apply {
             // JsonEditor 내부에서 내용 변경 시 onTabContentChangedListener가 호출되도록 설정
             setOnContentChangeCallback { newContent ->
                 onTabContentChangedListener?.invoke(newContent)
@@ -198,17 +198,25 @@ class JsonHelperTabbedPane(
      * 지정된 인덱스에 새 JSON 에디터 탭을 내부적으로 추가합니다.
      * @param index 탭이 추가될 위치
      * @param content 탭에 초기에 표시될 JSON 문자열 (기본값: 빈 문자열)
+     * @param extension 파일 확장자 (기본값: null)
      * @return 생성된 JsonEditor 인스턴스
      */
-    private fun addNewTabInternal(index: Int, content: String = ""): JsonEditor {
-        val editor = createEditor()
+    private fun addNewTabInternal(index: Int, content: String = "", extension: String? = null): JsonEditor {
+        val editor = createEditor(content, extension)
         // setText는 editor의 onContentChangeCallback을 트리거할 수 있으므로,
         // 여기서 onTabContentChangedListener를 직접 호출하지 않도록 주의합니다.
         // createEditor에서 설정된 콜백이 이를 처리해야 합니다.
-        if (content.isNotEmpty()) {
-            editor.setText(content) // 이 호출이 JsonEditor의 onContentChangeCallback을 발동시키는지 확인 필요
-            // 만약 발동시키지 않는다면, 아래 주석 해제 또는 createEditor의 콜백 호출 방식 변경
-            // onTabContentChangedListener?.invoke(content)
+        // JsonEditor가 initialContent로 초기화되었으므로 별도의 setText 호출이 필요 없을 수 있으나,
+        // 혹시 모를 초기화 누락이나 리스너 트리거를 위해 필요한지 확인 필요.
+        // EditorTextField(document)로 생성시 텍스트는 이미 설정됨.
+
+        // 만약 content가 비어있지 않고 리스너 트리거가 필요하다면:
+        // onTabContentChangedListener?.invoke(content) 
+        // 하지만 보통 사용자 입력 시 리스너가 동작하므로 초기 로딩시는 조용히 있는게 나을 수도 있음.
+        // 기존 로직 유지 (setText 호출) 하되, 값이 같으면 변경 이벤트가 안 일어날 수 있음.
+
+        if (content.isNotEmpty() && editor.getText() != content) {
+            editor.setText(content)
         }
 
         val title = "$TAB_TITLE_PREFIX${tabCounter++}"

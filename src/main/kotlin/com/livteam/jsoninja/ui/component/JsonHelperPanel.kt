@@ -63,9 +63,10 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     /**
      * 새 탭 추가
      * @param content 초기 내용
+     * @param extension 파일 확장자 (선택 사항)
      */
-    fun addNewTab(content: String = "") {
-        tabbedPane.addNewTabFromPlusTab(content)
+    fun addNewTab(content: String = "", extension: String? = null) {
+        tabbedPane.addNewTabFromPlusTab(content, extension)
     }
 
     /**

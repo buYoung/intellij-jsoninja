@@ -29,15 +29,24 @@ class OpenJsonFileAction : AnAction(
                 false, // jars directory
                 false, // archives
                 false  // all files
-            ).withFileFilter { it.name.endsWith(".json") },
+            ).withFileFilter { file ->
+                val name = file.name.lowercase()
+                name.endsWith(".json") ||
+                        name.endsWith(".json5") ||
+                        name.endsWith(".jsonl") ||
+                        name.endsWith(".jslines") ||
+                        name.endsWith(".ldjson") ||
+                        name.endsWith(".ndjson")
+            },
             project,
             null
         )
 
         fileChooser?.let { virtualFile ->
             val content = String(virtualFile.contentsToByteArray())
+            val extension = virtualFile.extension
             runWriteAction {
-                panel.addNewTab(content)
+                panel.addNewTab(content, extension)
             }
         }
     }
