@@ -37,9 +37,11 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.openapi.components.service
 import com.intellij.ui.PopupHandler
 import com.livteam.jsoninja.actions.CopyJsonQueryAction
 import com.livteam.jsoninja.model.JsonQueryType
+import com.livteam.jsoninja.services.JsonObjectMapperService
 
 /**
  * JSON Document 생성을 위한 인터페이스
@@ -73,7 +75,7 @@ class JsonEditor(
 ) : JPanel(), Disposable {
     companion object {
         private const val EMPTY_TEXT = ""
-        
+
         val JSONINJA_EDITOR_KEY = Key.create<Boolean>("JSONINJA_EDITOR_KEY")
 
         /**
@@ -92,15 +94,16 @@ class JsonEditor(
         ): Document {
             val language = JsonLanguage.INSTANCE
             val defaultJsonFileType = language.associatedFileType ?: JsonFileType.INSTANCE
+            val jsonObjectMapperService = service<JsonObjectMapperService>()
 
             // 확장자가 지정되지 않은 경우 콘텐츠 기반 감지 또는 기본값(JSON5) 사용
             var targetExtension = extension
             if (targetExtension == null) {
-                targetExtension = if (JsonHelperUtils.isJsonL(value)) "jsonl" else "json5"
+                targetExtension = if (JsonHelperUtils.isJsonL(value, jsonObjectMapperService)) "jsonl" else "json5"
             }
 
             val fileTypeCandidate = FileTypeManager.getInstance().getFileTypeByExtension(targetExtension)
-            
+
             // 해당 확장자의 FileType이 없으면(Unknown) 기본 JSON으로 폴백
             val (finalFileType, finalExtension) = if (fileTypeCandidate is UnknownFileType) {
                 defaultJsonFileType to defaultJsonFileType.defaultExtension
@@ -141,6 +144,7 @@ class JsonEditor(
 
     private val editor: EditorTextField = createJsonEditor()
     private val settings = JsoninjaSettingsState.getInstance(project)
+    private val jsonObjectMapperService = service<JsonObjectMapperService>()
 
     init {
         initializeUI()
@@ -222,11 +226,12 @@ class JsonEditor(
 
     private fun createJsonEditor(): EditorTextField {
         // 확장자 결정 로직: 명시된 확장자가 없으면 콘텐츠 기반 감지 또는 기본값(JSON5)
-        val targetExtension = extension ?: if (JsonHelperUtils.isJsonL(initialContent)) "jsonl" else "json5"
-        
+        val targetExtension =
+            extension ?: if (JsonHelperUtils.isJsonL(initialContent, jsonObjectMapperService)) "jsonl" else "json5"
+
         // 결정된 확장자로 Document 생성
         val document = documentCreator.createDocument(initialContent, project, targetExtension)
-        
+
         // EditorTextField 생성을 위한 FileType 결정
         val fileTypeCandidate = FileTypeManager.getInstance().getFileTypeByExtension(targetExtension)
         val fileType = if (fileTypeCandidate is UnknownFileType) {
@@ -265,15 +270,20 @@ class JsonEditor(
                 // Add Copy JSON Query action
                 val copyJsonQueryAction = CopyJsonQueryAction()
                 copyJsonQueryAction.templatePresentation.text = LocalizationBundle.message("action.copy.json.query")
-                copyJsonQueryAction.templatePresentation.description = LocalizationBundle.message("action.copy.json.query.description")
-                
+                copyJsonQueryAction.templatePresentation.description =
+                    LocalizationBundle.message("action.copy.json.query.description")
+
                 if (group.childrenCount > 0) {
                     group.addSeparator()
                 }
                 group.add(copyJsonQueryAction)
 
                 if (group.childrenCount > 0) {
-                    PopupHandler.installPopupMenu(editor.contentComponent, group, "com.livteam.jsoninja.action.group.EditorPopup")
+                    PopupHandler.installPopupMenu(
+                        editor.contentComponent,
+                        group,
+                        "com.livteam.jsoninja.action.group.EditorPopup"
+                    )
                 }
             }
             setPlaceholder(PLACEHOLDER_TEXT)

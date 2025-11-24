@@ -25,5 +25,18 @@ class JsonObjectMapperService {
         
         // Parser settings
         configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, true)
+
+        // JSON5 support
+        configure(JsonParser.Feature.ALLOW_COMMENTS, true)
+        configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true)
+        configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, true)
+    }
+
+    val jsonLObjectMapper: ObjectMapper = objectMapper.copy().apply {
+        // JSONL usually requires strict JSON (no comments, no unquoted fields, etc.)
+        // So we disable JSON5 features for JSONL
+        configure(JsonParser.Feature.ALLOW_COMMENTS, false)
+        configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, false)
+        configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, false)
     }
 }
