@@ -1,150 +1,39 @@
-# AGENTS.md
+# AGENTS Guide
+## Overview
+- JSON Ninja is a JetBrains IDE plugin for JSON formatting, diffing, escaping/unescaping, querying (JMESPath/JsonPath), random generation, and multi-tab editing via a tool window.
+- Kotlin-based; uses IntelliJ Platform services/actions plus Jackson for JSON handling and JsonPath/JMESPath for queries.
 
-This file provides guidance to AGENTS when working with code in this repository.
+## Structure
+- src/main/kotlin/com/livteam/jsoninja: core plugin code.
+  - actions: IDE actions for prettify/uglify/escape/unescape, diff views, tab control, copy query, generator; guarded by context checks.
+  - services: formatter, diff builder, query engine, object mapper, project helper, random JSON generator; settings via JsoninjaSettingsState.
+  - ui/component: JsonHelperPanel with JsonHelperTabbedPane/JsonEditor/JmesPathComponent, toolbar setup, WriteCommandAction for editor mutations.
+  - ui/diff: JsonDiffRequestChain, JsonDiffVirtualFile; works with JsonDiffExtension and JsonDiffService.
+  - extensions: JsoninjaPastePreProcessor auto-formats valid JSON on paste with size-based background processing.
+  - util/utils: JsonPathHelper builds JsonPath/JMESPath from PSI; JsonHelperUtils fetches active tab JSON.
+  - model: enums for format state, diff display mode, query type controlling behavior.
+  - settings: configurable UI for indent/sort/diff mode/query type/large file warnings.
+  - icons, LocalizationBundle for messages.
+- src/main/resources/META-INF: plugin.xml registers tool window, actions, listeners, diff extension, copy/paste preprocessor, icon mappings; localization bundle.
+- docs/: development guide, project structure, technical spec, version update notes; prd/ and todos/ hold plans/notes.
+- pro/: premium module scaffold with plugin-pro.xml (no Kotlin sources yet).
+- src/test/...: placeholders for future tests.
 
-## Project Overview
+## Conventions & patterns
+- Logging uses IntelliJ `logger<T>()` with local `LOG`; debug for flow, warn for recoverable issues, error for critical failures.
+- Naming: PascalCase classes, camelCase methods/vars, UPPER_SNAKE_CASE constants; enums for modes; comments mostly in Korean explaining intent.
+- Control flow favors early returns for null/blank checks; invalid JSON returns original text; services validate before formatting and handle failures gracefully.
+- Threading/UI: editor changes via `WriteCommandAction`/`runWriteAction`; background work on pooled threads; UI updates with `invokeLater`; disposables registered to parents.
+- State/config: project-level `@Service` classes with `service<T>()`/`project.getService`; JsoninjaSettingsState persisted via `@State`, storing enum names as strings.
+- JSON formatting: JsonFormatterService caches CustomPrettyPrinter by indent/compact arrays; toggles sorted vs unsorted ObjectMappers; `isValidJson` checks trailing tokens; escape/unescape supports beautified JSON and multi-escape patterns.
+- Diff handling: JsonDiffExtension detects JSON with heuristics plus validation, warns on large files, debounces via Alarm, tracks document state in a synchronized WeakHashMap, guards against self-triggered updates.
+- Querying: JsonQueryService chooses Jayway JsonPath or JMESPath per setting; suppresses exceptions and returns null on invalid expressions.
+- UI behavior: JsonHelperTabbedPane manages + tab creation/closure with listeners and disposables; JsonEditor installs context menu actions and modifier-triggered query tooltips.
+- TODOs: GenerateRandomJsonAction notes RandomJsonDataCreator should consume dialog config.
 
-JSON Ninja (JSONinja) is a powerful IntelliJ IDEA plugin for JSON processing built with Kotlin and the IntelliJ Platform SDK. The plugin provides JSON formatting, validation, querying with JMESPath, random data generation, and diff capabilities within a multi-tab interface.
-
-**Plugin Details:**
-- ID: `com.livteam.jsoninja`
-- Current Version: 1.3.0
-- Min IDE Build: 243 (2024.3)
-- Max IDE Build: 252.* (2025.1.*)
-- JVM Target: Java 17
-- Kotlin Version: 2.1.21
-
-## Essential Development Commands
-
-### Build & Run
-```bash
-# Run plugin in sandbox IDE (primary development command)
-./gradlew runIde
-
-# Build plugin distribution ZIP
-./gradlew buildPlugin
-```
-
-### Testing & Quality
-```bash
-# Run all tests
-./gradlew test
-
-# Run specific test class
-./gradlew test --tests "com.livteam.jsoninja.services.JsonFormatterServiceTest"
-
-# Run all verification tasks (tests + static analysis)
-./gradlew check
-
-# Generate code coverage reports
-./gradlew koverHtmlReport
-
-# Generate searchable options index
-./gradlew buildSearchableOptions
-```
-
-## Architecture Overview
-
-### Service Layer Architecture
-The plugin uses IntelliJ's service pattern with project-scoped services:
-
-- **`JsonFormatterService`** - Core JSON transformation engine supporting 4 format states:
-  - `PRETTIFY` - Standard pretty printing with configurable indentation
-  - `UGLIFY` - Minified single-line JSON
-  - `PRETTIFY_SORTED` - Pretty print with alphabetically sorted keys
-  - `PRETTIFY_COMPACT` - Pretty print with compact arrays
-- **`JmesPathService`** - JMES Path query processor for JSON filtering
-- **`JsonDiffService`** - JSON comparison and diff visualization
-- **`RandomJsonDataCreator`** - Generates random JSON using DataFaker library
-- **`JsonHelperService`** - Main project service managing format state
-
-### UI Component Hierarchy
-```
-JsoninjaToolWindowFactory (Tool Window Entry Point)
-└── JsonHelperPanel (Main Panel)
-    ├── JsonHelperActionBar (Toolbar with format actions)
-    └── JsonHelperTabbedPane (Multi-tab JSON editors)
-        └── JsonEditor (Custom editor with syntax highlighting)
-            └── JmesPathComponent (Query interface)
-```
-
-### Action System
-All user actions inherit from IntelliJ's AnAction and are organized in:
-- **Core Actions**: `PrettifyJsonAction`, `UglifyJsonAction`, `EscapeJsonAction`, `UnescapeJsonAction`
-- **Utility Actions**: `GenerateRandomJsonAction`, `AddTabAction`, `OpenJsonFileAction`
-- **Diff Actions**: `ShowJsonDiffAction`, `ShowJsonDiffInEditorTabAction`, `ShowJsonDiffInWindowAction`
-
-### Key Implementation Details
-- **JSON Processing**: Jackson ObjectMapper with custom PrettyPrinter configurations cached per format state
-- **Editor Integration**: Uses `EditorTextField` with `JsonFileType` for syntax highlighting and auto-formatting on paste
-- **Settings Persistence**: Project-level settings via `JsoninjaSettingsState` with configurable indentation and key sorting
-- **Internationalization**: Message bundles supporting English and Korean via `LocalizationBundle`
-
-### Data Flow
-1. User action triggers via toolbar or keyboard shortcut
-2. Action retrieves current JSON text from active editor tab  
-3. Service layer processes JSON based on format state and user settings
-4. Formatted result is written back to editor with proper syntax highlighting
-5. Tool window state and tab management handled by UI components
-
-### Extension Points
-The plugin registers these IntelliJ Platform extension points:
-- `toolWindow` - JSONinja tool window factory
-- `projectConfigurable` - Settings UI integration
-- `diff.DiffExtension` - Custom JSON diff provider
-- Application listeners for plugin lifecycle management
-
-## Development Environment Setup
-
-### Prerequisites
-- JDK 17+ (project uses Kotlin JVM toolchain 17)
-- Gradle 8.10.2 (via wrapper)
-- IntelliJ IDEA Community or Ultimate (for development)
-- Network access to JetBrains repositories
-
-### Dependencies
-- Jackson (databind + kotlin module) for JSON processing
-- JsonPath library for JMES Path queries
-- DataFaker for random data generation
-- JUnit 4 for testing
-- IntelliJ Platform SDK 2024.3 (IC type)
-
-## Testing Strategy
-
-Tests are organized under `src/test/kotlin/com/livteam/jsoninja/`:
-- **Service Tests**: Unit tests for all core services extending `BasePlatformTestCase`
-- **Action Tests**: Tests for user actions and their integration points
-- Test naming convention: `should_ExpectedBehavior_When_StateUnderTest`
-
-Run specific service tests:
-```bash
-./gradlew test --tests "*JsonFormatterServiceTest*"
-./gradlew test --tests "*JmesPathServiceTest*"  
-./gradlew test --tests "*JsonDiffServiceTest*"
-```
-
-## Code Quality Standards
-
-The project follows "clean code" principles as specified in `.windsurfrules`. Key practices:
-- Kotlin coding conventions with 4-space indentation
-- Service-oriented architecture with clear separation of concerns
-- Comprehensive unit test coverage for all services
-- Proper error handling and logging via IntelliJ diagnostic logger
-- Resource management and thread safety in concurrent operations
-- This operation must comply with the threading and write rules described in the "Threading & Write Rules" section.
-
-## Threading & Write Rules
-
-**Write Only**: `runWriteAction { }`
-**Write + Undo**: `WriteCommandAction.runWriteCommandAction(project) { }`
-**Write, No Undo**: `invokeLater { }`  
-**Background → Write + Undo**: `executeOnPooledThread { compute(); WriteCommandAction.runWriteCommandAction(project) { } }`
-**Background → Write, No Undo**: `executeOnPooledThread { compute(); invokeLater { } }`
-**Background Only**: `executeOnPooledThread { compute() }`
-
-### ModalityState (for invokeLater)
-
-**Default (modal-aware)**: `invokeLater { }` or `invokeLater(ModalityState.defaultModalityState()) { }`
-**Ignore modals**: `invokeLater(ModalityState.NON_MODAL) { }`
-**Always run**: `invokeLater(ModalityState.any()) { }`
-**Current context**: `invokeLater(ModalityState.current()) { }`
+## Working agreements
+- Respond in Korean unless the user asks otherwise; keep domain technical terms in English; do not alter fenced code blocks.
+- Do not add tests or lint/format tasks unless explicitly requested.
+- Prefer simple, minimal changes aligned to user asks; seek clarification when requirements are unclear; avoid unsolicited features or refactors.
+- Preserve public APIs/behaviors; highlight any required behavior change.
+- Keep new functions/modules small and colocated; avoid new dependencies unless necessary and explain why.
