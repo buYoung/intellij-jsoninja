@@ -47,3 +47,20 @@
 - Build minimal context before edits (find related usages/flows); prefer simple, minimal changes; avoid new deps unless necessary and justify if added.
 - Preserve behavior/public APIs unless requested; call out any behavior changes. Keep new functions small and near related code.
 - If requirements are unclear, ask for clarification instead of guessing.
+- This operation must comply with the threading and write rules described in the "Threading & Write Rules" section.
+
+## Threading & Write Rules
+
+**Write Only**: `runWriteAction { }`
+**Write + Undo**: `WriteCommandAction.runWriteCommandAction(project) { }`
+**Write, No Undo**: `invokeLater { }`  
+**Background → Write + Undo**: `executeOnPooledThread { compute(); WriteCommandAction.runWriteCommandAction(project) { } }`
+**Background → Write, No Undo**: `executeOnPooledThread { compute(); invokeLater { } }`
+**Background Only**: `executeOnPooledThread { compute() }`
+
+### ModalityState (for invokeLater)
+
+**Default (modal-aware)**: `invokeLater { }` or `invokeLater(ModalityState.defaultModalityState()) { }`
+**Ignore modals**: `invokeLater(ModalityState.NON_MODAL) { }`
+**Always run**: `invokeLater(ModalityState.any()) { }`
+**Current context**: `invokeLater(ModalityState.current()) { }`
