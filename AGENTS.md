@@ -1,39 +1,49 @@
-# AGENTS Guide
+# JSON Ninja – Contributor Guide
+
 ## Overview
-- JSON Ninja is a JetBrains IDE plugin for JSON formatting, diffing, escaping/unescaping, querying (JMESPath/JsonPath), random generation, and multi-tab editing via a tool window.
-- Kotlin-based; uses IntelliJ Platform services/actions plus Jackson for JSON handling and JsonPath/JMESPath for queries.
+- JetBrains IDE plugin providing JSON formatting, escaping, diffing, querying (Jayway JsonPath/JMESPath), multi-tab editing, and paste preprocessing with optional key sorting and compact arrays.
 
 ## Structure
-- src/main/kotlin/com/livteam/jsoninja: core plugin code.
-  - actions: IDE actions for prettify/uglify/escape/unescape, diff views, tab control, copy query, generator; guarded by context checks.
-  - services: formatter, diff builder, query engine, object mapper, project helper, random JSON generator; settings via JsoninjaSettingsState.
-  - ui/component: JsonHelperPanel with JsonHelperTabbedPane/JsonEditor/JmesPathComponent, toolbar setup, WriteCommandAction for editor mutations.
-  - ui/diff: JsonDiffRequestChain, JsonDiffVirtualFile; works with JsonDiffExtension and JsonDiffService.
-  - extensions: JsoninjaPastePreProcessor auto-formats valid JSON on paste with size-based background processing.
-  - util/utils: JsonPathHelper builds JsonPath/JMESPath from PSI; JsonHelperUtils fetches active tab JSON.
-  - model: enums for format state, diff display mode, query type controlling behavior.
-  - settings: configurable UI for indent/sort/diff mode/query type/large file warnings.
-  - icons, LocalizationBundle for messages.
-- src/main/resources/META-INF: plugin.xml registers tool window, actions, listeners, diff extension, copy/paste preprocessor, icon mappings; localization bundle.
-- docs/: development guide, project structure, technical spec, version update notes; prd/ and todos/ hold plans/notes.
-- pro/: premium module scaffold with plugin-pro.xml (no Kotlin sources yet).
-- src/test/...: placeholders for future tests.
+- `src/main/kotlin/com/livteam/jsoninja`: core code.
+  - `actions`: UI actions wiring toolbar/menu to panel methods.
+  - `services`: JSON formatting, diff, query, object mapper, settings/state helpers, random data generator.
+  - `ui`: tool window factory, panels, tabbed editors, dialogs, diff view scaffolding, query components.
+  - `extensions`: paste preprocessor for auto-format on paste.
+  - `model`: enums for format state, diff mode, query type.
+  - `utils/util`: shared helpers (JSON paths, action utils, icons).
+  - `settings`: persistent state + configurable UI.
+- `src/main/resources`: `plugin.xml`, message bundles, icons, JSON icon map.
+- `docs`: development/structure/spec/release guides; align changes with these when relevant.
+- `src/test/kotlin`: present but empty; mirror main packages if tests are added.
 
-## Conventions & patterns
-- Logging uses IntelliJ `logger<T>()` with local `LOG`; debug for flow, warn for recoverable issues, error for critical failures.
-- Naming: PascalCase classes, camelCase methods/vars, UPPER_SNAKE_CASE constants; enums for modes; comments mostly in Korean explaining intent.
-- Control flow favors early returns for null/blank checks; invalid JSON returns original text; services validate before formatting and handle failures gracefully.
-- Threading/UI: editor changes via `WriteCommandAction`/`runWriteAction`; background work on pooled threads; UI updates with `invokeLater`; disposables registered to parents.
-- State/config: project-level `@Service` classes with `service<T>()`/`project.getService`; JsoninjaSettingsState persisted via `@State`, storing enum names as strings.
-- JSON formatting: JsonFormatterService caches CustomPrettyPrinter by indent/compact arrays; toggles sorted vs unsorted ObjectMappers; `isValidJson` checks trailing tokens; escape/unescape supports beautified JSON and multi-escape patterns.
-- Diff handling: JsonDiffExtension detects JSON with heuristics plus validation, warns on large files, debounces via Alarm, tracks document state in a synchronized WeakHashMap, guards against self-triggered updates.
-- Querying: JsonQueryService chooses Jayway JsonPath or JMESPath per setting; suppresses exceptions and returns null on invalid expressions.
-- UI behavior: JsonHelperTabbedPane manages + tab creation/closure with listeners and disposables; JsonEditor installs context menu actions and modifier-triggered query tooltips.
-- TODOs: GenerateRandomJsonAction notes RandomJsonDataCreator should consume dialog config.
+## Core Behaviors & Patterns
+- **Formatting/escape**: `JsonFormatterService` uses shared `JsonObjectMapperService`; supports prettify/uglify, sorted keys, compact arrays, escape/unescape (including beautified JSON), validation, fully-unescape loops, and indent/key-sorting settings from `JsoninjaSettingsState`. Uses cached pretty printers keyed by indent + compact mode.
+- **State**: `JsoninjaSettingsState` persists indent, sortKeys, default/paste format state, diff mode, query type, large-file warning settings. `JsonHelperService` stores current format state as enum name.
+- **Queries**: `JsonQueryService` switches between Jayway JsonPath and JMESPath runtimes based on settings; validates expressions and returns results serialized via shared mapper.
+- **Diff**: `JsonDiffService` validates + formats both sides (semantic option sorts keys) and builds `SimpleDiffRequest` tagged with `JsonDiffKeys`.
+- **UI flow**: `JsoninjaToolWindowFactory` creates `JsonHelperPanel` with toolbar actions; `JsonHelperTabbedPane` manages numbered JSON tabs plus “+” tab, disposes per-tab resources, prevents closing last JSON tab. `JsonEditor` wraps `EditorTextField`, installs context menu (copy/paste + copy query), applies JSON syntax highlighting, tracks original JSON, emits content-change callbacks, shows JsonPath/JMESPath tooltip on modifier hover. JMESPath component stores original JSON before searches and formats results through current format state.
+- **Paste handling**: `JsoninjaPastePreProcessor` detects JSONinja editors via `JSONINJA_EDITOR_KEY`, validates JSON, formats on paste using `pasteFormatState`; falls back safely for invalid/large content (background with progress over threshold).
+- **Actions**: Thin `AnAction` classes delegate to panel helpers; `JsonHelperActionUtils.getPanel` gatekeeps availability. Diff actions choose view mode; copy action uses helper to derive query path.
+- **Utilities**: `JsonPathHelper` builds JsonPath/JMESPath strings from PSI elements (quoted when needed). Icons centralized in `JsoninjaIcons`.
+- **Localization**: Messages via `LocalizationBundle` with resource bundle under `messages/`; keep keys aligned when adding UI strings.
 
-## Working agreements
-- Respond in Korean unless the user asks otherwise; keep domain technical terms in English; do not alter fenced code blocks.
-- Do not add tests or lint/format tasks unless explicitly requested.
-- Prefer simple, minimal changes aligned to user asks; seek clarification when requirements are unclear; avoid unsolicited features or refactors.
-- Preserve public APIs/behaviors; highlight any required behavior change.
-- Keep new functions/modules small and colocated; avoid new dependencies unless necessary and explain why.
+## Conventions
+- **Naming**: Classes PascalCase, functions/vars camelCase, enums upper snake in settings; constants `UPPER_SNAKE_CASE`. Tab titles prefixed `JSON `; “+” tab named `addNewTab`.
+- **Logging**: IntelliJ `logger<T>()`; debug for validation failures, warn for formatting/query errors; avoid noisy info logs.
+- **Control flow**: Guard clauses for empty/invalid JSON; prefer service helpers over direct mapper use; use `WriteCommandAction`/`runWriteAction` for document edits; `invokeLater` for UI-safe tab operations.
+- **Comments**: Brief, often Korean explanations; TODO-style notes inline rather than separate list.
+- **Settings usage**: Read via `JsoninjaSettingsState.getInstance(project)`; store enums as string names; update format state through `JsonHelperService`.
+
+## When Extending
+- Register new actions/components in `plugin.xml` and align icons/messages.
+- Co-locate new features with existing package patterns (service + action + UI wiring).
+- Keep `JsonEditor`/tab lifecycle consistent: dispose resources via `Disposer`, preserve `JSONINJA_EDITOR_KEY`, respect large-file warning thresholds.
+- For formatting changes, consider cache keys and `JsonFormatState` semantics (sorting, compact arrays, uglify override).
+- For query-related features, handle both Jayway and JMESPath or gate by setting.
+
+## Working Agreements
+- Respond to users in Korean unless they request another language; keep domain terms in English, leave fenced code blocks untouched.
+- Do not add tests or lint/format tasks unless the user explicitly asks for them.
+- Build minimal context before edits (find related usages/flows); prefer simple, minimal changes; avoid new deps unless necessary and justify if added.
+- Preserve behavior/public APIs unless requested; call out any behavior changes. Keep new functions small and near related code.
+- If requirements are unclear, ask for clarification instead of guessing.
