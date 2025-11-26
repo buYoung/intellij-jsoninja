@@ -63,9 +63,10 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     /**
      * 새 탭 추가
      * @param content 초기 내용
+     * @param fileExtension 파일 확장자
      */
-    fun addNewTab(content: String = "") {
-        tabbedPane.addNewTabFromPlusTab(content)
+    fun addNewTab(content: String = "", fileExtension: String? = null) {
+        tabbedPane.addNewTabFromPlusTab(content, fileExtension)
     }
 
     /**
@@ -105,11 +106,15 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         }
     }
 
-    fun setRandomJsonData(data: String) {
+    fun setRandomJsonData(data: String, skipFormatting: Boolean = false) {
         val currentEditor = getCurrentEditor() ?: return
 
         WriteCommandAction.runWriteCommandAction(project) {
-            val processedJson = formatterService.formatJson(data, getJsonFormatState())
+            val processedJson = if (skipFormatting) {
+                data
+            } else {
+                formatterService.formatJson(data, getJsonFormatState())
+            }
             currentEditor.setText(processedJson)
         }
 

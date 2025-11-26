@@ -27,9 +27,12 @@ class GenerateRandomJsonAction : AnAction(
             val creator = RandomJsonDataCreator() // 최종적으로는 여기에 config를 전달해야 합니다.
 
             ApplicationManager.getApplication().executeOnPooledThread {
-                val randomJson = creator.generateConfiguredJsonString(config, prettyPrint = false) //
+                // JSON5일 경우 주석/trailing comma 생성을 위해 prettyPrint가 true여야 함
+                // 일반 JSON일 경우 false로 생성해도 panel.setRandomJsonData에서 포맷팅 수행함
+                val prettyPrint = config.isJson5
+                val randomJson = creator.generateConfiguredJsonString(config, prettyPrint = prettyPrint)
 
-                panel.setRandomJsonData(randomJson)
+                panel.setRandomJsonData(randomJson, skipFormatting = config.isJson5)
             }
         }
     }

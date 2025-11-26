@@ -45,7 +45,7 @@ class RandomJsonDataCreator (
             RootType.ARRAY_OF_OBJECTS -> generateSpecificArrayOfObjects(0, config.arrayElementCount, config.propertiesPerObjectInArray, maxDepth)
         }
         // ... (ObjectMapper 로직 동일)
-        return if (prettyPrint) {
+        val jsonString = if (prettyPrint) {
             mapper.writerWithDefaultPrettyPrinter()
                 .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS) // Maintain original behavior locally
                 .writeValueAsString(generatedData)
@@ -53,6 +53,13 @@ class RandomJsonDataCreator (
             mapper.writer()
                 .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .writeValueAsString(generatedData)
+        }
+        
+        // JSON5 특징 추가 (주석, trailing comma)
+        return if (config.isJson5 && prettyPrint) {
+            addJson5Features(jsonString)
+        } else {
+            jsonString
         }
     }
 
@@ -254,6 +261,59 @@ class RandomJsonDataCreator (
             7 -> faker.app().name()
             8 -> faker.lorem().word() // 가장 기본적인 단어
             else -> faker.file().fileName()
+        }
+    }
+
+    /**
+     * JSON5 특징을 추가: 주석과 trailing comma
+     */
+    private fun addJson5Features(jsonString: String): String {
+        val lines = jsonString.lines().toMutableList()
+        val result = mutableListOf<String>()
+        
+        // 상단에 JSON5 주석 추가
+        result.add("// Generated JSON5 Data")
+        result.add("// Supports comments, trailing commas, and unquoted keys")
+        
+        for (i in lines.indices) {
+            val line = lines[i]
+            val trimmed = line.trim()
+            
+            // 객체나 배열의 마지막 요소에 trailing comma 추가
+            if (i < lines.size - 1) {
+                val nextTrimmed = lines[i + 1].trim()
+                // 값이 무엇이든(문자열, 숫자, 불리언, null, 객체/배열 등) 닫는 괄호 앞이면 쉼표 추가
+                // 단, 여는 괄호 바로 뒤에 닫는 괄호가 오는 빈 객체/배열인 경우는 제외
+                if ((nextTrimmed.startsWith("}") || nextTrimmed.startsWith("]"))
+                    && !trimmed.endsWith(",")
+                    && !trimmed.endsWith("{")
+                    && !trimmed.endsWith("[")) {
+                    result.add(line + ",")
+                    continue
+                }
+            }
+            
+            // 일부 속성에 인라인 주석 추가 (랜덤하게)
+            if (trimmed.contains(":") && Random.nextDouble() < 0.15) {
+                result.add("$line  // ${generateRandomComment()}")
+            } else {
+                result.add(line)
+            }
+        }
+        
+        return result.joinToString("\n")
+    }
+    
+    /**
+     * 랜덤 주석 문구 생성 (Faker 활용)
+     */
+    private fun generateRandomComment(): String {
+        return when (Random.nextInt(5)) {
+            0 -> "Note: ${faker.lorem().sentence(3)}" // 짧은 문장
+            1 -> "Type: ${faker.lorem().word()}" // 타입 힌트 느낌
+            2 -> "TODO: ${faker.lorem().words(3).joinToString(" ")}" // 할 일
+            3 -> "Ref: ${faker.code().isbn10()}" // 참조 코드 느낌
+            else -> faker.company().catchPhrase() // 비즈니스 용어
         }
     }
 }
