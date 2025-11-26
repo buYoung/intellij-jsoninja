@@ -44,68 +44,73 @@ class GenerateJsonDialog(project: Project?) : DialogWrapper(project) {
 
     override fun createCenterPanel(): JComponent {
         return panel {
-            buttonsGroup(LocalizationBundle.message("dialog.generate.json.label.root.type")) {
-                row {
-                    rootTypeObject = radioButton(LocalizationBundle.message("dialog.generate.json.radio.object"), RootType.OBJECT)
-                        .component
-                    rootTypeArray = radioButton(LocalizationBundle.message("dialog.generate.json.radio.array"), RootType.ARRAY_OF_OBJECTS)
-                        .component
-                }
-            }.bind(
-                { if (rootTypeObject.isSelected) RootType.OBJECT else RootType.ARRAY_OF_OBJECTS },
-                { selectedType ->
-                    rootTypeObject.isSelected = (selectedType == RootType.OBJECT)
-                    rootTypeArray.isSelected = (selectedType == RootType.ARRAY_OF_OBJECTS)
-                    updateFieldVisibility()
-                }
-            )
-
-            row(LocalizationBundle.message("dialog.generate.json.label.max.depth")) { // "최대 생성 깊이 (Max Depth):"
-                maxDepthField = intTextField(1..10) // 범위 예시: 1부터 10까지
-                    .apply { component.text = initialConfig.maxDepth.toString() } // 초기값 설정
-                    .gap(RightGap.SMALL)
-                    .comment(LocalizationBundle.message("dialog.generate.json.comment.max.depth")) // "중첩 레벨 제한 (1 이상)"
-                    .component
+            group(LocalizationBundle.message("dialog.generate.json.group.structure")) {
+                buttonsGroup {
+                    row {
+                        rootTypeObject = radioButton(LocalizationBundle.message("dialog.generate.json.radio.object"), RootType.OBJECT)
+                            .component
+                        rootTypeArray = radioButton(LocalizationBundle.message("dialog.generate.json.radio.array"), RootType.ARRAY_OF_OBJECTS)
+                            .component
+                    }
+                }.bind(
+                    { if (rootTypeObject.isSelected) RootType.OBJECT else RootType.ARRAY_OF_OBJECTS },
+                    { selectedType ->
+                        rootTypeObject.isSelected = (selectedType == RootType.OBJECT)
+                        rootTypeArray.isSelected = (selectedType == RootType.ARRAY_OF_OBJECTS)
+                        updateFieldVisibility()
+                    }
+                )
             }
 
-            row {
-                json5Checkbox = checkBox(LocalizationBundle.message("dialog.generate.json.checkbox.json5"))
-                    .apply { component.isSelected = initialConfig.isJson5 }
-                    .component
-            }
-
-
-            panel {
+            group(LocalizationBundle.message("dialog.generate.json.group.dimensions")) {
                 row(LocalizationBundle.message("dialog.generate.json.label.object.prop.count")) {
                     objectPropertyCountField = intTextField(1..100)
                         .apply {
                             component.text = initialConfig.objectPropertyCount.toString()
                         }
                         .gap(RightGap.SMALL)
+                        .comment(LocalizationBundle.message("dialog.generate.json.comment.object.prop.count"))
                         .component
                 }.visibleIf(rootTypeObject.selected)
 
-            }.visibleIf(rootTypeObject.selected)
-
-            panel {
                 row(LocalizationBundle.message("dialog.generate.json.label.array.element.count")) {
                     arrayElementCountField = intTextField(1..100)
                         .apply {
                             component.text = initialConfig.arrayElementCount.toString()
                         }
                         .gap(RightGap.SMALL)
+                        .comment(LocalizationBundle.message("dialog.generate.json.comment.array.element.count"))
                         .component
-                }
+                }.visibleIf(rootTypeArray.selected)
+
                 row(LocalizationBundle.message("dialog.generate.json.label.props.per.object")) {
                     propertiesPerObjectInArrayField = intTextField(1..100) // 범위 예시
                         .apply {
                             component.text = initialConfig.propertiesPerObjectInArray.toString()
                         }
                         .gap(RightGap.SMALL)
+                        .comment(LocalizationBundle.message("dialog.generate.json.comment.props.per.object"))
+                        .component
+                }.visibleIf(rootTypeArray.selected)
+
+                separator()
+
+                row(LocalizationBundle.message("dialog.generate.json.label.max.depth")) { // "최대 생성 깊이 (Max Depth):"
+                    maxDepthField = intTextField(1..10) // 범위 예시: 1부터 10까지
+                        .apply { component.text = initialConfig.maxDepth.toString() } // 초기값 설정
+                        .gap(RightGap.SMALL)
+                        .comment(LocalizationBundle.message("dialog.generate.json.comment.max.depth")) // "중첩 레벨 제한 (1 이상)"
                         .component
                 }
-            }.visibleIf(rootTypeArray.selected)
+            }
 
+            group(LocalizationBundle.message("dialog.generate.json.group.options")) {
+                row {
+                    json5Checkbox = checkBox(LocalizationBundle.message("dialog.generate.json.checkbox.json5"))
+                        .apply { component.isSelected = initialConfig.isJson5 }
+                        .component
+                }
+            }
 
             updateFieldVisibility()
         }
