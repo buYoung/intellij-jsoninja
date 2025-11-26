@@ -106,11 +106,15 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         }
     }
 
-    fun setRandomJsonData(data: String) {
+    fun setRandomJsonData(data: String, skipFormatting: Boolean = false) {
         val currentEditor = getCurrentEditor() ?: return
 
         WriteCommandAction.runWriteCommandAction(project) {
-            val processedJson = formatterService.formatJson(data, getJsonFormatState())
+            val processedJson = if (skipFormatting) {
+                data
+            } else {
+                formatterService.formatJson(data, getJsonFormatState())
+            }
             currentEditor.setText(processedJson)
         }
 

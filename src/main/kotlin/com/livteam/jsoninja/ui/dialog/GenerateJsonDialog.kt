@@ -16,8 +16,8 @@ data class JsonGenerationConfig(
     val objectPropertyCount: Int = 5, // 루트=객체 일 때 기본값
     val arrayElementCount: Int = 5, // 루트=배열 일 때 기본값
     val propertiesPerObjectInArray: Int = 3, // 배열 내 객체의 속성 개수 기본값
-    val maxDepth: Int = 3
-    // 추후 필드 추가 (예: 값 타입, 키 이름 규칙 등)
+    val maxDepth: Int = 3,
+    val isJson5: Boolean = false // JSON5 생성 여부
 )
 
 enum class RootType {
@@ -32,6 +32,7 @@ class GenerateJsonDialog(project: Project?) : DialogWrapper(project) {
     private lateinit var arrayElementCountField: JBTextField
     private lateinit var propertiesPerObjectInArrayField: JBTextField
     private lateinit var maxDepthField: JBTextField
+    private lateinit var json5Checkbox: com.intellij.ui.components.JBCheckBox
 
     private val initialConfig = JsonGenerationConfig() // 기본값으로 시작
 
@@ -61,9 +62,15 @@ class GenerateJsonDialog(project: Project?) : DialogWrapper(project) {
 
             row(LocalizationBundle.message("dialog.generate.json.label.max.depth")) { // "최대 생성 깊이 (Max Depth):"
                 maxDepthField = intTextField(1..10) // 범위 예시: 1부터 10까지
-                    .apply { text(initialConfig.maxDepth.toString()) } // 초기값 설정
+                    .apply { component.text = initialConfig.maxDepth.toString() } // 초기값 설정
                     .gap(RightGap.SMALL)
                     .comment(LocalizationBundle.message("dialog.generate.json.comment.max.depth")) // "중첩 레벨 제한 (1 이상)"
+                    .component
+            }
+
+            row {
+                json5Checkbox = checkBox(LocalizationBundle.message("dialog.generate.json.checkbox.json5"))
+                    .apply { component.isSelected = initialConfig.isJson5 }
                     .component
             }
 
@@ -72,7 +79,7 @@ class GenerateJsonDialog(project: Project?) : DialogWrapper(project) {
                 row(LocalizationBundle.message("dialog.generate.json.label.object.prop.count")) {
                     objectPropertyCountField = intTextField(1..100)
                         .apply {
-                            text(initialConfig.objectPropertyCount.toString())
+                            component.text = initialConfig.objectPropertyCount.toString()
                         }
                         .gap(RightGap.SMALL)
                         .component
@@ -84,7 +91,7 @@ class GenerateJsonDialog(project: Project?) : DialogWrapper(project) {
                 row(LocalizationBundle.message("dialog.generate.json.label.array.element.count")) {
                     arrayElementCountField = intTextField(1..100)
                         .apply {
-                            text(initialConfig.arrayElementCount.toString())
+                            component.text = initialConfig.arrayElementCount.toString()
                         }
                         .gap(RightGap.SMALL)
                         .component
@@ -92,7 +99,7 @@ class GenerateJsonDialog(project: Project?) : DialogWrapper(project) {
                 row(LocalizationBundle.message("dialog.generate.json.label.props.per.object")) {
                     propertiesPerObjectInArrayField = intTextField(1..100) // 범위 예시
                         .apply {
-                            text(initialConfig.propertiesPerObjectInArray.toString())
+                            component.text = initialConfig.propertiesPerObjectInArray.toString()
                         }
                         .gap(RightGap.SMALL)
                         .component
@@ -132,7 +139,9 @@ class GenerateJsonDialog(project: Project?) : DialogWrapper(project) {
             rootType = if (rootTypeObject.isSelected) RootType.OBJECT else RootType.ARRAY_OF_OBJECTS,
             objectPropertyCount = objectPropertyCountField.text.toIntOrNull() ?: initialConfig.objectPropertyCount,
             arrayElementCount = arrayElementCountField.text.toIntOrNull() ?: initialConfig.arrayElementCount,
-            propertiesPerObjectInArray = propertiesPerObjectInArrayField.text.toIntOrNull() ?: initialConfig.propertiesPerObjectInArray
+            propertiesPerObjectInArray = propertiesPerObjectInArrayField.text.toIntOrNull() ?: initialConfig.propertiesPerObjectInArray,
+            maxDepth = maxDepthField.text.toIntOrNull() ?: initialConfig.maxDepth,
+            isJson5 = json5Checkbox.isSelected
         )
     }
 }
