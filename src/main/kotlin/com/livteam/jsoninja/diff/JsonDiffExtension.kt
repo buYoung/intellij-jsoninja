@@ -192,7 +192,12 @@ class JsonDiffExtension : DiffExtension() {
         try {
             // 1단계: 빠른 경로 - 파일 타입 확인
             val fileType = editor.virtualFile?.fileType
-            if (fileType == JsonFileType.INSTANCE || fileType?.name == "JSON5") {
+            // JSON5 파일 타입 이름은 플러그인마다 다를 수 있으므로 확장자도 확인
+            val isJson5 = fileType?.name?.equals("JSON5", ignoreCase = true) == true || 
+                          fileType?.defaultExtension == "json5" || 
+                          editor.virtualFile?.extension.equals("json5", ignoreCase = true)
+
+            if (fileType == JsonFileType.INSTANCE || isJson5) {
                 LOG.debug("File '$fileName' detected as JSON via file type")
                 state.detectionResult = JsonDetectionResult.YES
                 return true

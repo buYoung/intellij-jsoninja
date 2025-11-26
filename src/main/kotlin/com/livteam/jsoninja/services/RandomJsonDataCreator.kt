@@ -282,9 +282,12 @@ class RandomJsonDataCreator (
             // 객체나 배열의 마지막 요소에 trailing comma 추가
             if (i < lines.size - 1) {
                 val nextTrimmed = lines[i + 1].trim()
-                if ((trimmed.endsWith('"') || trimmed.matches(Regex(".*\\d+\\s*"))) 
-                    && (nextTrimmed.startsWith("}") || nextTrimmed.startsWith("]"))
-                    && !trimmed.endsWith(",")) {
+                // 값이 무엇이든(문자열, 숫자, 불리언, null, 객체/배열 등) 닫는 괄호 앞이면 쉼표 추가
+                // 단, 여는 괄호 바로 뒤에 닫는 괄호가 오는 빈 객체/배열인 경우는 제외
+                if ((nextTrimmed.startsWith("}") || nextTrimmed.startsWith("]"))
+                    && !trimmed.endsWith(",")
+                    && !trimmed.endsWith("{")
+                    && !trimmed.endsWith("[")) {
                     result.add(line + ",")
                     continue
                 }
