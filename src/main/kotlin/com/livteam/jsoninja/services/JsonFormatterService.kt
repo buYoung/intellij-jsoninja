@@ -13,6 +13,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
+import com.livteam.jsoninja.utils.JsonHelperUtils
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -24,9 +25,11 @@ import java.util.concurrent.ConcurrentHashMap
 class JsonFormatterService(private val project: Project) {
     private val LOG = logger<JsonFormatterService>()
     private val settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
-    
-    private val defaultMapper = service<JsonObjectMapperService>().objectMapper
-    
+
+    private val jsonObjectMapperService = service<JsonObjectMapperService>()
+    private val defaultMapper = jsonObjectMapperService.objectMapper
+    private val jsonLMapper = jsonObjectMapperService.jsonLObjectMapper
+
     private val sortedMapper = defaultMapper.copy().apply {
         configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
     }
@@ -116,56 +119,66 @@ class JsonFormatterService(private val project: Project) {
     }
 
     /**
-     * JSON 문자열을 지정된 포맷 상태에 따라 포맷팅
+     * Formats a JSON or JSONL string based on its content.
+     * Acts as a gateway, delegating to specific formatters for JSONL or standard JSON.
      *
-     * @param json 포맷팅할 JSON 문자열
-     * @param formatState 포맷 상태
-     * @return 포맷팅된 JSON 문자열, 포맷팅 실패 시 원본 반환
+     * @param json The JSON or JSONL string to format.
+     * @param formatState The target format state (e.g., prettify, uglify).
+     * @return The formatted string, or the original if formatting fails.
      */
     fun formatJson(json: String, formatState: JsonFormatState): String {
-        var formatState = formatState
-        val trimedJson = json.trim()
-        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
+        if (json.isBlank()) return json
 
-        if (isEmptyJson) return json
+        return if (JsonHelperUtils.isJsonL(json, jsonObjectMapperService)) {
+            formatJsonL(json, formatState)
+        } else {
+            formatStandardJson(json, formatState)
+        }
+    }
 
-        // Check if JSON is valid before attempting to format
+    /**
+     * Formats a standard JSON string.
+     *
+     * @param json The JSON string to format.
+     * @param formatState The target format state.
+     * @return The formatted JSON string.
+     */
+    private fun formatStandardJson(json: String, formatState: JsonFormatState): String {
         if (!isValidJson(json)) {
             LOG.debug("Invalid JSON detected, returning original: $json")
             return json
         }
 
         return try {
-            // 포맷 상태에 따라 설정 조정
-            // UGLIFY 상태일 때는 설정에 관계없이 항상 UGLIFY 유지
             val usesSorting = if (formatState == JsonFormatState.PRETTIFY_SORTED) {
                 true
             } else if (formatState == JsonFormatState.UGLIFY) {
-                false // UGLIFY 상태에서는 정렬하지 않음
+                false
             } else {
-                settings.sortKeys // 다른 상태에서는 설정값 사용
+                settings.sortKeys
             }
 
-            // UGLIFY가 아니고 정렬이 필요한 경우에만 PRETTIFY_SORTED로 변경
-            if (formatState != JsonFormatState.UGLIFY && usesSorting) {
-                formatState = JsonFormatState.PRETTIFY_SORTED
+            val effectiveFormatState = if (formatState != JsonFormatState.UGLIFY && usesSorting) {
+                JsonFormatState.PRETTIFY_SORTED
+            } else {
+                formatState
             }
 
-            // 매퍼 설정
             val mapper = getConfiguredMapper(usesSorting)
             val jsonNode = mapper.readTree(json)
 
-
-            when (formatState) {
+            when (effectiveFormatState) {
                 JsonFormatState.PRETTIFY,
                 JsonFormatState.PRETTIFY_COMPACT -> {
-                    val prettyPrinter = createConfiguredPrettyPrinter(formatState)
+                    val prettyPrinter = createConfiguredPrettyPrinter(effectiveFormatState)
                     mapper.writer(prettyPrinter).writeValueAsString(jsonNode)
                 }
 
                 JsonFormatState.PRETTIFY_SORTED -> {
-                    val prettyPrinter = createConfiguredPrettyPrinter(formatState)
-                    mapper.writer(prettyPrinter).writeValueAsString(mapper.treeToValue(jsonNode, Object::class.java))
+                    val prettyPrinter = createConfiguredPrettyPrinter(effectiveFormatState)
+                    // Re-read with sorting enabled mapper to apply sorting
+                    val sortedNode = sortedMapper.treeToValue(jsonNode, Object::class.java)
+                    sortedMapper.writer(prettyPrinter).writeValueAsString(sortedNode)
                 }
 
                 JsonFormatState.UGLIFY -> {
@@ -173,9 +186,44 @@ class JsonFormatterService(private val project: Project) {
                 }
             }
         } catch (e: Exception) {
-            // 포맷팅 실패 시 원본 반환
-            LOG.warn("JSON 포맷팅 실패: ${e.message}")
+            LOG.warn("JSON formatting failed: ${e.message}")
             json
+        }
+    }
+
+    /**
+     * Formats a JSONL string line by line.
+     *
+     * @param jsonl The JSONL string to format.
+     * @param formatState The target format state.
+     * @return The formatted JSONL string.
+     */
+    private fun formatJsonL(jsonl: String, formatState: JsonFormatState): String {
+        val usesSorting = formatState == JsonFormatState.PRETTIFY_SORTED || (formatState != JsonFormatState.UGLIFY && settings.sortKeys)
+        val mapper = if (usesSorting) sortedMapper else jsonLMapper
+
+        val prettyPrinter = if (formatState != JsonFormatState.UGLIFY) {
+            createConfiguredPrettyPrinter(formatState)
+        } else {
+            null
+        }
+
+        return jsonl.lines().joinToString("\n") { line ->
+            if (line.isBlank()) {
+                line
+            } else {
+                try {
+                    val jsonNode = mapper.readTree(line)
+                    if (prettyPrinter != null) {
+                        mapper.writer(prettyPrinter).writeValueAsString(jsonNode)
+                    } else {
+                        mapper.writeValueAsString(jsonNode)
+                    }
+                } catch (e: Exception) {
+                    // Return the original line if it's not valid JSON
+                    line
+                }
+            }
         }
     }
 
