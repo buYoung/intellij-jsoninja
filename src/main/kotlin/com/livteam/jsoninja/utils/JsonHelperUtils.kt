@@ -27,52 +27,55 @@ object JsonHelperUtils {
     }
 
     /**
-     * Heuristically checks if the given text appears to be in JSON Lines (JSONL) format.
+     * 주어진 텍스트가 JSON Lines(JSONL) 형식인지 휴리스틱하게 검사합니다.
      *
-     * This function uses a set of heuristics to quickly determine if a text is likely JSONL
-     * without parsing the entire file. This is crucial for performance with large files.
+     * 이 함수는 전체 파일을 파싱하지 않고 텍스트가 JSONL일 가능성이 높은지 신속하게 판단하기 위해
+     * 다음과 같은 휴리스틱(heuristics)을 사용합니다. 이는 대용량 파일의 성능에 매우 중요합니다.
      *
-     * The heuristics are:
-     * 1.  **Multiple Non-Empty Lines**: A valid JSONL file must contain at least two non-empty
-     *     lines. A single-line document is more likely to be a standard JSON file.
-     * 2.  **Strict JSON Parsing of Sample Lines**: It samples up to the first 10 non-empty
-     *     lines and tries to parse each as a strict JSON object. If all sampled lines parse
-     *     correctly, it's considered JSONL. This check uses a strict `ObjectMapper` that
-     *     disallows JSON5 features like comments or trailing commas.
-     * 3.  **Memory Efficiency**: It processes the text line by line using `lineSequence` to avoid
-     *     loading the entire file into memory.
+     * 휴리스틱 규칙:
+     * 1.  **여러 개의 비어있지 않은 줄**: 유효한 JSONL 파일은 적어도 두 개 이상의 비어있지 않은 줄을
+     *     포함해야 합니다. 한 줄짜리 문서는 일반 JSON 파일일 가능성이 높습니다.
+     * 2.  **샘플 라인의 엄격한 JSON 파싱**: 비어있지 않은 첫 10개 라인을 샘플링하여 각 라인이
+     *     엄격한(strict) JSON 객체로 파싱되는지 확인합니다. 모든 샘플 라인이 성공적으로 파싱되면
+     *     JSONL로 간주합니다. 이 검사는 주석이나 후행 쉼표 같은 JSON5 기능을 허용하지 않는
+     *     엄격한 `ObjectMapper`를 사용합니다.
+     * 3.  **메모리 효율성**: 전체 파일을 메모리에 로드하는 것을 피하기 위해 `lineSequence`를 사용하여
+     *     텍스트를 한 줄씩 처리합니다.
      *
-     * @param text The text content to check.
-     * @param jsonService A service that provides the strict `ObjectMapper` for JSONL parsing.
-     * @return `true` if the text is likely JSONL, `false` otherwise.
+     * 이 접근 방식은 IDE 플러그인과 같이 응답성이 중요한 환경에 최적화된 실용적인 방법입니다.
+     * 모든 라인을 검사하는 엄격한 유효성 검사는 대용량 파일에서 과도한 성능 저하를 일으킬 수 있습니다.
+     *
+     * @param text 검사할 텍스트 내용.
+     * @param jsonService JSONL 파싱을 위한 엄격한 `ObjectMapper`를 제공하는 서비스.
+     * @return 텍스트가 JSONL일 가능성이 높으면 `true`, 그렇지 않으면 `false`를 반환합니다.
      */
     fun isJsonL(text: String, jsonService: JsonObjectMapperService): Boolean {
         if (text.isBlank()) return false
 
-        // Use a sequence for memory-efficient line processing, especially for large files.
+        // 대용량 파일 처리를 위해 메모리 효율적인 시퀀스를 사용합니다.
         val linesSequence = text.lineSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() }
 
-        // Take up to 11 lines to check two conditions:
-        // 1. Are there at least 2 non-empty lines?
-        // 2. Are the first 10 lines valid JSON?
+        // 두 가지 조건을 확인하기 위해 최대 11개의 라인을 가져옵니다:
+        // 1. 비어있지 않은 라인이 2개 이상인가?
+        // 2. 첫 10개의 라인이 유효한 JSON인가?
         val sampleLines = linesSequence.take(11).toList()
 
-        // If there are fewer than two non-empty lines, it's not considered JSONL.
+        // 비어있지 않은 라인이 2개 미만이면 JSONL로 간주하지 않습니다.
         if (sampleLines.size < 2) return false
 
-        // Use a strict ObjectMapper to ensure each line is a valid, standard JSON object.
+        // 각 라인이 유효한 표준 JSON 객체인지 확인하기 위해 엄격한 ObjectMapper를 사용합니다.
         val mapper = jsonService.jsonLObjectMapper
 
-        // Check if the first 10 non-empty lines are all valid JSON objects.
+        // 첫 10개의 비어있지 않은 라인이 모두 유효한 JSON 객체인지 확인합니다.
         return sampleLines.take(10).all { line ->
             try {
-                // Attempt to parse the line. If it fails, it's not a valid JSONL line.
+                // 라인 파싱을 시도합니다. 실패하면 유효한 JSONL 라인이 아닙니다.
                 mapper.readTree(line)
                 true
             } catch (e: Exception) {
-                // Any parsing failure means it's not a well-formed JSONL file.
+                // 파싱 실패는 잘 구성된 JSONL 파일이 아님을 의미합니다.
                 false
             }
         }

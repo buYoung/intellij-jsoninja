@@ -119,12 +119,12 @@ class JsonFormatterService(private val project: Project) {
     }
 
     /**
-     * Formats a JSON or JSONL string based on its content.
-     * Acts as a gateway, delegating to specific formatters for JSONL or standard JSON.
+     * 내용에 따라 JSON 또는 JSONL 문자열의 형식을 지정합니다.
+     * JSONL 또는 표준 JSON에 대한 특정 포맷터에 위임하는 게이트웨이 역할을 합니다.
      *
-     * @param json The JSON or JSONL string to format.
-     * @param formatState The target format state (e.g., prettify, uglify).
-     * @return The formatted string, or the original if formatting fails.
+     * @param json 형식화할 JSON 또는 JSONL 문자열입니다.
+     * @param formatState 대상 형식 상태(예: prettify, uglify).
+     * @return 형식화된 문자열, 실패 시 원본.
      */
     fun formatJson(json: String, formatState: JsonFormatState): String {
         if (json.isBlank()) return json
@@ -137,11 +137,11 @@ class JsonFormatterService(private val project: Project) {
     }
 
     /**
-     * Formats a standard JSON string.
+     * 표준 JSON 문자열의 형식을 지정합니다.
      *
-     * @param json The JSON string to format.
-     * @param formatState The target format state.
-     * @return The formatted JSON string.
+     * @param json 형식화할 JSON 문자열입니다.
+     * @param formatState 대상 형식 상태.
+     * @return 형식화된 JSON 문자열.
      */
     private fun formatStandardJson(json: String, formatState: JsonFormatState): String {
         if (!isValidJson(json)) {
@@ -192,15 +192,15 @@ class JsonFormatterService(private val project: Project) {
     }
 
     /**
-     * Formats a JSONL string line by line.
+     * JSONL 문자열을 한 줄씩 형식화합니다.
      *
-     * @param jsonl The JSONL string to format.
-     * @param formatState The target format state.
-     * @return The formatted JSONL string.
+     * @param jsonl 형식화할 JSONL 문자열입니다.
+     * @param formatState 대상 형식 상태.
+     * @return 형식화된 JSONL 문자열.
      */
     private fun formatJsonL(jsonl: String, formatState: JsonFormatState): String {
         val usesSorting = formatState == JsonFormatState.PRETTIFY_SORTED || (formatState != JsonFormatState.UGLIFY && settings.sortKeys)
-        val mapper = if (usesSorting) sortedMapper else jsonLMapper
+        val mapper = if (usesSorting) sortedMapper else defaultMapper
 
         val prettyPrinter = if (formatState != JsonFormatState.UGLIFY) {
             createConfiguredPrettyPrinter(formatState)
