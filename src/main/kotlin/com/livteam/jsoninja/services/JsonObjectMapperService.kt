@@ -25,5 +25,10 @@ class JsonObjectMapperService {
         
         // Parser settings
         configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, true)
+
+        // JSON5 support
+        configure(JsonParser.Feature.ALLOW_COMMENTS, true)
+        configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true)
+        configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, true)
     }
 }

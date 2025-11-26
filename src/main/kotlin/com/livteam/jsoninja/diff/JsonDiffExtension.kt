@@ -191,7 +191,8 @@ class JsonDiffExtension : DiffExtension() {
 
         try {
             // 1단계: 빠른 경로 - 파일 타입 확인
-            if (editor.virtualFile?.fileType == JsonFileType.INSTANCE) {
+            val fileType = editor.virtualFile?.fileType
+            if (fileType == JsonFileType.INSTANCE || fileType?.name == "JSON5") {
                 LOG.debug("File '$fileName' detected as JSON via file type")
                 state.detectionResult = JsonDetectionResult.YES
                 return true

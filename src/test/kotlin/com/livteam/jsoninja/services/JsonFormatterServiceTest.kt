@@ -229,4 +229,60 @@ class JsonFormatterServiceTest : BasePlatformTestCase() {
         val result = jsonFormatterService.formatJson(inputWithTrailingTokens, JsonFormatState.PRETTIFY)
         assertEquals(inputWithTrailingTokens, result)
     }
+    fun testJson5Support() {
+        // Test JSON5 features: Comments, Single Quotes, Unquoted Field Names
+
+        // 1. Comments (Single-line and Block)
+        val jsonWithComments = """
+            {
+                // This is a single-line comment
+                "key": "value",
+                /* This is a
+                   block comment */
+                "number": 123
+            }
+        """.trimIndent()
+        assertTrue("Should accept JSON with comments", jsonFormatterService.isValidJson(jsonWithComments))
+        val formattedComments = jsonFormatterService.formatJson(jsonWithComments, JsonFormatState.UGLIFY)
+        assertEquals("Should remove comments and format to valid JSON", """{"key":"value","number":123}""", formattedComments)
+
+        // 2. Single Quotes
+        val jsonWithSingleQuotes = """
+            {
+                'key': 'value',
+                'number': 123
+            }
+        """.trimIndent()
+        assertTrue("Should accept JSON with single quotes", jsonFormatterService.isValidJson(jsonWithSingleQuotes))
+        val formattedSingleQuotes = jsonFormatterService.formatJson(jsonWithSingleQuotes, JsonFormatState.UGLIFY)
+        assertEquals("Should convert single quotes to double quotes", """{"key":"value","number":123}""", formattedSingleQuotes)
+
+        // 3. Unquoted Field Names
+        val jsonWithUnquotedFields = """
+            {
+                key: "value",
+                number: 123,
+                _validId: true,
+                ${'$'}specialVar: null
+            }
+        """.trimIndent()
+        assertTrue("Should accept JSON with unquoted field names", jsonFormatterService.isValidJson(jsonWithUnquotedFields))
+        val formattedUnquoted = jsonFormatterService.formatJson(jsonWithUnquotedFields, JsonFormatState.UGLIFY)
+        assertEquals("Should quote field names", """{"key":"value","number":123,"_validId":true,"${'$'}specialVar":null}""", formattedUnquoted)
+
+        // 4. Trailing Comma (Already tested, but checking combination with JSON5 features)
+        val json5Combination = """
+            {
+                // Comment
+                key: 'value', // Unquoted key + Single quoted value
+                list: [
+                    1,
+                    2, // Trailing comma in array
+                ], // Trailing comma in object
+            }
+        """.trimIndent()
+        assertTrue("Should accept combined JSON5 features", jsonFormatterService.isValidJson(json5Combination))
+        val formattedCombination = jsonFormatterService.formatJson(json5Combination, JsonFormatState.UGLIFY)
+        assertEquals("Should normalize to standard JSON", """{"key":"value","list":[1,2]}""", formattedCombination)
+    }
 }

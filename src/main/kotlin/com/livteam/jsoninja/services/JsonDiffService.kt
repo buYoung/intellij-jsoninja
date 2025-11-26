@@ -5,6 +5,8 @@ import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.json.JsonFileType
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.diff.JsonDiffKeys
@@ -41,12 +43,16 @@ class JsonDiffService(private val project: Project) {
         }
     }
 
-    private fun createDiffContent(json: String, editable: Boolean = true) =
-        if (editable) {
-            DiffContentFactory.getInstance().createEditable(project, json, JsonFileType.INSTANCE)
+    private fun createDiffContent(json: String, editable: Boolean = true): com.intellij.diff.contents.DiffContent {
+        val json5FileType = FileTypeManager.getInstance().getFileTypeByExtension("json5")
+        val fileType = if (json5FileType is UnknownFileType) JsonFileType.INSTANCE else json5FileType
+
+        return if (editable) {
+            DiffContentFactory.getInstance().createEditable(project, json, fileType)
         } else {
-            DiffContentFactory.getInstance().create(project, json, JsonFileType.INSTANCE, false)
+            DiffContentFactory.getInstance().create(project, json, fileType, false)
         }
+    }
 
     fun createDiffRequest(
         leftJson: String,

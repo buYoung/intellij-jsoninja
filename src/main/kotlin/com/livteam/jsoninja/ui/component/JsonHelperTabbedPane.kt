@@ -113,16 +113,16 @@ class JsonHelperTabbedPane(
     /**
      * + 탭을 클릭했을 때 새 탭을 추가하는 로직
      */
-    fun addNewTabFromPlusTab(content: String = "") {
+    fun addNewTabFromPlusTab(content: String = "", fileExtension: String? = null) {
         val plusTabIndex = indexOfComponent(components.find { it.name == ADD_NEW_TAB_COMPONENT_NAME })
 
         if (plusTabIndex != -1) {
             // 새 탭을 "+" 탭 바로 앞에 추가하고 선택
-            addNewTabInternal(plusTabIndex, content)
+            addNewTabInternal(plusTabIndex, content, fileExtension)
             // 새로 추가된 탭을 선택하는 것은 addNewTabInternal에서 처리
         } else {
             // "+" 탭을 찾지 못한 경우 (예외적 상황), 그냥 새 탭을 마지막에 추가
-            addNewTabInternal(tabCount, content)
+            addNewTabInternal(tabCount, content, fileExtension)
             // 새로 추가된 탭을 선택하는 것은 addNewTabInternal에서 처리
         }
     }
@@ -181,8 +181,8 @@ class JsonHelperTabbedPane(
      * 새로운 JsonEditor 인스턴스를 생성하고 초기화합니다.
      * 내용 변경 시 onTabContentChangedListener를 호출하도록 콜백을 설정합니다.
      */
-    private fun createEditor(): JsonEditor {
-        return JsonEditor(project).apply {
+    private fun createEditor(fileExtension: String? = null): JsonEditor {
+        return JsonEditor(project, fileExtension).apply {
             // JsonEditor 내부에서 내용 변경 시 onTabContentChangedListener가 호출되도록 설정
             setOnContentChangeCallback { newContent ->
                 onTabContentChangedListener?.invoke(newContent)
@@ -198,10 +198,11 @@ class JsonHelperTabbedPane(
      * 지정된 인덱스에 새 JSON 에디터 탭을 내부적으로 추가합니다.
      * @param index 탭이 추가될 위치
      * @param content 탭에 초기에 표시될 JSON 문자열 (기본값: 빈 문자열)
+     * @param fileExtension 파일 확장자 (기본값: null -> json5)
      * @return 생성된 JsonEditor 인스턴스
      */
-    private fun addNewTabInternal(index: Int, content: String = ""): JsonEditor {
-        val editor = createEditor()
+    private fun addNewTabInternal(index: Int, content: String = "", fileExtension: String? = null): JsonEditor {
+        val editor = createEditor(fileExtension)
         // setText는 editor의 onContentChangeCallback을 트리거할 수 있으므로,
         // 여기서 onTabContentChangedListener를 직접 호출하지 않도록 주의합니다.
         // createEditor에서 설정된 콜백이 이를 처리해야 합니다.
