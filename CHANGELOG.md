@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- JSON5 Support: The editor now uses JSON5 as the default format, allowing you to work with:
+    - Comments (`//` single-line and `/* */` block comments)
+    - Single-quoted strings (`'value'`)
+    - Unquoted object keys (`{key: "value"}`)
+    - Trailing commas in arrays and objects
+    - Opening `.json5` files directly applies JSON5 syntax highlighting.
+- Language Support: Added Simplified Chinese (简体中文) and Japanese (日本語) translations.
+
+### Changed
+
+- JSON Generator Improvements:
+    - Redesigned dialog UI with organized sections (Structure, Dimensions, Options).
+    - Added input hints showing allowed value ranges for each field.
+    - New option to generate JSON5 format output with comments and trailing commas.
+- New Look! We've revamped the plugin icon. Check out the cool ninja inside the curly braces!
+
 ## [1.5.0] - 2025-11-26
 
 ### Added
