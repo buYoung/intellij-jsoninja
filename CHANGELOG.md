@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.5.1] - 2025-11-27
+
 ### Added
 
 - JSON5 Support: The editor now uses JSON5 as the default format, allowing you to work with:
@@ -203,7 +205,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.3.1...v1.4.0
