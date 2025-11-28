@@ -24,13 +24,11 @@ class JsonHelperActionBar : DefaultActionGroup() {
         // JSON 변환 관련 액션 추가
         add(PrettifyJsonAction())
         add(UglifyJsonAction())
+        addSeparator()
         add(EscapeJsonAction())
         add(UnescapeJsonAction())
-
-        add(GenerateRandomJsonAction())
-
         addSeparator()
-
+        add(GenerateRandomJsonAction())
         // JSON Diff 액션 추가
         add(ShowJsonDiffAction())
     }

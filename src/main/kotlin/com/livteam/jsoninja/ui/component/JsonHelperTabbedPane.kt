@@ -2,14 +2,12 @@ package com.livteam.jsoninja.ui.component
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
+import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
 import java.awt.BorderLayout
@@ -20,7 +18,6 @@ import java.awt.event.MouseEvent
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
-import javax.swing.event.ChangeListener
 
 /**
  * JSON Helper 플러그인의 탭 컴포넌트를 관리하는 클래스입니다.
@@ -215,7 +212,7 @@ class JsonHelperTabbedPane(
         val title = "$TAB_TITLE_PREFIX${tabCounter++}"
 
         // 1. JmesPathComponent와 Editor를 담을 새로운 패널 생성
-        val tabContentPanel = JPanel(BorderLayout()).apply {
+        val tabContentPanel = JPanel(BorderLayout(0, 0)).apply {
             // 중요: 탭 컨텐츠 패널에 고유한 이름 부여
             name = title // 탭 제목을 패널 이름으로 사용하여 식별 가능하게 함
         }
@@ -226,7 +223,11 @@ class JsonHelperTabbedPane(
 
         // 2. JmesPathComponent 생성 및 상단에 추가
         val jmesPathComponent = JmesPathComponent(project)
-        tabContentPanel.add(jmesPathComponent.getComponent(), BorderLayout.NORTH)
+        val jmesComponent = jmesPathComponent.getComponent().apply {
+            border = JBUI.Borders.emptyTop(3)
+        }
+
+        tabContentPanel.add(jmesComponent, BorderLayout.NORTH)
 
         // 3. JsonEditor를 중앙에 직접 추가 (JBScrollPane 제거)
         tabContentPanel.add(editor, BorderLayout.CENTER)
@@ -237,6 +238,9 @@ class JsonHelperTabbedPane(
 
         // 4. 수정된 tabContentPanel을 탭에 추가
         insertTab(title, null, tabContentPanel, null, index)
+        // 탭 추가 시 JBTabbedPane이 자동으로 설정하는 border/insets를 제거
+        tabContentPanel.border = JBUI.Borders.empty()
+
         setTabComponentAt(index, createTabComponent(title, tabContentPanel))
 
         // 5. 새로 추가된 탭을 선택

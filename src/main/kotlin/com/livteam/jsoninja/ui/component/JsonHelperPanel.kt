@@ -11,6 +11,8 @@ import com.livteam.jsoninja.services.JsonHelperService
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.JSeparator
+import javax.swing.SwingConstants
 
 class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true), Disposable {
     private val tabbedPane = JsonHelperTabbedPane(project, this, this)
@@ -28,9 +30,10 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
 
         // Add content
         val contentPanel = JPanel(BorderLayout()).apply {
+            add(JSeparator(SwingConstants.VERTICAL), BorderLayout.WEST)
             add(tabbedPane, BorderLayout.CENTER)
         }
-        
+
         // Setup toolbar and content
         toolbar = createToolbar()
         setContent(contentPanel)
@@ -40,7 +43,9 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
         val actionGroup = JsonHelperActionBar()
         val actionToolbar = ActionManager.getInstance()
             .createActionToolbar("JsonHelperToolbar", actionGroup, true)
+
         actionToolbar.targetComponent = this
+
         return actionToolbar.component
     }
 
