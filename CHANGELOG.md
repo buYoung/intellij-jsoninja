@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated maximum supported IDE version to 263.*
+
 ## [1.5.2] - 2025-11-28
 
 ### Added
