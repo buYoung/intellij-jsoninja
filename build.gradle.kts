@@ -56,13 +56,13 @@ dependencies {
 
         // Plugin Dependencies. Uses `platformBundledPlugins` property from the gradle.properties file for bundled IntelliJ Platform plugins.
         bundledPlugins(providers.gradleProperty("platformBundledPlugins").map<List<String>> {
-            it.split(',').map(String::trim).filter(String::isNotEmpty)
+            it.split(',')
         })
 
 
         // Plugin Dependencies. Uses `platformPlugins` property from the gradle.properties file for plugin from JetBrains Marketplace.
         plugins(providers.gradleProperty("platformPlugins").map<List<String>> {
-            it.split(',').map(String::trim).filter(String::isNotEmpty)
+            it.split(',')
         })
 
         javaCompiler()
@@ -164,10 +164,9 @@ tasks {
     // Custom Deep Clean Task
     // Usage: ./gradlew deepClean --no-daemon
     // -----------------------------------------------------------
-    register("deepClean") {
+    register<Task>("deepClean") {
         group = "build"
         description = "Deletes build directory, local .gradle directory, and attempts to clear global Gradle caches."
-
         doLast {
             // 1. Clean Project Build Directory (Standard clean)
             val buildDir = layout.buildDirectory.get().asFile
