@@ -55,10 +55,15 @@ dependencies {
         )
 
         // Plugin Dependencies. Uses `platformBundledPlugins` property from the gradle.properties file for bundled IntelliJ Platform plugins.
-        bundledPlugins(providers.gradleProperty("platformBundledPlugins").map { it.split(',') })
+        bundledPlugins(providers.gradleProperty("platformBundledPlugins").map<List<String>> {
+            it.split(',').map(String::trim).filter(String::isNotEmpty)
+        })
+
 
         // Plugin Dependencies. Uses `platformPlugins` property from the gradle.properties file for plugin from JetBrains Marketplace.
-        plugins(providers.gradleProperty("platformPlugins").map { it.split(',') })
+        plugins(providers.gradleProperty("platformPlugins").map<List<String>> {
+            it.split(',').map(String::trim).filter(String::isNotEmpty)
+        })
 
         javaCompiler()
         pluginVerifier()
@@ -153,6 +158,51 @@ tasks {
 
     publishPlugin {
         dependsOn(patchChangelog)
+    }
+
+    // -----------------------------------------------------------
+    // Custom Deep Clean Task
+    // Usage: ./gradlew deepClean --no-daemon
+    // -----------------------------------------------------------
+    register("deepClean") {
+        group = "build"
+        description = "Deletes build directory, local .gradle directory, and attempts to clear global Gradle caches."
+
+        doLast {
+            // 1. Clean Project Build Directory (Standard clean)
+            val buildDir = layout.buildDirectory.get().asFile
+            if (buildDir.exists()) {
+                buildDir.deleteRecursively()
+                println("[Clean] Deleted project build directory: ${buildDir.absolutePath}")
+            }
+
+            // 2. Clean Project Local .gradle Directory
+            val projectDotGradle = file(".gradle")
+            if (projectDotGradle.exists()) {
+                projectDotGradle.deleteRecursively()
+                println("[Clean] Deleted project .gradle directory: ${projectDotGradle.absolutePath}")
+            }
+
+            // 3. Clean Global ~/.gradle/caches (Use with caution)
+            val userHome = System.getProperty("user.home")
+            val globalCaches = File(userHome, ".gradle/caches")
+
+            println("\n[Warning] Attempting to delete global Gradle caches at: ${globalCaches.absolutePath}")
+            println("Note: This may fail if the Gradle Daemon is running. Use '--no-daemon' to improve success rate.")
+
+            if (globalCaches.exists()) {
+                try {
+                    // Try to delete. This might throw exception if files are locked.
+                    globalCaches.deleteRecursively()
+                    println("[Clean] Successfully deleted global Gradle caches.")
+                } catch (e: Exception) {
+                    println("[Error] Failed to fully delete global caches (files might be locked): ${e.message}")
+                    println("Tip: Try running './gradlew deepClean --no-daemon'")
+                }
+            } else {
+                println("[Clean] Global cache directory does not exist or was already removed.")
+            }
+        }
     }
 }
 
