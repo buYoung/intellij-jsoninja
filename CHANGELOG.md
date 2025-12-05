@@ -6,7 +6,7 @@
 
 ### Changed
 
-- Updated maximum supported IDE version to 263.*
+- Updated maximum supported IDE version to 253.*
 
 ## [1.5.2] - 2025-11-28
 
