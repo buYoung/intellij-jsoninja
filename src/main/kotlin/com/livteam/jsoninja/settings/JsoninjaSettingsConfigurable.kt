@@ -11,6 +11,7 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.model.JsonQueryType
+import com.livteam.jsoninja.model.JsonIconPack
 import javax.swing.*
 
 class JsoninjaSettingsConfigurable(private val project: Project) : Configurable {
@@ -20,6 +21,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
     private var indentSizeSpinner: JSpinner? = null
     private var sortKeysCheckBox: JBCheckBox? = null
     private var jsonFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
+    private var iconPackComboBox: ComboBox<JsonIconPackWrapper>? = null
     private var pasteFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
     private var diffDisplayModeComboBox: ComboBox<JsonDiffDisplayModeWrapper>? = null
     private var jsonQueryTypeComboBox: ComboBox<JsonQueryTypeWrapper>? = null
@@ -85,6 +87,26 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         }
     }
 
+    // Wrapper class for JsonIconPack
+    data class JsonIconPackWrapper(val pack: JsonIconPack) {
+        override fun toString(): String {
+            return when (pack) {
+                JsonIconPack.VERSION_1 -> LocalizationBundle.message("settings.icon.pack.v1")
+                JsonIconPack.VERSION_2 -> LocalizationBundle.message("settings.icon.pack.v2")
+            }
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is JsonIconPackWrapper) return false
+            return pack == other.pack
+        }
+
+        override fun hashCode(): Int {
+            return pack.hashCode()
+        }
+    }
+
     override fun getDisplayName(): String {
         return LocalizationBundle.message("settings.display.name")
     }
@@ -108,6 +130,20 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 .toTypedArray()
 
             jsonFormatStateComboBox = ComboBox(defaultFormatStates)
+            
+            // Create icon pack combobox
+            val iconPacks = JsonIconPack.entries
+                .map { JsonIconPackWrapper(it) }
+                .toTypedArray()
+            iconPackComboBox = ComboBox(iconPacks)
+            val currentIconPack = try {
+                JsonIconPack.valueOf(settings.iconPack)
+            } catch (e: IllegalArgumentException) {
+                JsonIconPack.VERSION_2
+            }
+            val selectedIconPackWrapper = iconPacks.find { it.pack == currentIconPack }
+            iconPackComboBox?.selectedItem = selectedIconPackWrapper
+
             pasteFormatStateComboBox = ComboBox(allFormatStates)
 
             // Find the matching wrapper for the current state
@@ -155,6 +191,9 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 row(LocalizationBundle.message("settings.format.label")) {
                     cell(jsonFormatStateComboBox!!)
                 }
+                row(LocalizationBundle.message("settings.icon.pack.label")) {
+                    cell(iconPackComboBox!!)
+                }
                 row(LocalizationBundle.message("settings.paste.format.label")) {
                     cell(pasteFormatStateComboBox!!)
                 }
@@ -179,6 +218,11 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
 
     override fun isModified(): Boolean {
         val currentFormatState = JsonFormatState.fromString(settings.jsonFormatState)
+        val currentIconPack = try {
+            JsonIconPack.valueOf(settings.iconPack)
+        } catch (e: IllegalArgumentException) {
+            JsonIconPack.VERSION_2
+        }
         val currentPasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
         val currentDiffDisplayMode = try {
             JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
@@ -189,6 +233,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         return indentSizeSpinner?.value != settings.indentSize ||
                 sortKeysCheckBox?.isSelected != settings.sortKeys ||
                 (jsonFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentFormatState.name ||
+                (iconPackComboBox?.selectedItem as? JsonIconPackWrapper)?.pack?.name != currentIconPack.name ||
                 (pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentPasteFormatState.name ||
                 (diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper)?.mode?.name != currentDiffDisplayMode.name ||
                 (jsonQueryTypeComboBox?.selectedItem as? JsonQueryTypeWrapper)?.type?.name != currentJsonQueryType.name ||
@@ -201,6 +246,8 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         settings.sortKeys = sortKeysCheckBox?.isSelected ?: settings.sortKeys
         val selectedFormatWrapper = jsonFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper
         settings.jsonFormatState = selectedFormatWrapper?.state?.name ?: settings.jsonFormatState
+        val selectedIconPackWrapper = iconPackComboBox?.selectedItem as? JsonIconPackWrapper
+        settings.iconPack = selectedIconPackWrapper?.pack?.name ?: settings.iconPack
         val selectedPasteFormatWrapper = pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper
         settings.pasteFormatState = selectedPasteFormatWrapper?.state?.name ?: settings.pasteFormatState
         val selectedDiffModeWrapper = diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper
@@ -223,6 +270,18 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             .toTypedArray()
         val selectedWrapper = defaultFormatStates.find { it.state == currentFormatState }
         jsonFormatStateComboBox?.selectedItem = selectedWrapper
+
+        // Find the matching wrapper for the current icon pack
+        val currentIconPack = try {
+            JsonIconPack.valueOf(settings.iconPack)
+        } catch (e: IllegalArgumentException) {
+            JsonIconPack.VERSION_2
+        }
+        val iconPacks = JsonIconPack.entries
+            .map { JsonIconPackWrapper(it) }
+            .toTypedArray()
+        val selectedIconPackWrapper = iconPacks.find { it.pack == currentIconPack }
+        iconPackComboBox?.selectedItem = selectedIconPackWrapper
 
         // Find the matching wrapper for the paste format state
         val currentPasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
@@ -261,6 +320,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         indentSizeSpinner = null
         sortKeysCheckBox = null
         jsonFormatStateComboBox = null
+        iconPackComboBox = null
         pasteFormatStateComboBox = null
         diffDisplayModeComboBox = null
         jsonQueryTypeComboBox = null

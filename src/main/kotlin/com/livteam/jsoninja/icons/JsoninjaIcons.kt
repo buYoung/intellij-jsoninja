@@ -1,7 +1,9 @@
 package com.livteam.jsoninja.icons
 
 import com.intellij.ui.IconManager
-import com.intellij.openapi.util.IconLoader
+import com.intellij.openapi.project.Project
+import com.livteam.jsoninja.settings.JsoninjaSettingsState
+import com.livteam.jsoninja.model.JsonIconPack
 import javax.swing.Icon
 
 
@@ -58,4 +60,17 @@ object JsoninjaIcons {
 
     @JvmField
     val DiffIconV2: Icon = load("icons/expui/v2/diffIcon-v2-20.svg", "icons/classic/v2/diffIcon-v2-16.svg", -1766843, 2)
+
+    fun getPrettyIcon(project: Project?): Icon = getIcon(project, PrettyIcon, PrettyIconV2)
+    fun getUglifyIcon(project: Project?): Icon = getIcon(project, UglyIcon, UglyIconV2)
+    fun getEscapeIcon(project: Project?): Icon = getIcon(project, EscapeIcon, EscapeIconV2)
+    fun getUnescapeIcon(project: Project?): Icon = getIcon(project, UnescapeIcon, UnescapeIconV2)
+    fun getGenerateIcon(project: Project?): Icon = getIcon(project, GenerateIcon, GenerateIconV2)
+    fun getDiffIcon(project: Project?): Icon = getIcon(project, DiffIcon, DiffIconV2)
+
+    private fun getIcon(project: Project?, v1Icon: Icon, v2Icon: Icon): Icon {
+        if (project == null) return v2Icon
+        val settings = JsoninjaSettingsState.getInstance(project)
+        return if (settings.iconPack == JsonIconPack.VERSION_1.name) v1Icon else v2Icon
+    }
 }

@@ -24,7 +24,7 @@ import com.livteam.jsoninja.utils.JsonHelperUtils
 class ShowJsonDiffAction : AnAction(
     LocalizationBundle.message("action.show.json.diff"),
     LocalizationBundle.message("action.show.json.diff.description"),
-    JsoninjaIcons.DiffIconV2
+    null
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -64,6 +64,7 @@ class ShowJsonDiffAction : AnAction(
     override fun update(e: AnActionEvent) {
         val project = e.project
         e.presentation.isEnabledAndVisible = project != null
+        e.presentation.icon = JsoninjaIcons.getDiffIcon(project)
     }
 
     override fun getActionUpdateThread(): ActionUpdateThread {
