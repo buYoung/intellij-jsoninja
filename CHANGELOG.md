@@ -4,12 +4,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- New Icon Pack: Introduced Version 2 of the Tool Window icons for a fresher look!
+- Customization: Added an 'Icon Pack' option in the plugin settings. You can easily revert to the legacy icons if you prefer the classic style.
+
 ## [1.6.0] - 2025-12-11
 
 ### Added
 
-- **New Icon Pack:** Introduced Version 2 of the Tool Window icons for a fresher look!
-- **Customization:** Added an 'Icon Pack' option in the plugin settings. You can easily revert to the legacy icons if you prefer the classic style.
+- New Icon Pack: Introduced Version 2 of the Tool Window icons for a fresher look!
+- Customization: Added an 'Icon Pack' option in the plugin settings. You can easily revert to the legacy icons if you prefer the classic style.
 
 ## [1.5.3] - 2025-12-05
 
