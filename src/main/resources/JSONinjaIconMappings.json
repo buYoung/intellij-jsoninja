@@ -1,14 +1,21 @@
 {
   "icons": {
     "expui": {
-      "toolWindowIcon-13.svg": "icons/classic/toolWindowIcon-16.svg",
-      "toolWindowIcon-20.svg": "icons/classic/toolWindowIcon-16.svg",
-      "prettyIcon-20.svg": "icons/classic/prettyIcon-16.svg",
-      "uglyIcon-20.svg": "icons/classic/uglyIcon-16.svg",
-      "escapeIcon-20.svg": "icons/classic/escapeIcon-16.svg",
-      "unescapeIcon-20.svg": "icons/classic/unescapeIcon-16.svg",
-      "generateIcon-20.svg": "icons/classic/generateIcon-16.svg",
-      "diffIcon-20.svg": "icons/classic/diffIcon-16.svg"
+      "toolWindowIcon-16.svg": "icons/classic/toolWindowIcon-13.svg",
+      "prettyIcon-16.svg": "icons/classic/prettyIcon-20.svg",
+      "uglyIcon-16.svg": "icons/classic/uglyIcon-20.svg",
+      "escapeIcon-16.svg": "icons/classic/escapeIcon-20.svg",
+      "unescapeIcon-16.svg": "icons/classic/unescapeIcon-20.svg",
+      "generateIcon-16.svg": "icons/classic/generateIcon-20.svg",
+      "diffIcon-16.svg": "icons/classic/diffIcon-20.svg",
+      "v2": {
+        "prettyIcon-v2-16.svg": "icons/classic/v2/prettyIcon-v2-20.svg",
+        "uglyIcon-v2-16.svg": "icons/classic/v2/uglyIcon-v2-20.svg",
+        "escapeIcon-v2-16.svg": "icons/classic/v2/escapeIcon-v2-20.svg",
+        "unescapeIcon-v2-16.svg": "icons/classic/v2/unescapeIcon-v2-20.svg",
+        "generateIcon-v2-16.svg": "icons/classic/v2/generateIcon-v2-20.svg",
+        "diffIcon-v2-16.svg": "icons/classic/v2/diffIcon-v2-20.svg"
+      }
     }
   }
 }

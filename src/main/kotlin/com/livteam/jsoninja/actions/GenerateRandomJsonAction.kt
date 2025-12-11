@@ -11,7 +11,7 @@ import com.livteam.jsoninja.ui.dialog.GenerateJsonDialog
 class GenerateRandomJsonAction : AnAction(
     LocalizationBundle.message("action.generate.random.json.text"),
     LocalizationBundle.message("action.generate.random.json.text"),
-    JsoninjaIcons.GenerateIcon
+    null
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -40,5 +40,6 @@ class GenerateRandomJsonAction : AnAction(
     override fun update(e: AnActionEvent) {
         // 활성 JSON 에디터가 있을 때만 액션을 활성화합니다.
         e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
+        e.presentation.icon = JsoninjaIcons.getGenerateIcon(e.project)
     }
 }

@@ -11,7 +11,7 @@ import com.livteam.jsoninja.icons.JsoninjaIcons
 class UnescapeJsonAction : AnAction(
     LocalizationBundle.message("unescape"),
     LocalizationBundle.message("unescapeDescription"),
-    JsoninjaIcons.UnescapeIcon
+    null
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
@@ -20,5 +20,6 @@ class UnescapeJsonAction : AnAction(
 
     override fun update(e: AnActionEvent) {
         e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
+        e.presentation.icon = JsoninjaIcons.getUnescapeIcon(e.project)
     }
 }
