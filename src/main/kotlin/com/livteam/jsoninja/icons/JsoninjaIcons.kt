@@ -1,15 +1,23 @@
 package com.livteam.jsoninja.icons
 
 import com.intellij.ui.IconManager
+import com.intellij.openapi.util.IconLoader
 import javax.swing.Icon
 
-/**
- * Icon constants for JSONinja. Paths are resolved through the icon mapper to pick up the New UI variants.
- */
+
 object JsoninjaIcons {
+    private fun load(path: String, cacheKey: Int, flags: Int): Icon {
+        return IconManager.getInstance()
+            .loadRasterizedIcon(path, JsoninjaIcons::class.java.classLoader, cacheKey, flags)
+    }
+
+    private fun load(expUIPath: String, path: String, cacheKey: Int, flags: Int): Icon {
+        return IconManager.getInstance()
+            .loadRasterizedIcon(path, expUIPath, JsoninjaIcons::class.java.classLoader, cacheKey, flags)
+    }
+
     @JvmField
-    val ToolWindowIcon: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/toolWindowIcon-16.svg", JsoninjaIcons::class.java.classLoader)
+    val ToolWindowIcon: Icon = load("icons/expui/toolWindowIcon-20.svg", "icons/classic/toolWindowIcon-16.svg", 0, 2)
 
     @JvmField
     val PrettyIcon: Icon = IconManager.getInstance()
@@ -56,6 +64,5 @@ object JsoninjaIcons {
         .getIcon("icons/classic/v2/generateIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
 
     @JvmField
-    val DiffIconV2: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/v2/diffIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+    val DiffIconV2: Icon = load("icons/expui/v2/diffIcon-v2-20.svg", "icons/classic/v2/diffIcon-v2-16.svg", 1, 2)
 }
