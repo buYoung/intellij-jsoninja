@@ -20,49 +20,42 @@ object JsoninjaIcons {
     val ToolWindowIcon: Icon = load("icons/expui/toolWindowIcon-20.svg", "icons/classic/toolWindowIcon-16.svg", 0, 2)
 
     @JvmField
-    val PrettyIcon: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/prettyIcon-16.svg", JsoninjaIcons::class.java.classLoader)
+    val PrettyIcon: Icon = load("icons/expui/prettyIcon-20.svg", "icons/classic/prettyIcon-16.svg", 423984, 2)
 
     @JvmField
-    val UglyIcon: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/uglyIcon-16.svg", JsoninjaIcons::class.java.classLoader)
+    val UglyIcon: Icon = load("icons/expui/uglyIcon-20.svg", "icons/classic/uglyIcon-16.svg", 912837, 2)
 
     @JvmField
-    val EscapeIcon: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/escapeIcon-16.svg", JsoninjaIcons::class.java.classLoader)
+    val EscapeIcon: Icon = load("icons/expui/escapeIcon-20.svg", "icons/classic/escapeIcon-16.svg", 283746, 2)
 
     @JvmField
-    val UnescapeIcon: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/unescapeIcon-16.svg", JsoninjaIcons::class.java.classLoader)
+    val UnescapeIcon: Icon = load("icons/expui/unescapeIcon-20.svg", "icons/classic/unescapeIcon-16.svg", 572819, 2)
 
     @JvmField
-    val GenerateIcon: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/generateIcon-16.svg", JsoninjaIcons::class.java.classLoader)
+    val GenerateIcon: Icon = load("icons/expui/generateIcon-20.svg", "icons/classic/generateIcon-16.svg", 384726, 2)
 
     @JvmField
-    val DiffIcon: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/diffIcon-16.svg", JsoninjaIcons::class.java.classLoader)
+    val DiffIcon: Icon = load("icons/expui/diffIcon-20.svg", "icons/classic/diffIcon-16.svg", 192837, 2)
 
     @JvmField
-    val PrettyIconV2: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/v2/prettyIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+    val PrettyIconV2: Icon =
+        load("icons/expui/v2/prettyIcon-v2-20.svg", "icons/classic/v2/prettyIcon-v2-16.svg", 657483, 2)
 
     @JvmField
-    val UglyIconV2: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/v2/uglyIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+    val UglyIconV2: Icon = load("icons/expui/v2/uglyIcon-v2-20.svg", "icons/classic/v2/uglyIcon-v2-16.svg", 293847, 2)
 
     @JvmField
-    val EscapeIconV2: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/v2/escapeIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+    val EscapeIconV2: Icon =
+        load("icons/expui/v2/escapeIcon-v2-20.svg", "icons/classic/v2/escapeIcon-v2-16.svg", 847362, 2)
 
     @JvmField
-    val UnescapeIconV2: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/v2/unescapeIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+    val UnescapeIconV2: Icon =
+        load("icons/expui/v2/unescapeIcon-v2-20.svg", "icons/classic/v2/unescapeIcon-v2-16.svg", 472839, 2)
 
     @JvmField
-    val GenerateIconV2: Icon = IconManager.getInstance()
-        .getIcon("icons/classic/v2/generateIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+    val GenerateIconV2: Icon =
+        load("icons/expui/v2/generateIcon-v2-20.svg", "icons/classic/v2/generateIcon-v2-16.svg", 564738, 2)
 
     @JvmField
-    val DiffIconV2: Icon = load("icons/expui/v2/diffIcon-v2-20.svg", "icons/classic/v2/diffIcon-v2-16.svg", 1, 2)
+    val DiffIconV2: Icon = load("icons/expui/v2/diffIcon-v2-20.svg", "icons/classic/v2/diffIcon-v2-16.svg", -1766843, 2)
 }
