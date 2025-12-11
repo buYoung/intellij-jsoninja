@@ -13,7 +13,7 @@ import com.livteam.jsoninja.ui.component.JsonHelperPanel
 class UglifyJsonAction : AnAction(
     LocalizationBundle.message("uglify"),
     LocalizationBundle.message("uglifyDescription"),
-    JsoninjaIcons.UglyIcon
+    JsoninjaIcons.UglyIconV2
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return

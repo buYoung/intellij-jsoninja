@@ -24,7 +24,7 @@ import com.livteam.jsoninja.utils.JsonHelperUtils
 class ShowJsonDiffAction : AnAction(
     LocalizationBundle.message("action.show.json.diff"),
     LocalizationBundle.message("action.show.json.diff.description"),
-    JsoninjaIcons.DiffIcon
+    JsoninjaIcons.DiffIconV2
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -33,7 +33,7 @@ class ShowJsonDiffAction : AnAction(
 
         // Get current JSON from active tab using utility
         val currentJson = JsonHelperUtils.getCurrentJsonFromToolWindow(project)
-        
+
         // Create JSONs with default templates if no content
         val leftJson = currentJson ?: "{}"
         val rightJson = "{}"

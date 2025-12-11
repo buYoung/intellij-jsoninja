@@ -11,7 +11,7 @@ import com.livteam.jsoninja.icons.JsoninjaIcons
 class UnescapeJsonAction : AnAction(
     LocalizationBundle.message("unescape"),
     LocalizationBundle.message("unescapeDescription"),
-    JsoninjaIcons.UnescapeIcon
+    JsoninjaIcons.UnescapeIconV2
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return

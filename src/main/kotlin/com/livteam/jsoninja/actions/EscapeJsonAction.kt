@@ -12,7 +12,7 @@ import com.livteam.jsoninja.ui.component.JsonHelperPanel
 class EscapeJsonAction : AnAction(
     LocalizationBundle.message("escape"),
     LocalizationBundle.message("escapeDescription"),
-    JsoninjaIcons.EscapeIcon
+    JsoninjaIcons.EscapeIconV2
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return

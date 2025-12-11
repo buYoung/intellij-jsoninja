@@ -11,7 +11,7 @@ import com.livteam.jsoninja.ui.dialog.GenerateJsonDialog
 class GenerateRandomJsonAction : AnAction(
     LocalizationBundle.message("action.generate.random.json.text"),
     LocalizationBundle.message("action.generate.random.json.text"),
-    JsoninjaIcons.GenerateIcon
+    JsoninjaIcons.GenerateIconV2
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return

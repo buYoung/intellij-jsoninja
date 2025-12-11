@@ -34,4 +34,28 @@ object JsoninjaIcons {
     @JvmField
     val DiffIcon: Icon = IconManager.getInstance()
         .getIcon("icons/classic/diffIcon-16.svg", JsoninjaIcons::class.java.classLoader)
+
+    @JvmField
+    val PrettyIconV2: Icon = IconManager.getInstance()
+        .getIcon("icons/classic/v2/prettyIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+
+    @JvmField
+    val UglyIconV2: Icon = IconManager.getInstance()
+        .getIcon("icons/classic/v2/uglyIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+
+    @JvmField
+    val EscapeIconV2: Icon = IconManager.getInstance()
+        .getIcon("icons/classic/v2/escapeIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+
+    @JvmField
+    val UnescapeIconV2: Icon = IconManager.getInstance()
+        .getIcon("icons/classic/v2/unescapeIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+
+    @JvmField
+    val GenerateIconV2: Icon = IconManager.getInstance()
+        .getIcon("icons/classic/v2/generateIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
+
+    @JvmField
+    val DiffIconV2: Icon = IconManager.getInstance()
+        .getIcon("icons/classic/v2/diffIcon-v2-16.svg", JsoninjaIcons::class.java.classLoader)
 }

@@ -11,7 +11,7 @@ import com.livteam.jsoninja.icons.JsoninjaIcons
 class PrettifyJsonAction : AnAction(
     LocalizationBundle.message("prettify"),
     LocalizationBundle.message("prettifyDescription"),
-    JsoninjaIcons.PrettyIcon
+    JsoninjaIcons.PrettyIconV2
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
