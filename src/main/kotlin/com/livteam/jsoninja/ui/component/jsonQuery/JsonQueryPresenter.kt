@@ -17,7 +17,7 @@ import javax.swing.JComponent
  * JMESPath 검색 로직을 담당하는 Presenter
  * 사용자 입력을 받아 비즈니스 로직을 처리하고 View를 업데이트
  */
-class JsonQueryPresenter(private val project: Project) {
+class JsonQueryPresenter(private val project: Project, private val model: JsonQueryModel) {
     private val LOG = logger<JsonQueryPresenter>()
     private val view = JsonQueryView()
 
@@ -26,8 +26,6 @@ class JsonQueryPresenter(private val project: Project) {
 
     private var onSearchCallback: ((String, String) -> Unit)? = null
     private var onBeforeSearchCallback: (() -> Unit)? = null
-    
-    private val model = JsonQueryModel()
 
     init {
         setupKeyListener()

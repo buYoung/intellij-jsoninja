@@ -13,6 +13,7 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import com.livteam.jsoninja.ui.component.jsonQuery.JsonQueryPresenter
+import com.livteam.jsoninja.ui.component.model.JsonQueryModel
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Cursor
@@ -181,8 +182,8 @@ class JsonHelperTabbedPane(
      * 새로운 JsonEditor 인스턴스를 생성하고 초기화합니다.
      * 내용 변경 시 onTabContentChangedListener를 호출하도록 콜백을 설정합니다.
      */
-    private fun createEditor(fileExtension: String? = null): JsonEditorView {
-        return JsonEditorView(project, fileExtension).apply {
+    private fun createEditor(model: JsonQueryModel, fileExtension: String? = null): JsonEditorView {
+        return JsonEditorView(project, model, fileExtension).apply {
             // JsonEditorView 내부에서 내용 변경 시 onTabContentChangedListener가 호출되도록 설정
             setOnContentChangeCallback { newContent ->
                 onTabContentChangedListener?.invoke(newContent)
@@ -202,7 +203,8 @@ class JsonHelperTabbedPane(
      * @return 생성된 JsonEditorView 인스턴스
      */
     private fun addNewTabInternal(index: Int, content: String = "", fileExtension: String? = null): JsonEditorView {
-        val editor = createEditor(fileExtension)
+        val model = JsonQueryModel()
+        val editor = createEditor(model, fileExtension)
         // setText는 editor의 onContentChangeCallback을 트리거할 수 있으므로,
         // 여기서 onTabContentChangedListener를 직접 호출하지 않도록 주의합니다.
         // createEditor에서 설정된 콜백이 이를 처리해야 합니다.
@@ -225,7 +227,7 @@ class JsonHelperTabbedPane(
         Disposer.register(tabDisposable, editor)
 
         // 2. JmesPathPresenter 생성 및 상단에 추가
-        val jsonQueryPresenter = JsonQueryPresenter(project)
+        val jsonQueryPresenter = JsonQueryPresenter(project, model)
         val jmesComponent = jsonQueryPresenter.getComponent().apply {
             border = JBUI.Borders.emptyTop(3)
         }
@@ -303,7 +305,6 @@ class JsonHelperTabbedPane(
         // 초기 원본 JSON 설정 (탭 생성 시 내용이 있다면)
         initialJson?.takeIf { it.isNotBlank() }?.let {
             jsonQueryPresenter.setOriginalJson(it)
-            editor.setOriginalJson(it) // 에디터의 원본 JSON도 동기화
         }
 
         jsonQueryPresenter.setOnBeforeSearchCallback {
@@ -312,7 +313,6 @@ class JsonHelperTabbedPane(
                 val editorText = editor.getText()
                 if (editorText.isNotBlank()) { // isBlank()는 isEmpty()와 공백 문자열 모두 처리
                     jsonQueryPresenter.setOriginalJson(editorText)
-                    editor.setOriginalJson(editorText) // 에디터의 원본 JSON도 업데이트
                 } else {
                     // 에디터 내용이 비어있으면 검색하지 않도록 하거나, 사용자에게 알림 (선택)
                     // 여기서는 그냥 return하여 검색 중단
@@ -335,8 +335,7 @@ class JsonHelperTabbedPane(
             // 여기서는 JmesPath 결과를 보여주는 것이므로 originalJson은 그대로 두는 것이 맞을 수 있습니다.
             // JsonEditorView의 setOriginalJson의 역할과 시점에 따라 조정이 필요합니다.
             // 현재는 검색 결과 표시 후, 해당 결과에 대한 원본(originalJson 파라미터)을 에디터에 저장합니다.
-            editor.setOriginalJson(originalJson)
-
+            // editor.setOriginalJson(originalJson)
         }
     }
 

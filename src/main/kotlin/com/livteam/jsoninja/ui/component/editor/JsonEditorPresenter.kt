@@ -4,10 +4,12 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.util.Disposer
 
+import com.livteam.jsoninja.ui.component.model.JsonQueryModel
+
 class JsonEditorPresenter(
-    private val view: JsonEditorView
+    private val view: JsonEditorView,
+    private val model: JsonQueryModel
 ) {
-    private var originalJson: String = ""
     private var onContentChangeCallback: ((String) -> Unit)? = null
     var isSettingText = false
 
@@ -30,11 +32,11 @@ class JsonEditorPresenter(
     }
 
     fun setOriginalJson(json: String) {
-        originalJson = json
+        model.originalJson = json
     }
 
     fun getOriginalJson(): String {
-        return originalJson
+        return model.originalJson
     }
 
     fun setOnContentChangeCallback(callback: (String) -> Unit) {
