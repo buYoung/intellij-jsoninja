@@ -10,7 +10,7 @@ import com.intellij.psi.PsiFile
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
-import com.livteam.jsoninja.ui.component.JsonEditor
+import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
 
 /**
  * Pre-processes pasted content in JSONinja editors.
@@ -31,7 +31,7 @@ class JsoninjaPastePreProcessor : CopyPastePreProcessor {
         text: String,
         rawText: RawText?
     ): String {
-        if (editor.document.getUserData(JsonEditor.JSONINJA_EDITOR_KEY) != true) {
+        if (editor.document.getUserData(JsonDocumentFactory.JSONINJA_EDITOR_KEY) != true) {
             return text
         }
 

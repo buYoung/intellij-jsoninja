@@ -11,6 +11,7 @@ import com.intellij.ui.components.JBTabbedPane
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import com.livteam.jsoninja.ui.component.jsonQuery.JsonQueryPresenter
 import java.awt.BorderLayout
 import java.awt.Component
@@ -31,7 +32,7 @@ class JsonHelperTabbedPane(
     private val helperPanel: JsonHelperPanel
 ) : JBTabbedPane() {
     private var tabCounter = 1
-    private var onTabSelectedListener: ((JsonEditor?) -> Unit)? = null
+    private var onTabSelectedListener: ((JsonEditorView?) -> Unit)? = null
     private var onTabContentChangedListener: ((String) -> Unit)? = null
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val tabDisposables = mutableMapOf<Component, Disposable>()
@@ -180,12 +181,12 @@ class JsonHelperTabbedPane(
      * 새로운 JsonEditor 인스턴스를 생성하고 초기화합니다.
      * 내용 변경 시 onTabContentChangedListener를 호출하도록 콜백을 설정합니다.
      */
-    private fun createEditor(fileExtension: String? = null): JsonEditor {
-        return JsonEditor(project, fileExtension).apply {
-            // JsonEditor 내부에서 내용 변경 시 onTabContentChangedListener가 호출되도록 설정
+    private fun createEditor(fileExtension: String? = null): JsonEditorView {
+        return JsonEditorView(project, fileExtension).apply {
+            // JsonEditorView 내부에서 내용 변경 시 onTabContentChangedListener가 호출되도록 설정
             setOnContentChangeCallback { newContent ->
                 onTabContentChangedListener?.invoke(newContent)
-                // JsonEditor 자체의 원본 JSON도 업데이트 (필요하다면)
+                // JsonEditorView 자체의 원본 JSON도 업데이트 (필요하다면)
                 // setOriginalJson(newContent) // 이 부분은 JmesPath 사용 시 originalJson과 혼동될 수 있으므로,
                 // JmesPath 로직에서 명확히 관리하는 것이 좋음.
                 // 여기서는 단순히 content change 이벤트만 전달.
@@ -198,9 +199,9 @@ class JsonHelperTabbedPane(
      * @param index 탭이 추가될 위치
      * @param content 탭에 초기에 표시될 JSON 문자열 (기본값: 빈 문자열)
      * @param fileExtension 파일 확장자 (기본값: null -> json5)
-     * @return 생성된 JsonEditor 인스턴스
+     * @return 생성된 JsonEditorView 인스턴스
      */
-    private fun addNewTabInternal(index: Int, content: String = "", fileExtension: String? = null): JsonEditor {
+    private fun addNewTabInternal(index: Int, content: String = "", fileExtension: String? = null): JsonEditorView {
         val editor = createEditor(fileExtension)
         // setText는 editor의 onContentChangeCallback을 트리거할 수 있으므로,
         // 여기서 onTabContentChangedListener를 직접 호출하지 않도록 주의합니다.
@@ -231,7 +232,7 @@ class JsonHelperTabbedPane(
 
         tabContentPanel.add(jmesComponent, BorderLayout.NORTH)
 
-        // 3. JsonEditor를 중앙에 직접 추가 (JBScrollPane 제거)
+        // 3. JsonEditorView를 중앙에 직접 추가 (JBScrollPane 제거)
         tabContentPanel.add(editor, BorderLayout.CENTER)
 
         setupJmesPathPresenter(jsonQueryPresenter, editor, initialJson = content)
@@ -252,10 +253,10 @@ class JsonHelperTabbedPane(
     }
 
     /**
-     * 현재 선택된 탭의 JsonEditor를 반환합니다.
-     * 선택된 탭이 없거나 JsonEditor를 포함하지 않으면 null을 반환합니다.
+     * 현재 선택된 탭의 JsonEditorView를 반환합니다.
+     * 선택된 탭이 없거나 JsonEditorView를 포함하지 않으면 null을 반환합니다.
      */
-    fun getCurrentEditor(): JsonEditor? {
+    fun getCurrentEditor(): JsonEditorView? {
         val currentSelectedComponent = selectedComponent
         // "+" 탭이거나, null인 경우
         if (currentSelectedComponent == null || currentSelectedComponent.name == ADD_NEW_TAB_COMPONENT_NAME) {
@@ -264,9 +265,9 @@ class JsonHelperTabbedPane(
 
         // currentSelectedComponent는 이제 tabContentPanel (JPanel)임
         if (currentSelectedComponent is JPanel) {
-            // tabContentPanel 내에서 JsonEditor를 찾음
-            val editor = currentSelectedComponent.components.find { it is JsonEditor } as? JsonEditor
-            // JsonEditor를 반환
+            // tabContentPanel 내에서 JsonEditorView를 찾음
+            val editor = currentSelectedComponent.components.find { it is JsonEditorView } as? JsonEditorView
+            // JsonEditorView를 반환
             return editor
         }
         return null // JPanel이 아닌 경우 (예상치 못한 상황)
@@ -276,7 +277,7 @@ class JsonHelperTabbedPane(
      * 탭 선택 리스너 설정
      * @param listener 선택된 탭의 에디터를 매개변수로 받는 함수
      */
-    fun setOnTabSelectedListener(listener: (JsonEditor?) -> Unit) {
+    fun setOnTabSelectedListener(listener: (JsonEditorView?) -> Unit) {
         this.onTabSelectedListener = listener
     }
 
@@ -291,12 +292,12 @@ class JsonHelperTabbedPane(
     /**
      * JMESPath 컴포넌트의 콜백을 설정하고 초기 JSON을 제공합니다.
      * @param jsonQueryPresenter 설정할 JmesPathPresenter 인스턴스
-     * @param editor 연결된 JsonEditor 인스턴스
+     * @param editor 연결된 JsonEditorView 인스턴스
      * @param initialJson JMESPath 컴포넌트의 초기 원본 JSON (선택 사항)
      */
     private fun setupJmesPathPresenter(
         jsonQueryPresenter: JsonQueryPresenter,
-        editor: JsonEditor,
+        editor: JsonEditorView,
         initialJson: String? = null
     ) {
         // 초기 원본 JSON 설정 (탭 생성 시 내용이 있다면)
@@ -332,7 +333,7 @@ class JsonHelperTabbedPane(
             // JmesPath 결과 표시는 원본을 바꾸는 것이 아닐 수 있음.
             // 만약 formattedJson이 원본을 대체하는 것이라면, setOriginalJson도 formattedJson으로 해야 할 수 있음.
             // 여기서는 JmesPath 결과를 보여주는 것이므로 originalJson은 그대로 두는 것이 맞을 수 있습니다.
-            // JsonEditor의 setOriginalJson의 역할과 시점에 따라 조정이 필요합니다.
+            // JsonEditorView의 setOriginalJson의 역할과 시점에 따라 조정이 필요합니다.
             // 현재는 검색 결과 표시 후, 해당 결과에 대한 원본(originalJson 파라미터)을 에디터에 저장합니다.
             editor.setOriginalJson(originalJson)
 

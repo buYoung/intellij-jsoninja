@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import com.livteam.jsoninja.actions.*
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
@@ -75,7 +76,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
      * 현재 선택된 탭의 에디터 반환
      * @return 현재 선택된 탭의 에디터
      */
-    fun getCurrentEditor(): JsonEditor? {
+    fun getCurrentEditor(): JsonEditorView? {
         return tabbedPane.getCurrentEditor()
     }
 

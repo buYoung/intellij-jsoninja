@@ -7,7 +7,6 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.psi.PsiDocumentManager
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
-import com.livteam.jsoninja.ui.component.JsonEditor
 import com.livteam.jsoninja.util.JsonPathHelper
 import java.awt.datatransfer.StringSelection
 
