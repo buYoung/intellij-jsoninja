@@ -6,6 +6,7 @@ import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.components.JBTabbedPane
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
@@ -346,7 +347,7 @@ class JsonHelperTabbedPane(
         return closeTabAt(selectedIndex)
     }
 
-    private fun closeTabAt(index: Int, enforceMinimumJsonTab: Boolean = true): Boolean {
+    private fun closeTabAt(index: Int): Boolean {
         if (index < 0 || index >= tabCount) {
             return false
         }
@@ -356,16 +357,18 @@ class JsonHelperTabbedPane(
             return false
         }
 
-        if (enforceMinimumJsonTab && getJsonTabCount() <= 1) {
-            return false
-        }
-
+        val isLastJsonTab = getJsonTabCount() <= 1
         val nextSelectedIndex = if (index > 0) index - 1 else 0
 
         disposeTabComponent(component)
         removeTabAt(index)
 
-        if (tabCount > 0) {
+        if (isLastJsonTab) {
+            // 마지막 탭이면 초기 상태로 복구하고 Tool Window 닫기
+            tabCounter = 1
+            addNewTabInternal(0)
+            ToolWindowManager.getInstance(project).getToolWindow("JSONinja")?.hide()
+        } else if (tabCount > 0) {
             selectedIndex = if (nextSelectedIndex < tabCount) nextSelectedIndex else tabCount - 1
         }
 
@@ -398,7 +401,7 @@ class JsonHelperTabbedPane(
             }
         }
 
-        return jsonTabCount > 1
+        return jsonTabCount > 0
     }
 
     /**
