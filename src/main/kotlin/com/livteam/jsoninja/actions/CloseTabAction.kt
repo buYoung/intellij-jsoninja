@@ -3,7 +3,7 @@ package com.livteam.jsoninja.actions
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.wm.ToolWindowManager
-import com.livteam.jsoninja.ui.component.JsonHelperPanel
+import com.livteam.jsoninja.ui.component.main.JsoninjaPanelView
 
 /**
  * JSON 에디터 탭을 닫는 액션 클래스입니다.
@@ -18,9 +18,9 @@ class CloseTabAction : AnAction(
         val project = e.project ?: return
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("JSONinja") ?: return
 
-        // Tool window의 component가 JsonHelperPanel인지 확인
+        // Tool window의 component가 JsonHelperPanelView인지 확인
         val content = toolWindow.contentManager.selectedContent
-        val panel = content?.component as? JsonHelperPanel ?: return
+        val panel = content?.component as? JsoninjaPanelView ?: return
 
         val presenter = panel.getTabsPresenter()
 
@@ -51,9 +51,9 @@ class CloseTabAction : AnAction(
             return
         }
 
-        // Tool window의 component가 JsonHelperPanel인지 확인
+        // Tool window의 component가 JsonHelperPanelView인지 확인
         val content = toolWindow.contentManager.selectedContent
-        val panel = content?.component as? JsonHelperPanel
+        val panel = content?.component as? JsoninjaPanelView
         if (panel == null) {
             e.presentation.isEnabled = false
             return

@@ -5,7 +5,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.model.JsonFormatState
-import com.livteam.jsoninja.ui.component.JsonHelperPanel
 
 /**
  * JSON을 압축하는 액션 클래스입니다.

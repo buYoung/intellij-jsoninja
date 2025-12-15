@@ -4,7 +4,6 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.ui.component.JsonHelperPanel
 
 /**
  * 새 탭을 추가하는 액션 클래스입니다.

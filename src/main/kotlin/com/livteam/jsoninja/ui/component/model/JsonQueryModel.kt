@@ -6,7 +6,6 @@ package com.livteam.jsoninja.ui.component.model
 class JsonQueryModel {
     var originalJson: String = ""
 
-    // TODO 탭별로 lastQuery를 관리할 수 있도록 변경 예정
     var lastQuery: String = ""
 
     /**
