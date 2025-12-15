@@ -2,9 +2,11 @@ package com.livteam.jsoninja.ui.component
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.livteam.jsoninja.actions.*
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
@@ -40,7 +42,27 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     }
 
     private fun createToolbar(): JComponent {
-        val actionGroup = JsonHelperActionBar()
+        val actionGroup = DefaultActionGroup().apply {
+            isPopup = true
+            
+            // 기본 액션 추가
+            add(AddTabAction())
+            add(OpenJsonFileAction())
+
+            addSeparator()
+
+            // JSON 변환 관련 액션 추가
+            add(PrettifyJsonAction())
+            add(UglifyJsonAction())
+            addSeparator()
+            add(EscapeJsonAction())
+            add(UnescapeJsonAction())
+            addSeparator()
+            add(GenerateRandomJsonAction())
+            // JSON Diff 액션 추가
+            add(ShowJsonDiffAction())
+        }
+        
         val actionToolbar = ActionManager.getInstance()
             .createActionToolbar("JsonHelperToolbar", actionGroup, true)
 
