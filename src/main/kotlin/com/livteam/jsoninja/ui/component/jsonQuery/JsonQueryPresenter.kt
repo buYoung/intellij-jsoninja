@@ -7,6 +7,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonQueryService
+import com.livteam.jsoninja.ui.component.model.JsonQueryModel
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.KeyEvent.VK_ENTER
@@ -25,8 +26,8 @@ class JsonQueryPresenter(private val project: Project) {
 
     private var onSearchCallback: ((String, String) -> Unit)? = null
     private var onBeforeSearchCallback: (() -> Unit)? = null
-    private var originalJson: String = ""
-    private var lastQuery: String = ""
+    
+    private val model = JsonQueryModel()
 
     init {
         setupKeyListener()
@@ -43,13 +44,13 @@ class JsonQueryPresenter(private val project: Project) {
                     val query = view.query
                     // 쿼리가 비어있으면 원본 JSON으로 돌아감
                     if (query.isEmpty()) {
-                        lastQuery = ""
+                        model.lastQuery = ""
 
                         invokeLater(ModalityState.any()) {
-                            onSearchCallback?.invoke(originalJson, originalJson)
+                            onSearchCallback?.invoke(model.originalJson, model.originalJson)
                         }
                     } else {
-                        lastQuery = query
+                        model.lastQuery = query
                         performSearch(query)
                     }
                 }
@@ -61,20 +62,20 @@ class JsonQueryPresenter(private val project: Project) {
      * JMESPath 검색 실행
      */
     private fun performSearch(query: String) {
-        val originalJsonTrim = originalJson.trim()
+        val originalJsonTrim = model.originalJson.trim()
         val isOriginalJsonEmpty = originalJsonTrim.isBlank() || originalJsonTrim.isEmpty()
         // 검색 전 콜백 호출
         onBeforeSearchCallback?.invoke()
 
         // 원본 JSON이 비어있으면 검색 중단
-        if (isOriginalJsonEmpty || !isValidJson(originalJson)) {
+        if (isOriginalJsonEmpty || !isValidJson(model.originalJson)) {
             LOG.warn("원본 JSON이 비어있거나 유효하지 않습니다.")
             return
         }
 
         // 입력값이 없으면 원본 JSON을 보여줌
         if (query.isEmpty()) {
-            onSearchCallback?.invoke(originalJson, originalJson)
+            onSearchCallback?.invoke(model.originalJson, model.originalJson)
             return
         }
 
@@ -87,7 +88,7 @@ class JsonQueryPresenter(private val project: Project) {
                     return@executeOnPooledThread
                 }
 
-                val result = jsonQueryService.query(originalJson, query)
+                val result = jsonQueryService.query(model.originalJson, query)
 
                 // UI 업데이트는 EDT에서 수행
                 invokeLater(ModalityState.any()) {
@@ -102,7 +103,7 @@ class JsonQueryPresenter(private val project: Project) {
                     }
 
                     // 결과가 있는 경우만 출력 업데이트
-                    onSearchCallback?.invoke(originalJson, result)
+                    onSearchCallback?.invoke(model.originalJson, result)
                 }
             } catch (e: Exception) {
                 LOG.error("쿼리 실행 중 오류 발생", e)
@@ -142,16 +143,16 @@ class JsonQueryPresenter(private val project: Project) {
      */
     fun setOriginalJson(json: String) {
         // 원본 JSON이 변경되지 않았으면 아무 작업도 하지 않음
-        if (originalJson == json) {
+        if (model.originalJson == json) {
             return
         }
 
-        originalJson = json
+        model.originalJson = json
 
         // 원본 JSON이 변경되면 현재 쿼리를 다시 실행
         val currentQuery = view.query
         if (currentQuery.isNotEmpty()) {
-            lastQuery = currentQuery
+            model.lastQuery = currentQuery
             performSearch(currentQuery)
         } else if (json.isNotEmpty() && isValidJson(json)) {
             // 쿼리가 비어있으면 원본 JSON을 표시
@@ -163,7 +164,7 @@ class JsonQueryPresenter(private val project: Project) {
      * 원본 JSON 데이터 비어있는지 확인합니다
      */
     fun hasOriginalJson(): Boolean {
-        return originalJson.isNotEmpty()
+        return model.hasOriginalJson()
     }
 
     /**
