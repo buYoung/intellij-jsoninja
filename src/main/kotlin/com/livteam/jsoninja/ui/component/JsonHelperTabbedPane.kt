@@ -11,6 +11,7 @@ import com.intellij.ui.components.JBTabbedPane
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.ui.component.jsonQuery.JsonQueryPresenter
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Cursor
@@ -212,7 +213,7 @@ class JsonHelperTabbedPane(
 
         val title = "$TAB_TITLE_PREFIX${tabCounter++}"
 
-        // 1. JmesPathComponent와 Editor를 담을 새로운 패널 생성
+        // 1. JmesPathPresenter와 Editor를 담을 새로운 패널 생성
         val tabContentPanel = JPanel(BorderLayout(0, 0)).apply {
             // 중요: 탭 컨텐츠 패널에 고유한 이름 부여
             name = title // 탭 제목을 패널 이름으로 사용하여 식별 가능하게 함
@@ -222,9 +223,9 @@ class JsonHelperTabbedPane(
         Disposer.register(parentDisposable, tabDisposable)
         Disposer.register(tabDisposable, editor)
 
-        // 2. JmesPathComponent 생성 및 상단에 추가
-        val jmesPathComponent = JmesPathComponent(project)
-        val jmesComponent = jmesPathComponent.getComponent().apply {
+        // 2. JmesPathPresenter 생성 및 상단에 추가
+        val jsonQueryPresenter = JsonQueryPresenter(project)
+        val jmesComponent = jsonQueryPresenter.getComponent().apply {
             border = JBUI.Borders.emptyTop(3)
         }
 
@@ -233,7 +234,7 @@ class JsonHelperTabbedPane(
         // 3. JsonEditor를 중앙에 직접 추가 (JBScrollPane 제거)
         tabContentPanel.add(editor, BorderLayout.CENTER)
 
-        setupJmesPathComponent(jmesPathComponent, editor, initialJson = content)
+        setupJmesPathPresenter(jsonQueryPresenter, editor, initialJson = content)
 
         tabDisposables[tabContentPanel] = tabDisposable
 
@@ -289,27 +290,27 @@ class JsonHelperTabbedPane(
 
     /**
      * JMESPath 컴포넌트의 콜백을 설정하고 초기 JSON을 제공합니다.
-     * @param jmesPathComponent 설정할 JmesPathComponent 인스턴스
+     * @param jsonQueryPresenter 설정할 JmesPathPresenter 인스턴스
      * @param editor 연결된 JsonEditor 인스턴스
      * @param initialJson JMESPath 컴포넌트의 초기 원본 JSON (선택 사항)
      */
-    private fun setupJmesPathComponent(
-        jmesPathComponent: JmesPathComponent,
+    private fun setupJmesPathPresenter(
+        jsonQueryPresenter: JsonQueryPresenter,
         editor: JsonEditor,
         initialJson: String? = null
     ) {
         // 초기 원본 JSON 설정 (탭 생성 시 내용이 있다면)
         initialJson?.takeIf { it.isNotBlank() }?.let {
-            jmesPathComponent.setOriginalJson(it)
+            jsonQueryPresenter.setOriginalJson(it)
             editor.setOriginalJson(it) // 에디터의 원본 JSON도 동기화
         }
 
-        jmesPathComponent.setOnBeforeSearchCallback {
+        jsonQueryPresenter.setOnBeforeSearchCallback {
             // JMESPath 검색 전, 원본 JSON이 없으면 현재 에디터에서 가져와 설정
-            if (!jmesPathComponent.hasOriginalJson()) {
+            if (!jsonQueryPresenter.hasOriginalJson()) {
                 val editorText = editor.getText()
                 if (editorText.isNotBlank()) { // isBlank()는 isEmpty()와 공백 문자열 모두 처리
-                    jmesPathComponent.setOriginalJson(editorText)
+                    jsonQueryPresenter.setOriginalJson(editorText)
                     editor.setOriginalJson(editorText) // 에디터의 원본 JSON도 업데이트
                 } else {
                     // 에디터 내용이 비어있으면 검색하지 않도록 하거나, 사용자에게 알림 (선택)
@@ -319,7 +320,7 @@ class JsonHelperTabbedPane(
             }
         }
 
-        jmesPathComponent.setOnSearchCallback { originalJson, resultJson ->
+        jsonQueryPresenter.setOnSearchCallback { originalJson, resultJson ->
             // JMESPath 검색 결과 처리
             val jsonFormatState = helperPanel.getJsonFormatState()
             val formattedJson = formatterService.formatJson(resultJson, jsonFormatState)

@@ -1,37 +1,34 @@
-package com.livteam.jsoninja.ui.component
+package com.livteam.jsoninja.ui.component.jsonQuery
 
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.project.Project
-import com.intellij.ui.SearchTextField
-import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.services.JsonQueryService
-import com.livteam.jsoninja.services.JsonFormatterService
-import java.awt.event.KeyAdapter
-import java.awt.event.KeyEvent
-import javax.swing.JComponent
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.logger
-import java.awt.event.KeyEvent.*
+import com.intellij.openapi.project.Project
+import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.services.JsonQueryService
+import java.awt.event.KeyAdapter
+import java.awt.event.KeyEvent
+import java.awt.event.KeyEvent.VK_ENTER
+import javax.swing.JComponent
 
 /**
- * JMESPath 검색을 위한 컴포넌트
- * 사용자가 JMESPath 표현식을 입력하고 엔터 키를 눌러 검색할 수 있는 기능 제공
+ * JMESPath 검색 로직을 담당하는 Presenter
+ * 사용자 입력을 받아 비즈니스 로직을 처리하고 View를 업데이트
  */
-class JmesPathComponent(private val project: Project) {
-    private val LOG = logger<JmesPathComponent>()
-    private val jmesPathField = SearchTextField()
-    private var onSearchCallback: ((String, String) -> Unit)? = null
-    private var onBeforeSearchCallback: (() -> Unit)? = null
-    private var originalJson: String = ""
-    private var lastQuery: String = ""
-    private var parentPanel: JsonHelperPanel? = null
+class JsonQueryPresenter(private val project: Project) {
+    private val LOG = logger<JsonQueryPresenter>()
+    private val view = JsonQueryView()
 
     private val jsonQueryService = project.getService(JsonQueryService::class.java)
     private val jsonFormatterService = project.getService(JsonFormatterService::class.java)
 
+    private var onSearchCallback: ((String, String) -> Unit)? = null
+    private var onBeforeSearchCallback: (() -> Unit)? = null
+    private var originalJson: String = ""
+    private var lastQuery: String = ""
+
     init {
-        jmesPathField.textEditor.emptyText.text = LocalizationBundle.message("jmesPathPlaceholder")
         setupKeyListener()
     }
 
@@ -39,11 +36,11 @@ class JmesPathComponent(private val project: Project) {
      * 엔터 키 입력 및 붙여넣기 이벤트 처리를 위한 키 리스너 설정
      */
     private fun setupKeyListener() {
-        jmesPathField.textEditor.addKeyListener(object : KeyAdapter() {
+        view.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
                 // 엔터 키 처리
                 if (e.keyCode == VK_ENTER) {
-                    val query = jmesPathField.text.trim()
+                    val query = view.query
                     // 쿼리가 비어있으면 원본 JSON으로 돌아감
                     if (query.isEmpty()) {
                         lastQuery = ""
@@ -140,14 +137,6 @@ class JmesPathComponent(private val project: Project) {
     }
 
     /**
-     * 부모 패널 설정
-     * @param panel JsonHelperPanel 인스턴스
-     */
-    fun setParentPanel(panel: JsonHelperPanel) {
-        parentPanel = panel
-    }
-
-    /**
      * 원본 JSON 설정
      * @param json 원본 JSON 문자열
      */
@@ -160,7 +149,7 @@ class JmesPathComponent(private val project: Project) {
         originalJson = json
 
         // 원본 JSON이 변경되면 현재 쿼리를 다시 실행
-        val currentQuery = jmesPathField.text.trim()
+        val currentQuery = view.query
         if (currentQuery.isNotEmpty()) {
             lastQuery = currentQuery
             performSearch(currentQuery)
@@ -178,10 +167,10 @@ class JmesPathComponent(private val project: Project) {
     }
 
     /**
-     * JMESPath 필드 컴포넌트 반환
+     * View의 컴포넌트 반환
      * @return JMESPath 입력 필드 컴포넌트
      */
     fun getComponent(): JComponent {
-        return jmesPathField
+        return view.component
     }
 }
