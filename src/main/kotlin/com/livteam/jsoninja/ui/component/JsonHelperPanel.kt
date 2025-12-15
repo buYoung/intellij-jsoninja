@@ -11,6 +11,8 @@ import com.livteam.jsoninja.actions.*
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
+import com.livteam.jsoninja.ui.component.tab.JsonTabsPresenter
+import com.livteam.jsoninja.ui.component.tab.JsonTabsView
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -18,8 +20,8 @@ import javax.swing.JSeparator
 import javax.swing.SwingConstants
 
 class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(false, true), Disposable {
-    private val tabbedPane = JsonHelperTabbedPane(project, this, this)
-    private var isJmesQueryInProgress = false
+    private val tabsView = JsonTabsView()
+    private val tabsPresenter = JsonTabsPresenter(project, this, tabsView)
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val helperService = project.getService(JsonHelperService::class.java)
 
@@ -29,12 +31,12 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
 
     private fun setupUI() {
         // 초기 탭 추가
-        tabbedPane.setupInitialTabs()
+        tabsPresenter.setupInitialTabs()
 
         // Add content
         val contentPanel = JPanel(BorderLayout()).apply {
             add(JSeparator(SwingConstants.VERTICAL), BorderLayout.WEST)
-            add(tabbedPane, BorderLayout.CENTER)
+            add(tabsView, BorderLayout.CENTER)
         }
 
         // Setup toolbar and content
@@ -45,7 +47,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
     private fun createToolbar(): JComponent {
         val actionGroup = DefaultActionGroup().apply {
             isPopup = true
-            
+
             // 기본 액션 추가
             add(AddTabAction())
             add(OpenJsonFileAction())
@@ -63,7 +65,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
             // JSON Diff 액션 추가
             add(ShowJsonDiffAction())
         }
-        
+
         val actionToolbar = ActionManager.getInstance()
             .createActionToolbar("JsonHelperToolbar", actionGroup, true)
 
@@ -77,15 +79,15 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
      * @return 현재 선택된 탭의 에디터
      */
     fun getCurrentEditor(): JsonEditorView? {
-        return tabbedPane.getCurrentEditor()
+        return tabsPresenter.getCurrentEditor()
     }
 
     /**
-     * TabbedPane 컴포넌트 반환
-     * @return JsonHelperTabbedPane 인스턴스
+     * tabs Presenter 반환
+     * @return JsonTabsPresenter 인스턴스
      */
-    fun getTabbedPane(): JsonHelperTabbedPane {
-        return tabbedPane
+    fun getTabsPresenter(): JsonTabsPresenter {
+        return tabsPresenter
     }
 
     /**
@@ -94,7 +96,7 @@ class JsonHelperPanel(private val project: Project) : SimpleToolWindowPanel(fals
      * @param fileExtension 파일 확장자
      */
     fun addNewTab(content: String = "", fileExtension: String? = null) {
-        tabbedPane.addNewTabFromPlusTab(content, fileExtension)
+        tabsPresenter.addNewTabFromPlusTab(content, fileExtension)
     }
 
     /**
