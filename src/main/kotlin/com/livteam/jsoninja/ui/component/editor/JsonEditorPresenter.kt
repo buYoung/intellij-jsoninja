@@ -1,12 +1,15 @@
 package com.livteam.jsoninja.ui.component.editor
 
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 
 import com.livteam.jsoninja.ui.component.model.JsonQueryModel
 
 class JsonEditorPresenter(
+    private val project: Project,
     private val view: JsonEditorView,
     private val model: JsonQueryModel
 ) {
@@ -28,6 +31,14 @@ class JsonEditorPresenter(
 
         Disposer.register(view) {
             view.editor.removeDocumentListener(contentChangeListener)
+        }
+    }
+
+    fun setText(text: String) {
+        this.isSettingText = true
+        WriteCommandAction.runWriteCommandAction(project) {
+            view.editor.text = text
+            this.isSettingText = false
         }
     }
 

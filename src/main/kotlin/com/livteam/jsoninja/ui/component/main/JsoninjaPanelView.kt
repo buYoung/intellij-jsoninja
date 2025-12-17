@@ -3,7 +3,6 @@ package com.livteam.jsoninja.ui.component.main
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.DefaultActionGroup
-import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.livteam.jsoninja.actions.*
@@ -162,16 +161,11 @@ class JsoninjaPanelView(private val project: Project) : SimpleToolWindowPanel(fa
 
         val processedJson = processor(jsonText)
 
-        // 에디터에 처리된 JSON 설정
-        WriteCommandAction.runWriteCommandAction(project) {
-            currentEditor.setText(processedJson)
-        }
+        currentEditor.setText(processedJson)
     }
 
     fun updateEditorText(editor: JsonEditorView, text: String) {
-        WriteCommandAction.runWriteCommandAction(project) {
-            editor.setText(text)
-        }
+        editor.setText(text)
     }
 
     override fun dispose() {

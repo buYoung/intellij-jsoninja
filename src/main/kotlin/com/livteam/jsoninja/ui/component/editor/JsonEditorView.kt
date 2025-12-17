@@ -7,7 +7,6 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.IdeActions
-import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
@@ -42,8 +41,8 @@ class JsonEditorView(
 
     init {
         editor = createJsonEditor()
-        presenter = JsonEditorPresenter(this, model)
-        
+        presenter = JsonEditorPresenter(project, this, model)
+
         initializeUI()
         presenter.setupContentChangeListener()
         setupMouseListener()
@@ -88,13 +87,18 @@ class JsonEditorView(
 
                 val copyJsonQueryAction = CopyJsonQueryAction()
                 copyJsonQueryAction.templatePresentation.text = LocalizationBundle.message("action.copy.json.query")
-                copyJsonQueryAction.templatePresentation.description = LocalizationBundle.message("action.copy.json.query.description")
+                copyJsonQueryAction.templatePresentation.description =
+                    LocalizationBundle.message("action.copy.json.query.description")
 
                 if (group.childrenCount > 0) group.addSeparator()
                 group.add(copyJsonQueryAction)
 
                 if (group.childrenCount > 0) {
-                    PopupHandler.installPopupMenu(editor.contentComponent, group, "com.livteam.jsoninja.action.group.EditorPopup")
+                    PopupHandler.installPopupMenu(
+                        editor.contentComponent,
+                        group,
+                        "com.livteam.jsoninja.action.group.EditorPopup"
+                    )
                 }
             }
             setPlaceholder(PLACEHOLDER_TEXT)
@@ -117,18 +121,10 @@ class JsonEditorView(
         add(editor, BorderLayout.CENTER)
     }
 
-    fun setText(text: String) {
-        presenter.isSettingText = true
-        WriteCommandAction.runWriteCommandAction(project) {
-            editor.text = text
-            presenter.isSettingText = false
-        }
-    }
+    fun setText(text: String) = presenter.setText(text)
 
     fun getText(): String = editor.text
 
-    fun setOriginalJson(json: String) = presenter.setOriginalJson(json)
-    fun getOriginalJson(): String = presenter.getOriginalJson()
     fun setOnContentChangeCallback(callback: (String) -> Unit) = presenter.setOnContentChangeCallback(callback)
 
     override fun dispose() {
