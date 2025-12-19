@@ -15,7 +15,7 @@ class UnescapeJsonAction : AnAction(
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
-        panel.unescapeJson()
+        panel.presenter.unescapeJson()
     }
 
     override fun update(e: AnActionEvent) {

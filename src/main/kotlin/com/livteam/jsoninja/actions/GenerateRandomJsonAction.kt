@@ -32,7 +32,7 @@ class GenerateRandomJsonAction : AnAction(
                 val prettyPrint = config.isJson5
                 val randomJson = creator.generateConfiguredJsonString(config, prettyPrint = prettyPrint)
 
-                panel.setRandomJsonData(randomJson, skipFormatting = config.isJson5)
+                panel.presenter.setRandomJsonData(randomJson, skipFormatting = config.isJson5)
             }
         }
     }

@@ -42,7 +42,7 @@ class OpenJsonFileAction : AnAction(
             val content = String(virtualFile.contentsToByteArray())
             val extension = virtualFile.extension
             runWriteAction {
-                panel.addNewTab(content, extension)
+                panel.presenter.addNewTab(content, extension)
             }
         }
     }
