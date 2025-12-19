@@ -13,6 +13,7 @@ import javax.swing.JPanel
 
 class JsonTabsView : JBTabbedPane() {
     private var presenter: JsonTabsPresenter? = null
+    private var plusTabMouseListener: MouseAdapter? = null
 
     companion object {
         const val ADD_NEW_TAB_COMPONENT_NAME = "addNewTab"
@@ -23,14 +24,16 @@ class JsonTabsView : JBTabbedPane() {
 
         // 탭 변경 리스너는 JBTabbedPane의 기본 기능 사용, Presenter에서 addChangeListener 호출
 
-        addMouseListener(object : MouseAdapter() {
+        plusTabMouseListener?.let { removeMouseListener(it) }
+        plusTabMouseListener = object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) {
                 val selectedComponent = this@JsonTabsView.selectedComponent
                 if (selectedComponent?.name == ADD_NEW_TAB_COMPONENT_NAME) {
-                    presenter.onPlusTabSelected()
+                    this@JsonTabsView.presenter?.onPlusTabSelected()
                 }
             }
-        })
+        }
+        addMouseListener(plusTabMouseListener)
     }
 
     fun addPlusTab() {

@@ -13,6 +13,7 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.PopupHandler
 import com.livteam.jsoninja.LocalizationBundle
@@ -128,6 +129,7 @@ class JsonEditorView(
     fun setOnContentChangeCallback(callback: (String) -> Unit) = presenter.setOnContentChangeCallback(callback)
 
     override fun dispose() {
+        (editor as? Disposable)?.let { Disposer.dispose(it) }
         removeAll()
     }
 }

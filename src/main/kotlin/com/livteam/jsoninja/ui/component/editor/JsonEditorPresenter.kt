@@ -35,10 +35,13 @@ class JsonEditorPresenter(
     }
 
     fun setText(text: String) {
-        this.isSettingText = true
-        WriteCommandAction.runWriteCommandAction(project) {
-            view.editor.text = text
-            this.isSettingText = false
+        isSettingText = true
+        try {
+            WriteCommandAction.runWriteCommandAction(project) {
+                view.editor.text = text
+            }
+        } finally {
+            isSettingText = false
         }
     }
 
