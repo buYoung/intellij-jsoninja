@@ -3,6 +3,7 @@ package com.livteam.jsoninja.ui.component.editor
 import com.intellij.openapi.editor.event.EditorMouseMotionListener
 import com.intellij.openapi.editor.event.EditorMouseEvent
 import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.psi.PsiDocumentManager
@@ -31,35 +32,34 @@ class JsonEditorTooltipListener(
         val event = e.mouseEvent
         val isModifierDown = if (SystemInfo.isMac) event.isMetaDown else event.isControlDown
 
-        if (isModifierDown) {
-            val offset = e.offset
-            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(e.editor.document)
-            if (psiFile != null) {
-                val element = psiFile.findElementAt(offset)
-
-                if (element != null) {
-                    val queryType = JsonQueryType.fromString(settings.jsonQueryType)
-                    val path = when (queryType) {
-                        JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
-                        JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
-                    }
-
-                    if (path != null) {
-                        val label = when (queryType) {
-                            JsonQueryType.JMESPATH -> "JMESPath"
-                            JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
-                        }
-                        val text = "<html>$label: <b>$path</b></html>"
-                        (e.editor as? EditorEx)?.contentComponent?.toolTipText = text
-                    } else {
-                        (e.editor as? EditorEx)?.contentComponent?.toolTipText = null
-                    }
-                }
-            } else {
-                (e.editor as? EditorEx)?.contentComponent?.toolTipText = null
+        val editorEx = e.editor as? EditorEx ?: return
+        if (!isModifierDown) {
+            if (editorEx.contentComponent.toolTipText != null) {
+                editorEx.contentComponent.toolTipText = null
             }
-        } else {
-            (e.editor as? EditorEx)?.contentComponent?.toolTipText = null
+            return
+        }
+
+        val offset = e.offset
+        val tooltipText = ReadAction.compute<String?, RuntimeException> {
+            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(e.editor.document) ?: return@compute null
+            val element = psiFile.findElementAt(offset) ?: return@compute null
+            val queryType = JsonQueryType.fromString(settings.jsonQueryType)
+            val path = when (queryType) {
+                JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
+                JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
+            } ?: return@compute null
+
+            val label = when (queryType) {
+                JsonQueryType.JMESPATH -> "JMESPath"
+                JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
+            }
+
+            "<html>$label: <b>$path</b></html>"
+        }
+
+        if (editorEx.contentComponent.toolTipText != tooltipText) {
+            editorEx.contentComponent.toolTipText = tooltipText
         }
     }
 }

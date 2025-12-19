@@ -36,7 +36,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
     }
 
     /**
-     * 엔터 키 입력 및 붙여넣기 이벤트 처리를 위한 키 리스너 설정
+     * 엔터 키 입력 처리를 위한 키 리스너 설정
      */
     private fun setupKeyListener() {
         view.addKeyListener(object : KeyAdapter() {
@@ -102,12 +102,10 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
                     }
 
                     if (result.isEmpty()) {
-                        // 결과가 null인 경우(쿼리 실패) 아무 작업도 수행하지 않음
-                        // 이전 상태를 유지하기 위해 콜백을 호출하지 않음
+                        // 결과가 비어있어도 콜백은 호출하여 UI가 현재 결과를 반영하도록 함
                         LOG.warn("쿼리 결과가 없습니다: $query")
                     }
 
-                    // 결과가 있는 경우만 출력 업데이트
                     onSearchCallback?.invoke(model.originalJson, result)
                 }
             } catch (e: Exception) {
