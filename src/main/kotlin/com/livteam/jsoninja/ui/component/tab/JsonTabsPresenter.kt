@@ -56,19 +56,11 @@ class JsonTabsPresenter(
 
     private fun addPlusTab() {
         view.addPlusTab()
-
-        val latestJsonEditor = view.components.findLast {
-            if (it.name == null) return@findLast false
-            if (it.name.isEmpty()) return@findLast false
-            it.name.startsWith(TAB_TITLE_PREFIX)
+        val plusTabIndex =
+            view.indexOfComponent(view.components.find { it.name == JsonTabsView.ADD_NEW_TAB_COMPONENT_NAME })
+        if (plusTabIndex != -1) {
+            view.setTabTooltip(plusTabIndex, LocalizationBundle.message("addTab"))
         }
-
-        val currentIndex = if (latestJsonEditor != null) {
-            view.indexOfComponent(latestJsonEditor)
-        } else {
-            1
-        }
-        view.setTabTooltip(currentIndex, LocalizationBundle.message("addTab"))
     }
 
     fun onPlusTabSelected() {
