@@ -59,8 +59,7 @@ class JsonTabsPresenter(
 
     private fun addPlusTab() {
         view.addPlusTab()
-        val plusTabIndex =
-            view.indexOfComponent(view.components.find { it.name == JsonTabsView.ADD_NEW_TAB_COMPONENT_NAME })
+        val plusTabIndex = view.getPlusTabIndex()
         if (plusTabIndex != -1) {
             view.setTabTooltip(plusTabIndex, LocalizationBundle.message("addTab"))
         }
@@ -73,8 +72,7 @@ class JsonTabsPresenter(
     }
 
     fun addNewTabFromPlusTab(content: String = "", fileExtension: String? = null) {
-        val plusTabIndex =
-            view.indexOfComponent(view.components.find { it.name == JsonTabsView.ADD_NEW_TAB_COMPONENT_NAME })
+        val plusTabIndex = view.getPlusTabIndex()
 
         if (plusTabIndex != -1) {
             addNewTabInternal(plusTabIndex, content, fileExtension)
@@ -177,7 +175,7 @@ class JsonTabsPresenter(
 
     fun canCloseCurrentTab(): Boolean {
         val selectedComponent = view.selectedComponent
-        if (selectedComponent == null || selectedComponent.name == JsonTabsView.ADD_NEW_TAB_COMPONENT_NAME) {
+        if (selectedComponent == null || view.isPlusTabComponent(selectedComponent)) {
             return false
         }
 
@@ -185,8 +183,7 @@ class JsonTabsPresenter(
     }
 
     fun isPlusTabSelected(): Boolean {
-        val selectedComponent = view.selectedComponent
-        return selectedComponent != null && selectedComponent.name == JsonTabsView.ADD_NEW_TAB_COMPONENT_NAME
+        return view.isPlusTabComponent(view.selectedComponent)
     }
 
     fun closeCurrentTab(): Boolean {
@@ -199,7 +196,7 @@ class JsonTabsPresenter(
         }
 
         val component = view.getComponentAt(index)
-        if (component == null || component.name == JsonTabsView.ADD_NEW_TAB_COMPONENT_NAME) {
+        if (component == null || view.isPlusTabComponent(component)) {
             return false
         }
 
@@ -229,7 +226,7 @@ class JsonTabsPresenter(
         var count = 0
         for (i in 0 until view.tabCount) {
             val component = view.getComponentAt(i)
-            if (component != null && component.name != JsonTabsView.ADD_NEW_TAB_COMPONENT_NAME) {
+            if (component != null && !view.isPlusTabComponent(component)) {
                 count++
             }
         }
@@ -238,14 +235,11 @@ class JsonTabsPresenter(
 
     fun getCurrentEditor(): JsonEditorView? {
         val currentSelectedComponent = view.selectedComponent
-        if (currentSelectedComponent == null || currentSelectedComponent.name == JsonTabsView.ADD_NEW_TAB_COMPONENT_NAME) {
+        if (currentSelectedComponent == null || view.isPlusTabComponent(currentSelectedComponent)) {
             return null
         }
 
         return tabContexts[currentSelectedComponent]?.editor
-            ?: (currentSelectedComponent as? JPanel)
-                ?.components
-                ?.find { it is JsonEditorView } as? JsonEditorView
     }
 
     fun setOnTabSelectedListener(listener: (JsonEditorView?) -> Unit) {

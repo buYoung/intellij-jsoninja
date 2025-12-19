@@ -10,6 +10,7 @@ import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
@@ -65,45 +66,62 @@ class JsonEditorView(
             fileType = JsonLanguage.INSTANCE.associatedFileType ?: JsonFileType.INSTANCE
         }
 
-        return EditorTextField(document, project, fileType, false, false).apply {
-            addSettingsProvider { editor ->
-                editor.settings.applyEditorSettings()
-                editor.colorsScheme = EditorColorsManager.getInstance().globalScheme
-                editor.backgroundColor = EditorColorsManager.getInstance().globalScheme.defaultBackground
-                editor.highlighter = HighlighterFactory.createHighlighter(project, fileType)
+        return EditorTextField(document, project, fileType, false, false).also { editorField ->
+            configureEditor(editorField, fileType)
+        }
+    }
 
-                editor.isEmbeddedIntoDialogWrapper = true
-                editor.setHorizontalScrollbarVisible(true)
-                editor.setVerticalScrollbarVisible(true)
+    private fun configureEditor(editorField: EditorTextField, fileType: com.intellij.openapi.fileTypes.FileType) {
+        editorField.addSettingsProvider { editor ->
+            editor.settings.applyEditorSettings()
+            applyEditorAppearance(editor, fileType)
+            applyEditorScrollbars(editor)
+            installEditorContextMenu(editor)
+        }
+        editorField.setPlaceholder(PLACEHOLDER_TEXT)
+        editorField.putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
+    }
 
-                // Install context menu handler
-                val actionManager = ActionManager.getInstance()
-                val group = DefaultActionGroup()
+    private fun applyEditorAppearance(
+        editor: EditorEx,
+        fileType: com.intellij.openapi.fileTypes.FileType
+    ) {
+        val globalScheme = EditorColorsManager.getInstance().globalScheme
+        editor.colorsScheme = globalScheme
+        editor.backgroundColor = globalScheme.defaultBackground
+        editor.highlighter = HighlighterFactory.createHighlighter(project, fileType)
+        editor.isEmbeddedIntoDialogWrapper = true
+    }
 
-                val copyAction = actionManager.getAction(IdeActions.ACTION_COPY)
-                if (copyAction != null) group.add(copyAction)
+    private fun applyEditorScrollbars(editor: EditorEx) {
+        editor.setHorizontalScrollbarVisible(true)
+        editor.setVerticalScrollbarVisible(true)
+    }
 
-                val pasteAction = actionManager.getAction(IdeActions.ACTION_PASTE)
-                if (pasteAction != null) group.add(pasteAction)
+    private fun installEditorContextMenu(editor: EditorEx) {
+        val actionManager = ActionManager.getInstance()
+        val group = DefaultActionGroup()
 
-                val copyJsonQueryAction = CopyJsonQueryAction()
-                copyJsonQueryAction.templatePresentation.text = LocalizationBundle.message("action.copy.json.query")
-                copyJsonQueryAction.templatePresentation.description =
-                    LocalizationBundle.message("action.copy.json.query.description")
+        val copyAction = actionManager.getAction(IdeActions.ACTION_COPY)
+        if (copyAction != null) group.add(copyAction)
 
-                if (group.childrenCount > 0) group.addSeparator()
-                group.add(copyJsonQueryAction)
+        val pasteAction = actionManager.getAction(IdeActions.ACTION_PASTE)
+        if (pasteAction != null) group.add(pasteAction)
 
-                if (group.childrenCount > 0) {
-                    PopupHandler.installPopupMenu(
-                        editor.contentComponent,
-                        group,
-                        "com.livteam.jsoninja.action.group.EditorPopup"
-                    )
-                }
-            }
-            setPlaceholder(PLACEHOLDER_TEXT)
-            putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
+        val copyJsonQueryAction = CopyJsonQueryAction()
+        copyJsonQueryAction.templatePresentation.text = LocalizationBundle.message("action.copy.json.query")
+        copyJsonQueryAction.templatePresentation.description =
+            LocalizationBundle.message("action.copy.json.query.description")
+
+        if (group.childrenCount > 0) group.addSeparator()
+        group.add(copyJsonQueryAction)
+
+        if (group.childrenCount > 0) {
+            PopupHandler.installPopupMenu(
+                editor.contentComponent,
+                group,
+                "com.livteam.jsoninja.action.group.EditorPopup"
+            )
         }
     }
 

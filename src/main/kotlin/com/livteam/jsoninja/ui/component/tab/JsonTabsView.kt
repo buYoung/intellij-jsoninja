@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.ui.components.JBTabbedPane
 import com.livteam.jsoninja.LocalizationBundle
 import java.awt.BorderLayout
+import java.awt.Component
 import java.awt.Cursor
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -14,6 +15,7 @@ import javax.swing.JPanel
 class JsonTabsView : JBTabbedPane() {
     private var presenter: JsonTabsPresenter? = null
     private var plusTabMouseListener: MouseAdapter? = null
+    private var plusTabComponent: JComponent? = null
 
     companion object {
         const val ADD_NEW_TAB_COMPONENT_NAME = "addNewTab"
@@ -28,7 +30,7 @@ class JsonTabsView : JBTabbedPane() {
         plusTabMouseListener = object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) {
                 val selectedComponent = this@JsonTabsView.selectedComponent
-                if (selectedComponent?.name == ADD_NEW_TAB_COMPONENT_NAME) {
+                if (isPlusTabComponent(selectedComponent)) {
                     this@JsonTabsView.presenter?.onPlusTabSelected()
                 }
             }
@@ -42,7 +44,17 @@ class JsonTabsView : JBTabbedPane() {
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             toolTipText = LocalizationBundle.message("addTab")
         }
+        plusTabComponent = plusPanel
         addTab("", AllIcons.General.Add, plusPanel)
+    }
+
+    fun getPlusTabIndex(): Int {
+        val component = plusTabComponent ?: return -1
+        return indexOfComponent(component)
+    }
+
+    fun isPlusTabComponent(component: Component?): Boolean {
+        return component != null && component == plusTabComponent
     }
 
     fun setTabTooltip(index: Int, text: String) {
