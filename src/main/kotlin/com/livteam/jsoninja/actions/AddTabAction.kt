@@ -15,7 +15,7 @@ class AddTabAction : AnAction(
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
-        panel.addNewTab()
+        panel.presenter.addNewTab()
     }
 
     override fun update(e: AnActionEvent) {

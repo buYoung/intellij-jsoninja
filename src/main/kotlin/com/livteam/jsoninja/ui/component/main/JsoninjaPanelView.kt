@@ -3,9 +3,6 @@ package com.livteam.jsoninja.ui.component.main
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
-import com.livteam.jsoninja.model.JsonFormatState
-import com.livteam.jsoninja.ui.component.editor.JsonEditorView
-import com.livteam.jsoninja.ui.component.tab.JsonTabsPresenter
 import com.livteam.jsoninja.ui.component.tab.JsonTabsView
 import java.awt.BorderLayout
 import javax.swing.JPanel
@@ -14,9 +11,8 @@ import javax.swing.SwingConstants
 
 class JsoninjaPanelView(private val project: Project) : SimpleToolWindowPanel(false, true), Disposable {
     private val tabsView = JsonTabsView()
-    private val tabsPresenter = JsonTabsPresenter(project, this, tabsView)
 
-    val presenter = JsoninjaPanelPresenter(project, tabsPresenter)
+    val presenter = JsoninjaPanelPresenter(project, this, tabsView)
 
     init {
         setupUI()
@@ -24,7 +20,7 @@ class JsoninjaPanelView(private val project: Project) : SimpleToolWindowPanel(fa
 
     private fun setupUI() {
         // 초기 탭 추가
-        tabsPresenter.setupInitialTabs()
+        presenter.initialize()
 
         // Add content
         val contentPanel = JPanel(BorderLayout()).apply {
@@ -35,81 +31,6 @@ class JsoninjaPanelView(private val project: Project) : SimpleToolWindowPanel(fa
         // Setup toolbar and content
         toolbar = JsoninjaToolbarFactory.create(this)
         setContent(contentPanel)
-    }
-
-    /**
-     * 현재 선택된 탭의 에디터 반환
-     * @return 현재 선택된 탭의 에디터
-     */
-    fun getCurrentEditor(): JsonEditorView? {
-        return presenter.getCurrentEditor()
-    }
-
-    /**
-     * tabs Presenter 반환
-     * @return JsonTabsPresenter 인스턴스
-     */
-    fun getTabsPresenter(): JsonTabsPresenter {
-        return presenter.getTabsPresenter()
-    }
-
-    /**
-     * 새 탭 추가
-     * @param content 초기 내용
-     * @param fileExtension 파일 확장자
-     */
-    fun addNewTab(content: String = "", fileExtension: String? = null) {
-        presenter.addNewTab(content, fileExtension)
-    }
-
-    /**
-     * JSON 포맷 상태 설정
-     * @param state 설정할 JSON 포맷 상태
-     */
-    fun setJsonFormatState(state: JsonFormatState) {
-        presenter.setJsonFormatState(state)
-    }
-
-    /**
-     * 현재 JSON 포맷 상태 반환
-     * @return 현재 JSON 포맷 상태
-     */
-    fun getJsonFormatState(): JsonFormatState {
-        return presenter.getJsonFormatState()
-    }
-
-    /**
-     * 현재 선택된 에디터의 JSON을 지정된 포맷 상태로 포맷팅합니다.
-     *
-     * @param formatState 포맷 상태
-     */
-    fun formatJson(formatState: JsonFormatState) {
-        presenter.formatJson(formatState)
-    }
-
-    /**
-     * 현재 선택된 에디터의 JSON을 기본 설정에 맞춰 포맷합니다.
-     */
-    fun formatJson() {
-        presenter.formatJson()
-    }
-
-    /**
-     * 현재 선택된 에디터의 JSON을 이스케이프 처리합니다.
-     */
-    fun escapeJson() {
-        presenter.escapeJson()
-    }
-
-    /**
-     * 현재 선택된 에디터의 이스케이프 처리된 JSON을 원래대로 되돌립니다.
-     */
-    fun unescapeJson() {
-        presenter.unescapeJson()
-    }
-
-    fun setRandomJsonData(data: String, skipFormatting: Boolean = false) {
-        presenter.setRandomJsonData(data, skipFormatting)
     }
 
     override fun dispose() {

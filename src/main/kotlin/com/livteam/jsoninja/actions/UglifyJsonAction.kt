@@ -17,7 +17,7 @@ class UglifyJsonAction : AnAction(
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
         // UGLIFY는 설정 UI에서 선택할 수 없으므로 기본 포맷 상태는 변경하지 않는다.
-        panel.formatJson(JsonFormatState.UGLIFY)
+        panel.presenter.formatJson(JsonFormatState.UGLIFY)
     }
 
     override fun update(e: AnActionEvent) {

@@ -22,7 +22,7 @@ class CloseTabAction : AnAction(
         val content = toolWindow.contentManager.selectedContent
         val panel = content?.component as? JsoninjaPanelView ?: return
 
-        val presenter = panel.getTabsPresenter()
+        val presenter = panel.presenter.getTabsPresenter()
 
         // 탭 개수에 따라 다른 동작 수행
         val canClose = presenter.canCloseCurrentTab()
@@ -59,7 +59,7 @@ class CloseTabAction : AnAction(
             return
         }
 
-        val presenter = panel.getTabsPresenter()
+        val presenter = panel.presenter.getTabsPresenter()
         val selectedComponent = presenter.getView().selectedComponent
 
         // 현재 선택된 컴포넌트가 "+" 탭이 아닌 경우에만 활성화

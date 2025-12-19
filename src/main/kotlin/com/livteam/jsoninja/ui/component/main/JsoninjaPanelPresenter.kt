@@ -5,14 +5,22 @@ import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
+import com.intellij.openapi.Disposable
 import com.livteam.jsoninja.ui.component.tab.JsonTabsPresenter
+import com.livteam.jsoninja.ui.component.tab.JsonTabsView
 
 class JsoninjaPanelPresenter(
     private val project: Project,
-    private val tabsPresenter: JsonTabsPresenter,
+    parentDisposable: Disposable,
+    tabsView: JsonTabsView
 ) {
+    private val tabsPresenter = JsonTabsPresenter(project, parentDisposable, tabsView)
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val helperService = project.getService(JsonHelperService::class.java)
+
+    fun initialize() {
+        tabsPresenter.setupInitialTabs()
+    }
 
     fun getCurrentEditor(): JsonEditorView? = tabsPresenter.getCurrentEditor()
 

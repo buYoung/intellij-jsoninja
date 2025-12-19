@@ -15,7 +15,7 @@ class PrettifyJsonAction : AnAction(
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
-        panel.formatJson()
+        panel.presenter.formatJson()
     }
 
     override fun update(e: AnActionEvent) {

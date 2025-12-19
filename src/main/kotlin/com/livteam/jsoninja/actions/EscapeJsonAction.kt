@@ -15,7 +15,7 @@ class EscapeJsonAction : AnAction(
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
-        panel.escapeJson()
+        panel.presenter.escapeJson()
     }
 
     override fun update(e: AnActionEvent) {

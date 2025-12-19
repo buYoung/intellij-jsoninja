@@ -23,6 +23,6 @@ object JsonHelperUtils {
         val content = toolWindow.contentManager.selectedContent ?: return null
         val component = content.component as? JsoninjaPanelView ?: return null
 
-        return component.getCurrentEditor()?.getText()
+        return component.presenter.getCurrentEditor()?.getText()
     }
 }
