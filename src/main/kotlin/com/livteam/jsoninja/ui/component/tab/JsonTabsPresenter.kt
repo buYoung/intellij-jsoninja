@@ -47,10 +47,8 @@ class JsonTabsPresenter(
 
     fun setupInitialTabs() {
         invokeLater {
-            runWriteAction {
-                addNewTabInternal(0)
-                addPlusTab()
-            }
+            addNewTabInternal(0)
+            addPlusTab()
         }
     }
 
@@ -65,9 +63,7 @@ class JsonTabsPresenter(
 
     fun onPlusTabSelected() {
         invokeLater {
-            runWriteAction {
-                addNewTabFromPlusTab()
-            }
+            addNewTabFromPlusTab()
         }
     }
 
@@ -101,6 +97,7 @@ class JsonTabsPresenter(
         Disposer.register(tabDisposable, editor)
 
         val jsonQueryPresenter = JsonQueryPresenter(project, model)
+        Disposer.register(tabDisposable, jsonQueryPresenter)
         val jmesComponent = jsonQueryPresenter.getComponent().apply {
             border = JBUI.Borders.emptyTop(3)
         }
@@ -158,11 +155,9 @@ class JsonTabsPresenter(
 
     fun onTabCloseClicked(tabContentComponent: Component) {
         invokeLater {
-            runWriteAction {
-                val closableTabIndex = view.indexOfComponent(tabContentComponent)
-                if (closableTabIndex == -1) return@runWriteAction
-                closeTabAt(closableTabIndex)
-            }
+            val closableTabIndex = view.indexOfComponent(tabContentComponent)
+            if (closableTabIndex == -1) return@invokeLater
+            closeTabAt(closableTabIndex)
         }
     }
 

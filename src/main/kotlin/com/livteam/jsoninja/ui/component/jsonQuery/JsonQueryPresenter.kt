@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.ui.component.jsonQuery
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.invokeLater
@@ -17,12 +18,15 @@ import javax.swing.JComponent
  * JMESPath 검색 로직을 담당하는 Presenter
  * 사용자 입력을 받아 비즈니스 로직을 처리하고 View를 업데이트
  */
-class JsonQueryPresenter(private val project: Project, private val model: JsonQueryModel) {
+class JsonQueryPresenter(private val project: Project, private val model: JsonQueryModel) : Disposable {
     private val LOG = logger<JsonQueryPresenter>()
     private val view = JsonQueryView()
 
     private val jsonQueryService = project.getService(JsonQueryService::class.java)
     private val jsonFormatterService = project.getService(JsonFormatterService::class.java)
+
+    @Volatile
+    private var isDisposed = false
 
     private var onSearchCallback: ((String, String) -> Unit)? = null
     private var onBeforeSearchCallback: (() -> Unit)? = null
@@ -60,6 +64,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
      * JMESPath 검색 실행
      */
     private fun performSearch(query: String) {
+        if (isDisposed) return
         val originalJsonTrim = model.originalJson.trim()
         val isOriginalJsonEmpty = originalJsonTrim.isBlank() || originalJsonTrim.isEmpty()
         // 검색 전 콜백 호출
@@ -80,6 +85,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
         // 백그라운드 스레드에서 쿼리 실행
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
+                if (isDisposed) return@executeOnPooledThread
                 // 쿼리 유효성 먼저 검사
                 if (!jsonQueryService.isValidExpression(query)) {
                     LOG.warn("유효하지 않은 쿼리 표현식: $query")
@@ -90,6 +96,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
 
                 // UI 업데이트는 EDT에서 수행
                 invokeLater(ModalityState.any()) {
+                    if (isDisposed) return@invokeLater
                     if (result == null) {
                         return@invokeLater
                     }
@@ -140,6 +147,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
      * @param json 원본 JSON 문자열
      */
     fun setOriginalJson(json: String) {
+        if (isDisposed) return
         // 원본 JSON이 변경되지 않았으면 아무 작업도 하지 않음
         if (model.originalJson == json) {
             return
@@ -171,5 +179,9 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
      */
     fun getComponent(): JComponent {
         return view.component
+    }
+
+    override fun dispose() {
+        isDisposed = true
     }
 }
