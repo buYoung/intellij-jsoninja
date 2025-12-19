@@ -4,7 +4,6 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
@@ -21,6 +20,7 @@ class JsonTabsPresenter(
     private var tabCounter = 1
     private var onTabSelectedListener: ((JsonEditorView?) -> Unit)? = null
     private var onTabContentChangedListener: ((String) -> Unit)? = null
+    private var onLastJsonTabClosedListener: (() -> Unit)? = null
 
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val helperService = project.getService(JsonHelperService::class.java)
@@ -141,7 +141,7 @@ class JsonTabsPresenter(
         if (isLastJsonTab) {
             tabCounter = 1
             addNewTabInternal(0)
-            ToolWindowManager.getInstance(project).getToolWindow("JSONinja")?.hide()
+            onLastJsonTabClosedListener?.invoke()
         } else if (view.tabCount > 0) {
             view.selectedIndex = if (nextSelectedIndex < view.tabCount) nextSelectedIndex else view.tabCount - 1
         }
@@ -180,6 +180,10 @@ class JsonTabsPresenter(
 
     fun setOnTabContentChangedListener(listener: (String) -> Unit) {
         this.onTabContentChangedListener = listener
+    }
+
+    fun setOnLastJsonTabClosedListener(listener: () -> Unit) {
+        this.onLastJsonTabClosedListener = listener
     }
 
     fun getView(): JsonTabsView {

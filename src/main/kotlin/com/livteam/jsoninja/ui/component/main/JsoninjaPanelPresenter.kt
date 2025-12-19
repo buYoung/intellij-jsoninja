@@ -1,13 +1,14 @@
 package com.livteam.jsoninja.ui.component.main
 
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.Disposable
+import com.livteam.jsoninja.ui.component.tab.JsonTabsPresenter
+import com.livteam.jsoninja.ui.component.tab.JsonTabsView
+import com.intellij.openapi.wm.ToolWindowManager
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
-import com.intellij.openapi.Disposable
-import com.livteam.jsoninja.ui.component.tab.JsonTabsPresenter
-import com.livteam.jsoninja.ui.component.tab.JsonTabsView
 
 class JsoninjaPanelPresenter(
     private val project: Project,
@@ -17,6 +18,12 @@ class JsoninjaPanelPresenter(
     private val tabsPresenter = JsonTabsPresenter(project, parentDisposable, tabsView)
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val helperService = project.getService(JsonHelperService::class.java)
+
+    init {
+        tabsPresenter.setOnLastJsonTabClosedListener {
+            ToolWindowManager.getInstance(project).getToolWindow("JSONinja")?.hide()
+        }
+    }
 
     fun initialize() {
         tabsPresenter.setupInitialTabs()
