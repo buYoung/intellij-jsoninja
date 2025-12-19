@@ -1,17 +1,13 @@
 package com.livteam.jsoninja.ui.component.main
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
-import com.livteam.jsoninja.actions.*
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import com.livteam.jsoninja.ui.component.tab.JsonTabsPresenter
 import com.livteam.jsoninja.ui.component.tab.JsonTabsView
 import java.awt.BorderLayout
-import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JSeparator
 import javax.swing.SwingConstants
@@ -20,7 +16,7 @@ class JsoninjaPanelView(private val project: Project) : SimpleToolWindowPanel(fa
     private val tabsView = JsonTabsView()
     private val tabsPresenter = JsonTabsPresenter(project, this, tabsView)
 
-    val presenter = JsoninjaPanelPresenter(project, this, tabsPresenter)
+    val presenter = JsoninjaPanelPresenter(project, tabsPresenter)
 
     init {
         setupUI()
@@ -37,38 +33,8 @@ class JsoninjaPanelView(private val project: Project) : SimpleToolWindowPanel(fa
         }
 
         // Setup toolbar and content
-        toolbar = createToolbar()
+        toolbar = JsoninjaToolbarFactory.create(this)
         setContent(contentPanel)
-    }
-
-    private fun createToolbar(): JComponent {
-        val actionGroup = DefaultActionGroup().apply {
-            isPopup = true
-
-            // 기본 액션 추가
-            add(AddTabAction())
-            add(OpenJsonFileAction())
-
-            addSeparator()
-
-            // JSON 변환 관련 액션 추가
-            add(PrettifyJsonAction())
-            add(UglifyJsonAction())
-            addSeparator()
-            add(EscapeJsonAction())
-            add(UnescapeJsonAction())
-            addSeparator()
-            add(GenerateRandomJsonAction())
-            // JSON Diff 액션 추가
-            add(ShowJsonDiffAction())
-        }
-
-        val actionToolbar = ActionManager.getInstance()
-            .createActionToolbar("JsonHelperToolbar", actionGroup, true)
-
-        actionToolbar.targetComponent = this
-
-        return actionToolbar.component
     }
 
     /**
@@ -144,28 +110,6 @@ class JsoninjaPanelView(private val project: Project) : SimpleToolWindowPanel(fa
 
     fun setRandomJsonData(data: String, skipFormatting: Boolean = false) {
         presenter.setRandomJsonData(data, skipFormatting)
-    }
-
-    /**
-     * 현재 에디터의 텍스트를 처리하는 공통 메서드 (Presenter에서 호출)
-     *
-     * @param processor 문자열 처리 함수
-     */
-    fun processEditorText(processor: (String) -> String) {
-        val currentEditor = getCurrentEditor() ?: return
-        val jsonText = currentEditor.getText()
-        val trimedJsonText = jsonText.trim()
-        val isJsonTextEmpty = trimedJsonText.isBlank() || trimedJsonText.isEmpty()
-
-        if (isJsonTextEmpty) return
-
-        val processedJson = processor(jsonText)
-
-        currentEditor.setText(processedJson)
-    }
-
-    fun updateEditorText(editor: JsonEditorView, text: String) {
-        editor.setText(text)
     }
 
     override fun dispose() {

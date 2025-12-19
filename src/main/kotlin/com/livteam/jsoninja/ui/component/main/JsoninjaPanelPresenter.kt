@@ -9,7 +9,6 @@ import com.livteam.jsoninja.ui.component.tab.JsonTabsPresenter
 
 class JsoninjaPanelPresenter(
     private val project: Project,
-    private val view: JsoninjaPanelView,
     private val tabsPresenter: JsonTabsPresenter,
 ) {
     private val formatterService = project.getService(JsonFormatterService::class.java)
@@ -31,7 +30,7 @@ class JsoninjaPanelPresenter(
 
     fun formatJson(formatState: JsonFormatState? = null) {
         val state = formatState ?: getJsonFormatState()
-        view.processEditorText { jsonText ->
+        processCurrentEditorText { jsonText ->
             val textToFormat = if (formatterService.containsEscapeCharacters(jsonText)) {
                 formatterService.fullyUnescapeJson(jsonText)
             } else {
@@ -42,11 +41,11 @@ class JsoninjaPanelPresenter(
     }
 
     fun escapeJson() {
-        view.processEditorText { jsonText -> formatterService.escapeJson(jsonText) }
+        processCurrentEditorText { jsonText -> formatterService.escapeJson(jsonText) }
     }
 
     fun unescapeJson() {
-        view.processEditorText { jsonText -> formatterService.unescapeJson(jsonText) }
+        processCurrentEditorText { jsonText -> formatterService.unescapeJson(jsonText) }
     }
 
     fun setRandomJsonData(data: String, skipFormatting: Boolean = false) {
@@ -58,6 +57,19 @@ class JsoninjaPanelPresenter(
             formatterService.formatJson(data, getJsonFormatState())
         }
 
-        view.updateEditorText(currentEditor, processedJson)
+        currentEditor.setText(processedJson)
+    }
+
+    private fun processCurrentEditorText(processor: (String) -> String) {
+        val currentEditor = getCurrentEditor() ?: return
+        val jsonText = currentEditor.getText()
+        val trimmedJsonText = jsonText.trim()
+        val isJsonTextEmpty = trimmedJsonText.isBlank() || trimmedJsonText.isEmpty()
+
+        if (isJsonTextEmpty) return
+
+        val processedJson = processor(jsonText)
+
+        currentEditor.setText(processedJson)
     }
 }

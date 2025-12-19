@@ -2,7 +2,6 @@ package com.livteam.jsoninja.ui.component.tab
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.invokeLater
-import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindowManager
@@ -29,11 +28,17 @@ class JsonTabsPresenter(
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val helperService = project.getService(JsonHelperService::class.java)
 
-    private val tabDisposables = mutableMapOf<Component, Disposable>()
+    private val tabContexts = mutableMapOf<Component, TabContext>()
 
     companion object {
         private const val TAB_TITLE_PREFIX = "JSON "
     }
+
+    private data class TabContext(
+        val panel: JPanel,
+        val editor: JsonEditorView,
+        val disposable: Disposable
+    )
 
     init {
         view.setPresenter(this)
@@ -41,7 +46,7 @@ class JsonTabsPresenter(
             onTabSelectedListener?.invoke(getCurrentEditor())
         }
         Disposer.register(parentDisposable) {
-            tabDisposables.clear()
+            tabContexts.clear()
         }
     }
 
@@ -79,14 +84,26 @@ class JsonTabsPresenter(
     }
 
     private fun addNewTabInternal(index: Int, content: String = "", fileExtension: String? = null): JsonEditorView {
+        val title = "$TAB_TITLE_PREFIX${tabCounter++}"
+        val tabContext = createTabContext(title, content, fileExtension)
+
+        tabContexts[tabContext.panel] = tabContext
+
+        view.insertEditorTab(title, tabContext.panel, index)
+        tabContext.panel.border = JBUI.Borders.empty()
+
+        view.selectedIndex = index
+
+        return tabContext.editor
+    }
+
+    private fun createTabContext(title: String, content: String, fileExtension: String?): TabContext {
         val model = JsonQueryModel()
         val editor = createEditor(model, fileExtension)
 
         if (content.isNotEmpty()) {
             editor.setText(content)
         }
-
-        val title = "$TAB_TITLE_PREFIX${tabCounter++}"
 
         val tabContentPanel = JPanel(BorderLayout(0, 0)).apply {
             name = title
@@ -107,14 +124,11 @@ class JsonTabsPresenter(
 
         setupJmesPathPresenter(jsonQueryPresenter, editor, initialJson = content)
 
-        tabDisposables[tabContentPanel] = tabDisposable
-
-        view.insertEditorTab(title, tabContentPanel, index)
-        tabContentPanel.border = JBUI.Borders.empty()
-
-        view.selectedIndex = index
-
-        return editor
+        return TabContext(
+            panel = tabContentPanel,
+            editor = editor,
+            disposable = tabDisposable
+        )
     }
 
     private fun createEditor(model: JsonQueryModel, fileExtension: String? = null): JsonEditorView {
@@ -208,7 +222,7 @@ class JsonTabsPresenter(
 
     private fun disposeTabComponent(component: Component?) {
         if (component == null) return
-        tabDisposables.remove(component)?.let { Disposer.dispose(it) }
+        tabContexts.remove(component)?.let { Disposer.dispose(it.disposable) }
     }
 
     fun getJsonTabCount(): Int {
@@ -228,11 +242,10 @@ class JsonTabsPresenter(
             return null
         }
 
-        if (currentSelectedComponent is JPanel) {
-            val editor = currentSelectedComponent.components.find { it is JsonEditorView } as? JsonEditorView
-            return editor
-        }
-        return null
+        return tabContexts[currentSelectedComponent]?.editor
+            ?: (currentSelectedComponent as? JPanel)
+                ?.components
+                ?.find { it is JsonEditorView } as? JsonEditorView
     }
 
     fun setOnTabSelectedListener(listener: (JsonEditorView?) -> Unit) {
