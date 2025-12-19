@@ -8,8 +8,8 @@ import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import com.livteam.jsoninja.ui.component.jsonQuery.JsonQueryPresenter
-import com.livteam.jsoninja.ui.component.model.JsonQueryModel
-import com.livteam.jsoninja.ui.component.model.TabContext
+import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
+import com.livteam.jsoninja.ui.component.model.TabUiState
 import java.awt.BorderLayout
 import javax.swing.JPanel
 
@@ -24,8 +24,8 @@ class JsonTabContextFactory(
         content: String,
         fileExtension: String?,
         onTabContentChangedListener: ((String) -> Unit)?
-    ): TabContext {
-        val model = JsonQueryModel()
+    ): TabUiState {
+        val model = JsonQueryUiState()
         val editor = createEditor(model, fileExtension, onTabContentChangedListener)
 
         if (content.isNotEmpty()) {
@@ -51,7 +51,7 @@ class JsonTabContextFactory(
 
         setupJmesPathPresenter(jsonQueryPresenter, editor, initialJson = content)
 
-        return TabContext(
+        return TabUiState(
             panel = tabContentPanel,
             editor = editor,
             disposable = tabDisposable
@@ -59,7 +59,7 @@ class JsonTabContextFactory(
     }
 
     private fun createEditor(
-        model: JsonQueryModel,
+        model: JsonQueryUiState,
         fileExtension: String? = null,
         onTabContentChangedListener: ((String) -> Unit)?
     ): JsonEditorView {

@@ -1,9 +1,9 @@
 package com.livteam.jsoninja.ui.component.model
 
 /**
- * JsonQuery 관련 데이터를 관리하는 모델
+ * JsonQuery 관련 데이터를 관리하는 UI 상태
  */
-class JsonQueryModel {
+class JsonQueryUiState {
     var originalJson: String = ""
 
     var lastQuery: String = ""
@@ -15,4 +15,3 @@ class JsonQueryModel {
         return originalJson.isNotEmpty()
     }
 }
-

@@ -8,7 +8,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonQueryService
-import com.livteam.jsoninja.ui.component.model.JsonQueryModel
+import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.KeyEvent.VK_ENTER
@@ -18,7 +18,7 @@ import javax.swing.JComponent
  * JMESPath 검색 로직을 담당하는 Presenter
  * 사용자 입력을 받아 비즈니스 로직을 처리하고 View를 업데이트
  */
-class JsonQueryPresenter(private val project: Project, private val model: JsonQueryModel) : Disposable {
+class JsonQueryPresenter(private val project: Project, private val model: JsonQueryUiState) : Disposable {
     private val LOG = logger<JsonQueryPresenter>()
     private val view = JsonQueryView()
 

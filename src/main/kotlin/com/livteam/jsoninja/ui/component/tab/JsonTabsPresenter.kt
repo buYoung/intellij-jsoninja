@@ -9,7 +9,7 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
-import com.livteam.jsoninja.ui.component.model.TabContext
+import com.livteam.jsoninja.ui.component.model.TabUiState
 import java.awt.Component
 
 class JsonTabsPresenter(
@@ -31,7 +31,7 @@ class JsonTabsPresenter(
         helperService = helperService
     )
 
-    private val tabContexts = mutableMapOf<Component, TabContext>()
+    private val tabContexts = mutableMapOf<Component, TabUiState>()
 
     companion object {
         private const val TAB_TITLE_PREFIX = "JSON "
