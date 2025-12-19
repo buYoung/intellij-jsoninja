@@ -1,4 +1,4 @@
-package com.livteam.jsoninja.ui.dialogs
+package com.livteam.jsoninja.ui.dialog
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
