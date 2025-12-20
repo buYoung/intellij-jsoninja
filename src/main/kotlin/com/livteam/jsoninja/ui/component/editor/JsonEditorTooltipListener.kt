@@ -9,7 +9,7 @@ import com.intellij.openapi.util.SystemInfo
 import com.intellij.psi.PsiDocumentManager
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
-import com.livteam.jsoninja.util.JsonPathHelper
+import com.livteam.jsoninja.utils.JsonPathHelper
 import javax.swing.JComponent
 import javax.swing.SwingUtilities
 

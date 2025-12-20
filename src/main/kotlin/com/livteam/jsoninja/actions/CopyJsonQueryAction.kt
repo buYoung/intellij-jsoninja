@@ -7,7 +7,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.psi.PsiDocumentManager
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
-import com.livteam.jsoninja.util.JsonPathHelper
+import com.livteam.jsoninja.utils.JsonPathHelper
 import java.awt.datatransfer.StringSelection
 
 class CopyJsonQueryAction : AnAction() {
