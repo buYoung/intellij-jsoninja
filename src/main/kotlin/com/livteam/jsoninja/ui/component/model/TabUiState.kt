@@ -4,7 +4,7 @@ import com.intellij.openapi.Disposable
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import javax.swing.JPanel
 
-data class TabContext(
+data class TabUiState(
     val panel: JPanel,
     val editor: JsonEditorView,
     val disposable: Disposable

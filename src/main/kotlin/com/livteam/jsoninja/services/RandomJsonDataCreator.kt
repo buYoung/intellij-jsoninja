@@ -2,8 +2,8 @@ package com.livteam.jsoninja.services
 
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.intellij.openapi.components.service
-import com.livteam.jsoninja.ui.dialog.JsonGenerationConfig
-import com.livteam.jsoninja.ui.dialog.RootType
+import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
+import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonRootType
 import net.datafaker.Faker
 import java.util.Locale
 import java.util.Locale.getDefault
@@ -15,7 +15,7 @@ private enum class ArrayElementType {
     STRING, NUMBER_INT, NUMBER_DOUBLE, BOOLEAN, DATE, UUID, OBJECT, ARRAY // 필요에 따라 추가 가능
 }
 
-class RandomJsonDataCreator (
+class RandomJsonDataCreator(
     private val defaultMaxObjectProperties: Int = 5,
     private val defaultMaxArrayElements: Int = 5,
     private val nullProbability: Double = 0.1,
@@ -40,9 +40,14 @@ class RandomJsonDataCreator (
      */
     fun generateConfiguredJsonString(config: JsonGenerationConfig, prettyPrint: Boolean = true): String {
         val maxDepth = config.maxDepth
-        val generatedData = when (config.rootType) {
-            RootType.OBJECT -> generateSpecificObject(0, config.objectPropertyCount, maxDepth)
-            RootType.ARRAY_OF_OBJECTS -> generateSpecificArrayOfObjects(0, config.arrayElementCount, config.propertiesPerObjectInArray, maxDepth)
+        val generatedData = when (config.jsonRootType) {
+            JsonRootType.OBJECT -> generateSpecificObject(0, config.objectPropertyCount, maxDepth)
+            JsonRootType.ARRAY_OF_OBJECTS -> generateSpecificArrayOfObjects(
+                0,
+                config.arrayElementCount,
+                config.propertiesPerObjectInArray,
+                maxDepth
+            )
         }
         // ... (ObjectMapper 로직 동일)
         val jsonString = if (prettyPrint) {
@@ -54,7 +59,7 @@ class RandomJsonDataCreator (
                 .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .writeValueAsString(generatedData)
         }
-        
+
         // JSON5 특징 추가 (주석, trailing comma)
         return if (config.isJson5 && prettyPrint) {
             addJson5Features(jsonString)
@@ -91,7 +96,9 @@ class RandomJsonDataCreator (
 
         val map = mutableMapOf<String, Any?>()
         // 키 생성: 공통 키 + 개발 친화적 키 + Faker 단어 혼합
-        val potentialKeys = (commonKeys + List(propertyCount) { generateDeveloperFriendlyKey() } + List(propertyCount) { faker.lorem().word() })
+        val potentialKeys = (commonKeys + List(propertyCount) { generateDeveloperFriendlyKey() } + List(propertyCount) {
+            faker.lorem().word()
+        })
             .distinct()
             .shuffled()
             .take(propertyCount) // 정확히 propertyCount 만큼 키 선택
@@ -106,7 +113,12 @@ class RandomJsonDataCreator (
     /**
      * 지정된 길이의 배열 생성 (내부 객체 생성 시 개선된 로직 사용)
      */
-    private fun generateSpecificArrayOfObjects(currentDepth: Int, arrayLength: Int, propertiesPerObject: Int, maxDepth: Int): List<Map<String, Any?>> {
+    private fun generateSpecificArrayOfObjects(
+        currentDepth: Int,
+        arrayLength: Int,
+        propertiesPerObject: Int,
+        maxDepth: Int
+    ): List<Map<String, Any?>> {
         if (currentDepth >= maxDepth) return listOf(mapOf("depth_limit_reached" to currentDepth))
 
         val list = mutableListOf<Map<String, Any?>>()
@@ -135,6 +147,7 @@ class RandomJsonDataCreator (
                     generateConsistentTypedArray(currentDepth, maxDepth)
                 }
             }
+
             else -> generateDeveloperFriendlyPrimitive()
         }
     }
@@ -148,7 +161,9 @@ class RandomJsonDataCreator (
         val map = mutableMapOf<String, Any?>()
         val numProperties = Random.nextInt(1, defaultMaxObjectProperties + 1)
         // 키 생성: 공통 키 + 개발 친화적 키 + Faker 단어 혼합
-        val potentialKeys = (commonKeys + List(numProperties) { generateDeveloperFriendlyKey() } + List(numProperties) { faker.lorem().word() })
+        val potentialKeys = (commonKeys + List(numProperties) { generateDeveloperFriendlyKey() } + List(numProperties) {
+            faker.lorem().word()
+        })
             .distinct()
             .shuffled()
             .take(numProperties)
@@ -216,7 +231,8 @@ class RandomJsonDataCreator (
             ArrayElementType.NUMBER_INT -> faker.number().numberBetween(1, 100000) // 정수 생성
             ArrayElementType.NUMBER_DOUBLE -> faker.number().randomDouble(2, 0, 5000) // 실수 생성
             ArrayElementType.BOOLEAN -> faker.bool().bool() // 불리언 생성
-            ArrayElementType.DATE -> faker.timeAndDate().past(365 * 2, TimeUnit.DAYS, "YYYY-MM-dd mm:hh:ss.SSS") // ISO 날짜 생성
+            ArrayElementType.DATE -> faker.timeAndDate()
+                .past(365 * 2, TimeUnit.DAYS, "YYYY-MM-dd mm:hh:ss.SSS") // ISO 날짜 생성
             ArrayElementType.UUID -> faker.internet().uuid() // UUID 생성
             ArrayElementType.OBJECT -> generateRandomNestedObject(currentDepth, maxDepth) // 중첩 객체 생성 (재귀)
             ArrayElementType.ARRAY -> generateConsistentTypedArray(currentDepth, maxDepth) // 중첩 배열 생성 (재귀, 타입 일관성 유지)
@@ -270,15 +286,15 @@ class RandomJsonDataCreator (
     private fun addJson5Features(jsonString: String): String {
         val lines = jsonString.lines().toMutableList()
         val result = mutableListOf<String>()
-        
+
         // 상단에 JSON5 주석 추가
         result.add("// Generated JSON5 Data")
         result.add("// Supports comments, trailing commas, and unquoted keys")
-        
+
         for (i in lines.indices) {
             val line = lines[i]
             val trimmed = line.trim()
-            
+
             // 객체나 배열의 마지막 요소에 trailing comma 추가
             if (i < lines.size - 1) {
                 val nextTrimmed = lines[i + 1].trim()
@@ -287,12 +303,13 @@ class RandomJsonDataCreator (
                 if ((nextTrimmed.startsWith("}") || nextTrimmed.startsWith("]"))
                     && !trimmed.endsWith(",")
                     && !trimmed.endsWith("{")
-                    && !trimmed.endsWith("[")) {
+                    && !trimmed.endsWith("[")
+                ) {
                     result.add(line + ",")
                     continue
                 }
             }
-            
+
             // 일부 속성에 인라인 주석 추가 (랜덤하게)
             if (trimmed.contains(":") && Random.nextDouble() < 0.15) {
                 result.add("$line  // ${generateRandomComment()}")
@@ -300,10 +317,10 @@ class RandomJsonDataCreator (
                 result.add(line)
             }
         }
-        
+
         return result.joinToString("\n")
     }
-    
+
     /**
      * 랜덤 주석 문구 생성 (Faker 활용)
      */

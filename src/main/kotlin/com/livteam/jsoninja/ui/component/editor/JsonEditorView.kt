@@ -19,7 +19,7 @@ import com.intellij.ui.EditorTextField
 import com.intellij.ui.PopupHandler
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.actions.CopyJsonQueryAction
-import com.livteam.jsoninja.ui.component.model.JsonQueryModel
+import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 import java.awt.BorderLayout
 import javax.swing.JPanel
 
@@ -28,7 +28,7 @@ import javax.swing.JPanel
  */
 class JsonEditorView(
     private val project: Project,
-    private val model: JsonQueryModel,
+    private val model: JsonQueryUiState,
     private val fileExtension: String? = null,
     private val documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
 ) : JPanel(), Disposable {

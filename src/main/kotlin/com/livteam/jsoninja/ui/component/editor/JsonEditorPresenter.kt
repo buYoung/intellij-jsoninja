@@ -6,12 +6,12 @@ import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 
-import com.livteam.jsoninja.ui.component.model.JsonQueryModel
+import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 
 class JsonEditorPresenter(
     private val project: Project,
     private val view: JsonEditorView,
-    private val model: JsonQueryModel
+    private val model: JsonQueryUiState
 ) {
     private var onContentChangeCallback: ((String) -> Unit)? = null
     var isSettingText = false

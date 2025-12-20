@@ -23,7 +23,7 @@ import com.intellij.util.Alarm
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
-import com.livteam.jsoninja.ui.dialogs.LargeFileWarningDialog
+import com.livteam.jsoninja.ui.dialog.LargeFileWarningDialog
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean

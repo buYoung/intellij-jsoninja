@@ -6,7 +6,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.services.RandomJsonDataCreator // 이 서비스가 존재하거나 수정될 것이라고 가정합니다.
-import com.livteam.jsoninja.ui.dialog.GenerateJsonDialog
+import com.livteam.jsoninja.ui.dialog.generateJson.GenerateJsonDialog
 
 class GenerateRandomJsonAction : AnAction(
     LocalizationBundle.message("action.generate.random.json.text"),
