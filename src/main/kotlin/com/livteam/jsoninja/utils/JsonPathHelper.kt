@@ -1,4 +1,4 @@
-package com.livteam.jsoninja.util
+package com.livteam.jsoninja.utils
 
 import com.intellij.json.psi.*
 import com.intellij.openapi.util.text.StringUtil
