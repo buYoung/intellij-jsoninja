@@ -4,7 +4,7 @@
 
 ### 1.1 필수 요구사항
 - JDK 17 이상
-- Kotlin 1.8 이상
+- Kotlin 2.1 이상
 - IntelliJ IDEA (Community 또는 Ultimate)
 - Gradle 8.0 이상
 
@@ -22,13 +22,23 @@
 intellij-jsoninja/
 ├── src/
 │   ├── main/
-│   │   ├── kotlin/           # 소스 코드
-│   │   ├── resources/        # 리소스 파일
-│   │   └── META-INF/         # 플러그인 설정
-│   └── test/                 # 테스트 코드
-├── docs/                     # 문서
-├── gradle/                   # Gradle 래퍼
-└── build.gradle.kts         # Gradle 빌드 스크립트
+│   │   ├── kotlin/com/livteam/jsoninja/
+│   │   │   ├── actions/          # IDE 액션 (메뉴, 단축키 등)
+│   │   │   ├── diff/             # JSON Diff 기능
+│   │   │   ├── extensions/       # IDE 확장 포인트
+│   │   │   ├── icons/            # 아이콘 리소스 연결
+│   │   │   ├── listeners/        # 프로젝트/애플리케이션 리스너
+│   │   │   ├── model/            # 데이터 모델 및 Enum
+│   │   │   ├── services/         # 핵심 비즈니스 로직
+│   │   │   ├── settings/         # 설정 관리
+│   │   │   ├── ui/               # UI 컴포넌트 (ToolWindow, Dialog 등)
+│   │   │   └── utils/            # 유틸리티 함수
+│   │   ├── resources/            # 리소스 파일 (아이콘, 메시지 번들 등)
+│   │   └── META-INF/             # 플러그인 설정 (plugin.xml)
+│   └── test/                     # 테스트 코드
+├── docs/                         # 문서
+├── gradle/                       # Gradle 래퍼
+└── build.gradle.kts             # Gradle 빌드 스크립트
 ```
 
 ## 3. 코딩 컨벤션
@@ -43,55 +53,60 @@ intellij-jsoninja/
 - 함수/변수: camelCase
 - 상수: UPPER_SNAKE_CASE
 - 패키지: lowerCamelCase
+- 서비스 클래스: `*Service` (예: `JsonFormatterService`)
+- 액션 클래스: `*Action` (예: `JsonPrettifyAction`)
 
 ## 4. 기능 구현 가이드
 
-### 4.1 JSON Prettify
+주요 로직은 `services` 패키지 내의 서비스 클래스들이 담당합니다. `Project` 레벨의 서비스로 등록되어 있습니다.
+
+### 4.1 JSON Formatting (Prettify/Uglify)
+`JsonFormatterService`를 사용하여 JSON을 포맷팅합니다.
+
 ```kotlin
-class JsonPrettifier {
-    fun prettify(json: String): String {
-        // 1. JSON 파싱
-        // 2. 들여쓰기 적용
-        // 3. 포맷팅된 문자열 반환
-    }
-}
+val service = project.service<JsonFormatterService>()
+
+// Prettify (기본 설정)
+val prettyJson = service.formatJson(jsonString, JsonFormatState.PRETTIFY)
+
+// Prettify (Compact Arrays)
+val compactJson = service.formatJson(jsonString, JsonFormatState.PRETTIFY_COMPACT)
+
+// Uglify (Minify)
+val uglyJson = service.formatJson(jsonString, JsonFormatState.UGLIFY)
 ```
 
-### 4.2 JSON Uglify
+### 4.2 JSON Escape/Unescape
+`JsonFormatterService`에서 이스케이프 처리를 담당합니다.
+
 ```kotlin
-class JsonUglifier {
-    fun uglify(json: String): String {
-        // 1. JSON 파싱
-        // 2. 공백 제거
-        // 3. 한 줄로 변환
-    }
-}
+val service = project.service<JsonFormatterService>()
+
+// Escape
+val escapedJson = service.escapeJson(jsonString)
+
+// Unescape
+val unescapedJson = service.unescapeJson(escapedJsonString)
 ```
 
-### 4.3 JSON Escape/Unescape
-```kotlin
-class JsonEscapeProcessor {
-    fun escape(json: String): String {
-        // 특수 문자 이스케이프 처리
-    }
+### 4.3 JSON Query (JMESPath/JsonPath)
+`JsonQueryService`를 통해 JSON 데이터를 쿼리합니다. 쿼리 방식(Jayway/JMESPath)은 설정에 따릅니다.
 
-    fun unescape(json: String): String {
-        // 이스케이프된 문자 복원
-    }
-}
+```kotlin
+val queryService = project.service<JsonQueryService>()
+val result = queryService.query(jsonString, "$.store.book[*].author") // 결과 JSON 문자열 반환 (실패 시 null)
 ```
 
 ## 5. 테스트 작성 가이드
 
 ### 5.1 단위 테스트
-- JUnit 5 사용
+- JUnit 4 사용
 - 각 기능별 테스트 클래스 작성
-- 테스트 케이스 명명: should_ExpectedBehavior_When_StateUnderTest
+- 테스트 케이스 명명: `should_ExpectedBehavior_When_StateUnderTest` 또는 한글 명명 허용
 
 ### 5.2 통합 테스트
 - 플러그인 통합 테스트 프레임워크 사용
-- UI 요소 테스트
-- 실제 IDE 환경에서의 동작 테스트
+- `src/test` 디렉토리 내에 위치
 
 ## 6. 빌드 및 배포
 
@@ -100,7 +115,7 @@ class JsonEscapeProcessor {
 ./gradlew build
 ```
 
-### 6.2 플러그인 실행
+### 6.2 플러그인 실행 (샌드박스)
 ```bash
 ./gradlew runIde
 ```
@@ -109,13 +124,14 @@ class JsonEscapeProcessor {
 ```bash
 ./gradlew buildPlugin
 ```
+생성된 플러그인 파일은 `build/distributions/` 디렉토리에서 확인할 수 있습니다.
 
 ## 7. 문제 해결
 
 ### 7.1 일반적인 문제
-- Gradle 동기화 실패: Gradle 캐시 삭제 후 재시도
-- IDE 버전 호환성 문제: build.gradle.kts의 IDE 버전 확인
+- Gradle 동기화 실패: `./gradlew deepClean` 실행 후 재시도
+- IDE 버전 호환성 문제: `gradle.properties`의 `platformVersion` 확인
 
 ### 7.2 디버깅
 - IDE 로그 확인: Help > Show Log in Explorer
-- 디버그 모드로 플러그인 실행: ./gradlew runIde --debug-jvm
+- 디버그 모드로 플러그인 실행: `./gradlew runIde --debug-jvm`

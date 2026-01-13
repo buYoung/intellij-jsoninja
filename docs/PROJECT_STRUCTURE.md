@@ -7,112 +7,69 @@ src/
 ├── main/
 │   ├── kotlin/
 │   │   └── com/
-│   │       └── buyoung/
-│   │           └── jsonhelper/
-│   │               ├── actions/           # 플러그인 액션 클래스들
-│   │               │   ├── PrettifyAction.kt     # JSON 포맷팅 액션
-│   │               │   ├── UglifyAction.kt       # JSON 압축 액션
-│   │               │   ├── EscapeAction.kt       # JSON 이스케이프 액션
-│   │               │   └── UnescapeAction.kt     # JSON 언이스케이프 액션
-│   │               │
-│   │               ├── services/         # 비즈니스 로직 서비스
-│   │               │   ├── JsonFormatter.kt      # JSON 포맷팅 서비스
-│   │               │   └── JsonEscapeService.kt  # JSON 이스케이프 처리 서비스
-│   │               │
-│   │               ├── ui/              # UI 관련 컴포넌트
-│   │               │   ├── JsonToolWindow.kt     # JSON 도구 창
-│   │               │   └── dialogs/             # 대화상자 컴포넌트
-│   │               │
-│   │               ├── utils/           # 유틸리티 클래스들
-│   │               │   └── JsonUtils.kt          # JSON 관련 유틸리티
-│   │               │
-│   │               └── settings/        # 플러그인 설정 관련
-│   │                   └── JsonHelperSettings.kt # 설정 관리 클래스
+│   │       └── livteam/
+│   │           └── jsoninja/
+│   │               ├── actions/           # 플러그인 액션 클래스들 (메뉴, 단축키 등)
+│   │               ├── diff/              # JSON Diff 뷰어 확장 로직
+│   │               ├── extensions/        # IDE 확장 포인트 (붙여넣기 전처리 등)
+│   │               ├── icons/             # 아이콘 등록 및 리소스 참조
+│   │               ├── listeners/         # 애플리케이션 라이프사이클 리스너
+│   │               ├── model/             # 데이터 모델 및 Enum
+│   │               ├── services/          # 비즈니스 로직 서비스
+│   │               ├── settings/          # 플러그인 설정 및 UI
+│   │               ├── ui/                # UI 컴포넌트
+│   │               │   ├── component/     # Presenter/View 컴포넌트 (Editor, Tab 등)
+│   │               │   ├── dialog/        # 대화상자 (JSON 생성, 경고 등)
+│   │               │   ├── diff/          # Diff UI 헬퍼
+│   │               │   └── toolWindow/    # 도구 창 팩토리
+│   │               └── utils/             # 공통 유틸리티
 │   │
 │   └── resources/
-│       └── META-INF/
-│           ├── plugin.xml              # 플러그인 설정 파일
-│           ├── pluginIcon.svg          # 플러그인 아이콘
-│           └── messages/               # 다국어 지원
-│               └── JsonHelperBundle.properties
+│       ├── META-INF/
+│       │   └── plugin.xml              # 플러그인 설정 파일
+│       ├── icons/                      # 아이콘 리소스
+│       └── messages/                   # 다국어 지원 리소스 번들
 │
 └── test/
     └── kotlin/
         └── com/
-            └── buyoung/
-                └── jsonhelper/
-                    ├── actions/        # 액션 테스트
-                    ├── services/       # 서비스 테스트
-                    └── utils/          # 유틸리티 테스트
-
+            └── livteam/
+                └── jsoninja/           # 메인 패키지 구조와 동일한 테스트 코드
 ```
 
 ## 주요 컴포넌트 설명
 
-### 1. Actions (액션)
-- `PrettifyAction`: JSON 문자열을 보기 좋게 포맷팅
-- `UglifyAction`: JSON 문자열을 한 줄로 압축
-- `EscapeAction`: JSON 문자열 이스케이프 처리
-- `UnescapeAction`: 이스케이프된 JSON 문자열 복원
+### 1. Actions (`actions/`)
+- `PrettifyJsonAction`: JSON 문자열 포맷팅
+- `UglifyJsonAction`: JSON 문자열 압축
+- `EscapeJsonAction`: JSON 문자열 이스케이프 처리
+- `UnescapeJsonAction`: 이스케이프된 JSON 복원
+- `ShowJsonDiffAction`: JSON Diff 보기
+- `GenerateRandomJsonAction`: 랜덤 JSON 데이터 생성
 
-### 2. Services (서비스)
-- `JsonFormatter`: JSON 포맷팅 관련 핵심 로직
-  - Prettify 기능
-  - Uglify 기능
-- `JsonEscapeService`: JSON 이스케이프 처리 관련 로직
-  - 문자열 이스케이프
-  - 문자열 언이스케이프
+### 2. Services (`services/`)
+- `JsonFormatterService`: 포맷팅 및 압축 핵심 로직
+- `JsonQueryService`: JSON 쿼리 처리 (Jayway, JMESPath)
+- `JsonDiffService`: JSON 비교 로직
+- `RandomJsonDataCreator`: 랜덤 JSON 데이터 생성 로직
 
-### 3. UI Components (UI 컴포넌트)
-- `JsonToolWindow`: 플러그인의 메인 도구 창
-  - JSON 입력 영역
-  - 도구 버튼들
-  - 결과 출력 영역
+### 3. UI Components (`ui/`)
+- `toolWindow/JsoninjaToolWindowFactory`: 메인 도구 창 진입점
+- `component/`: 재사용 가능한 UI 컴포넌트 (에디터, 쿼리창, 탭 관리)
+- `dialog/`: 각종 대화상자 (대용량 파일 경고, JSON 생성 등)
 
-### 4. Utils (유틸리티)
-- `JsonUtils`: 공통으로 사용되는 JSON 관련 유틸리티 함수들
-  - JSON 유효성 검사
-  - JSON 파싱
-  - 오류 처리
+### 4. Settings (`settings/`)
+- `JsoninjaSettingsState`: 플러그인 설정 상태 관리
+- `JsoninjaSettingsConfigurable`: 설정 UI 연동
 
-### 5. Settings (설정)
-- `JsonHelperSettings`: 플러그인 설정 관리
-  - 기본 들여쓰기 설정
-  - 테마 설정
-  - 단축키 설정
-
-## 리소스 구성
-
-### META-INF
-- `plugin.xml`: 플러그인 메타데이터 및 설정
-  - 액션 등록
-  - 도구 창 등록
-  - 의존성 정의
-- `messages/`: 다국어 지원을 위한 리소스 번들
-  - 한국어 지원
-  - 영어 지원
-
-## 테스트 구조
-
-테스트 코드는 메인 코드와 동일한 패키지 구조를 따르며, 각 컴포넌트별로 테스트 클래스를 구성합니다.
-
-### 테스트 범위
-- 단위 테스트: 각 컴포넌트의 독립적인 기능 테스트
-- 통합 테스트: 여러 컴포넌트의 상호작용 테스트
-- UI 테스트: 사용자 인터페이스 동작 테스트
+### 5. Utils (`utils/`)
+- `JsonHelperUtils`: 일반적인 JSON 헬퍼 함수
+- `JsonPathHelper`: JSON 경로 처리 유틸리티
 
 ## 개발 가이드라인
 
-1. 각 기능은 독립적인 액션 클래스로 구현
-2. 비즈니스 로직은 서비스 클래스에 구현
-3. UI 관련 코드는 ui 패키지에 구현
-4. 공통 유틸리티는 utils 패키지에 구현
-5. 설정 관련 코드는 settings 패키지에 구현
-
-## 확장성
-
-새로운 기능 추가 시:
-1. 해당 기능의 액션 클래스 생성
-2. 필요한 서비스 클래스 구현
-3. UI 컴포넌트 추가
-4. plugin.xml에 새로운 액션 등록
+1. **패키지 명명**: `com.livteam.jsoninja.*` 사용
+2. **Action**: 사용자 상호작용은 독립적인 Action 클래스로 구현
+3. **Service**: 비즈니스 로직은 서비스(`@Service`)로 캡슐화
+4. **UI**: 가능하면 Presenter/View 패턴을 사용하여 로직 분리
+5. **다국어**: UI 문자열은 `messages/` 번들을 통해 관리
