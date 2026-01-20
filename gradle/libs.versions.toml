@@ -8,7 +8,7 @@ jmespath-jackson = "0.6.0"
 datafaker = "2.5.3"
 
 # plugins
-changelog = "2.4.0"
+changelog = "2.5.0"
 intelliJPlatform = "2.10.5"
 kotlin = "2.1.21"
 kover = "0.9.3"
