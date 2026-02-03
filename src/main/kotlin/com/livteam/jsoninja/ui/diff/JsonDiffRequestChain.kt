@@ -13,9 +13,9 @@ import com.livteam.jsoninja.services.JsonDiffService
 class JsonDiffRequestChain(
     private val project: Project,
     private val diffService: JsonDiffService,
-    private val leftJson: String,
-    private val rightJson: String,
-    private var semantic: Boolean = false
+    val leftJson: String,
+    val rightJson: String,
+    val semantic: Boolean = false
 ) : SimpleDiffRequestChain(createInitialRequest(diffService, project, leftJson, rightJson, semantic)) {
     
     init {

@@ -29,8 +29,12 @@ class SwitchDiffDisplayModeAction : AnAction {
         AllIcons.Actions.ChangeView
     )
     
+    private var requestChain: JsonDiffRequestChain? = null
+
     // Constructor with request chain (for backward compatibility)
-    constructor(requestChain: JsonDiffRequestChain) : this()
+    constructor(requestChain: JsonDiffRequestChain) : this() {
+        this.requestChain = requestChain
+    }
     
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -53,19 +57,18 @@ class SwitchDiffDisplayModeAction : AnAction {
         settings.diffDisplayMode = newMode.name
         
         // Get current diff contents if available
-        // For now, we'll create a new diff with default content
-        // In a real implementation, we would need to access the current diff viewer's content
-        val leftJson = "{\"example\": \"left\"}"
-        val rightJson = "{\"example\": \"right\"}"
+        val leftJson = requestChain?.leftJson ?: "{}"
+        val rightJson = requestChain?.rightJson ?: "{}"
+        val semantic = requestChain?.semantic ?: false
         
         // Open in new mode
         when (newMode) {
             JsonDiffDisplayMode.EDITOR_TAB -> {
-                val diffFile = JsonDiffVirtualFile(project, jsonDiffService, leftJson, rightJson)
+                val diffFile = JsonDiffVirtualFile(project, jsonDiffService, leftJson, rightJson, semantic)
                 DiffEditorTabFilesManager.getInstance(project).showDiffFile(diffFile, true)
             }
             JsonDiffDisplayMode.WINDOW -> {
-                val diffChain = JsonDiffRequestChain(project, jsonDiffService, leftJson, rightJson)
+                val diffChain = JsonDiffRequestChain(project, jsonDiffService, leftJson, rightJson, semantic)
                 DiffManager.getInstance().showDiff(project, diffChain, DiffDialogHints.FRAME)
             }
         }
