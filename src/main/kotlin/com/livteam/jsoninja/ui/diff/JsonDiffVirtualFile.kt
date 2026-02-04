@@ -13,10 +13,10 @@ class JsonDiffVirtualFile(
     diffService: JsonDiffService,
     leftJson: String,
     rightJson: String,
-    semantic: Boolean = false,
+    sortKeys: Boolean = false,
     name: String = LocalizationBundle.message("dialog.json.diff.title")
 ) : ChainDiffVirtualFile(
-    JsonDiffRequestChain(project, diffService, leftJson, rightJson, semantic),
+    JsonDiffRequestChain(project, diffService, leftJson, rightJson, sortKeys),
     name
 ) {
     // Store the chain for potential updates

@@ -18,7 +18,6 @@ import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.util.Key
 import com.intellij.util.Alarm
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
@@ -47,7 +46,7 @@ class JsonDiffExtension : DiffExtension() {
     private object Constants {
         const val DEBOUNCE_DELAY = 300 // milliseconds
         const val SMALL_EDIT_THRESHOLD = 3 // characters
-        val CHANGE_GUARD_KEY: Key<Boolean> = Key.create("JSONINJA_DIFF_CHANGE_GUARD")
+        val CHANGE_GUARD_KEY = JsonDiffKeys.JSON_DIFF_CHANGE_GUARD
     }
 
     /**
@@ -107,6 +106,7 @@ class JsonDiffExtension : DiffExtension() {
 
         val formatterService = project.service<JsonFormatterService>()
         val settings = JsoninjaSettingsState.getInstance(project)
+        val diffSortKeys = request.getUserData(JsonDiffKeys.JSON_DIFF_SORT_KEYS) ?: settings.diffSortKeys
         val projectName = project.name
 
         // 양쪽 모두 JSON인지 판단; 최종 검증은 JsonFormatterService.isValidJson을 통해 진행
@@ -157,7 +157,7 @@ class JsonDiffExtension : DiffExtension() {
 
         // 양쪽 editor에 listener 설치
         editors.forEach { editor ->
-            installAutoFormatter(project, editor, viewer, formatterService, settings)
+            installAutoFormatter(project, editor, viewer, formatterService, settings, diffSortKeys)
         }
 
         LOG.debug("JSON diff extension activated for project '$projectName' with ${editors.size} editors")
@@ -261,7 +261,8 @@ class JsonDiffExtension : DiffExtension() {
         editor: Editor,
         viewer: FrameDiffTool.DiffViewer,
         formatterService: JsonFormatterService,
-        settings: JsoninjaSettingsState
+        settings: JsoninjaSettingsState,
+        sortKeys: Boolean
     ) {
         val document = editor.document
         val state = getDocumentState(document)
@@ -304,7 +305,7 @@ class JsonDiffExtension : DiffExtension() {
                 // debounce로 새로운 포맷팅 예약
                 alarm.addRequest({
                     if (!project.isDisposed) {
-                        scheduleJsonFormatting(project, document, formatterService, fileName)
+                        scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys)
                     }
                 }, Constants.DEBOUNCE_DELAY)
             }
@@ -322,7 +323,7 @@ class JsonDiffExtension : DiffExtension() {
 
         // content가 있으면 초기 포맷팅 수행
         if (document.text.isNotBlank()) {
-            scheduleJsonFormatting(project, document, formatterService, fileName)
+            scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys)
         }
     }
 
@@ -334,12 +335,13 @@ class JsonDiffExtension : DiffExtension() {
         project: Project,
         document: Document,
         formatterService: JsonFormatterService,
-        fileName: String
+        fileName: String,
+        sortKeys: Boolean
     ) {
         if (project.isDisposed) return
 
         ApplicationManager.getApplication().executeOnPooledThread {
-            val formattedResult = formatJsonInBackground(document, formatterService, fileName)
+            val formattedResult = formatJsonInBackground(document, formatterService, fileName, sortKeys)
             if (formattedResult != null && !project.isDisposed) {
                 applyJsonFormatting(project, document, formattedResult, fileName)
             }
@@ -353,7 +355,8 @@ class JsonDiffExtension : DiffExtension() {
     private fun formatJsonInBackground(
         document: Document,
         formatterService: JsonFormatterService,
-        fileName: String
+        fileName: String,
+        sortKeys: Boolean
     ): String? {
         // 재진입 update 방지
         if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
@@ -384,7 +387,7 @@ class JsonDiffExtension : DiffExtension() {
         return try {
             val startTime = System.currentTimeMillis()
             // JsonFormatterService는 요구사항대로 내부적으로 isValidJson을 통해 검증
-            val formatted = formatterService.formatJson(trimmed, JsonFormatState.PRETTIFY)
+            val formatted = formatterService.formatJson(trimmed, JsonFormatState.PRETTIFY, sortKeys)
             val formatTime = System.currentTimeMillis() - startTime
 
             state.lastContentHash = contentHash

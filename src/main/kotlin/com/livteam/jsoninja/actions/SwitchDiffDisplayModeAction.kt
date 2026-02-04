@@ -59,16 +59,16 @@ class SwitchDiffDisplayModeAction : AnAction {
         // Get current diff contents if available
         val leftJson = requestChain?.leftJson ?: "{}"
         val rightJson = requestChain?.rightJson ?: "{}"
-        val semantic = requestChain?.semantic ?: false
+        val sortKeys = requestChain?.sortKeys ?: false
         
         // Open in new mode
         when (newMode) {
             JsonDiffDisplayMode.EDITOR_TAB -> {
-                val diffFile = JsonDiffVirtualFile(project, jsonDiffService, leftJson, rightJson, semantic)
+                val diffFile = JsonDiffVirtualFile(project, jsonDiffService, leftJson, rightJson, sortKeys)
                 DiffEditorTabFilesManager.getInstance(project).showDiffFile(diffFile, true)
             }
             JsonDiffDisplayMode.WINDOW -> {
-                val diffChain = JsonDiffRequestChain(project, jsonDiffService, leftJson, rightJson, semantic)
+                val diffChain = JsonDiffRequestChain(project, jsonDiffService, leftJson, rightJson, sortKeys)
                 DiffManager.getInstance().showDiff(project, diffChain, DiffDialogHints.FRAME)
             }
         }

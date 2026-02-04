@@ -33,7 +33,7 @@ class JsonDiffService(private val project: Project) {
 
             // Single parsing operation for both validation and formatting
             val formatState = if (semantic) JsonFormatState.PRETTIFY_SORTED else JsonFormatState.PRETTIFY
-            val formatted = formatterService.formatJson(json, formatState)
+            val formatted = formatterService.formatJson(json, formatState, semantic)
 
             // If formatting succeeds, the JSON is valid
             Pair(true, formatted)
@@ -82,6 +82,7 @@ class JsonDiffService(private val project: Project) {
         )
 
         request.putUserData(JsonDiffKeys.JSON_DIFF_REQUEST_MARKER, true)
+        request.putUserData(JsonDiffKeys.JSON_DIFF_SORT_KEYS, semantic)
 
         return request
     }

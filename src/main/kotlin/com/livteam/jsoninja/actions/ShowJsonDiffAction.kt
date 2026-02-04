@@ -45,19 +45,33 @@ class ShowJsonDiffAction : AnAction(
             JsonDiffDisplayMode.WINDOW
         }
 
+        val diffSortKeys = settings.diffSortKeys
+
         when (displayMode) {
-            JsonDiffDisplayMode.EDITOR_TAB -> showAsEditorTab(project, jsonDiffService, leftJson, rightJson)
-            JsonDiffDisplayMode.WINDOW -> showAsWindow(project, jsonDiffService, leftJson, rightJson)
+            JsonDiffDisplayMode.EDITOR_TAB -> showAsEditorTab(project, jsonDiffService, leftJson, rightJson, diffSortKeys)
+            JsonDiffDisplayMode.WINDOW -> showAsWindow(project, jsonDiffService, leftJson, rightJson, diffSortKeys)
         }
     }
 
-    private fun showAsEditorTab(project: Project, diffService: JsonDiffService, leftJson: String, rightJson: String) {
-        val diffFile = JsonDiffVirtualFile(project, diffService, leftJson, rightJson)
+    private fun showAsEditorTab(
+        project: Project,
+        diffService: JsonDiffService,
+        leftJson: String,
+        rightJson: String,
+        sortKeys: Boolean
+    ) {
+        val diffFile = JsonDiffVirtualFile(project, diffService, leftJson, rightJson, sortKeys)
         DiffEditorTabFilesManager.getInstance(project).showDiffFile(diffFile, true)
     }
 
-    private fun showAsWindow(project: Project, diffService: JsonDiffService, leftJson: String, rightJson: String) {
-        val diffChain = JsonDiffRequestChain(project, diffService, leftJson, rightJson)
+    private fun showAsWindow(
+        project: Project,
+        diffService: JsonDiffService,
+        leftJson: String,
+        rightJson: String,
+        sortKeys: Boolean
+    ) {
+        val diffChain = JsonDiffRequestChain(project, diffService, leftJson, rightJson, sortKeys)
         DiffManager.getInstance().showDiff(project, diffChain, DiffDialogHints.FRAME)
     }
 

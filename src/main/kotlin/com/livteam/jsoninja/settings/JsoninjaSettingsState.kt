@@ -20,6 +20,7 @@ data class JsoninjaSettingsState(
     var iconPack: String = JsonIconPack.VERSION_2.name, // Icon pack preference
     var pasteFormatState: String = JsonFormatState.PRETTIFY.name, // Format state for paste operations
     var diffDisplayMode: String = JsonDiffDisplayMode.WINDOW.name, // Diff display mode preference
+    var diffSortKeys: Boolean = false, // Diff auto sort keys
     var jsonQueryType: String = JsonQueryType.JAYWAY_JSONPATH.name, // Query type preference
     var largeFileThresholdMB: Int = 2, // Threshold in MB for large file warning
     var showLargeFileWarning: Boolean = true // Whether to show warning for large files
@@ -36,6 +37,7 @@ data class JsoninjaSettingsState(
         this.iconPack = state.iconPack
         this.pasteFormatState = state.pasteFormatState
         this.diffDisplayMode = state.diffDisplayMode
+        this.diffSortKeys = state.diffSortKeys
         this.jsonQueryType = state.jsonQueryType
         this.largeFileThresholdMB = state.largeFileThresholdMB
         this.showLargeFileWarning = state.showLargeFileWarning

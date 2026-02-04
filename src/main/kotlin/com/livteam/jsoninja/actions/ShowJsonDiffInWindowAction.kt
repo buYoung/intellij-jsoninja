@@ -10,6 +10,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonDiffService
+import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.diff.JsonDiffRequestChain
 import com.livteam.jsoninja.utils.JsonHelperUtils
 
@@ -24,6 +25,7 @@ class ShowJsonDiffInWindowAction : AnAction(
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val jsonDiffService = project.service<JsonDiffService>()
+        val settings = JsoninjaSettingsState.getInstance(project)
 
         // Get current JSON from active tab using utility
         val currentJson = JsonHelperUtils.getCurrentJsonFromToolWindow(project)
@@ -33,7 +35,7 @@ class ShowJsonDiffInWindowAction : AnAction(
         val rightJson = "{}"
         
         // Show as window
-        val diffChain = JsonDiffRequestChain(project, jsonDiffService, leftJson, rightJson)
+        val diffChain = JsonDiffRequestChain(project, jsonDiffService, leftJson, rightJson, settings.diffSortKeys)
         DiffManager.getInstance().showDiff(project, diffChain, DiffDialogHints.FRAME)
     }
 

@@ -4,6 +4,7 @@ import com.intellij.diff.chains.SimpleDiffRequestChain
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.openapi.project.Project
+import com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction
 import com.livteam.jsoninja.actions.SwitchDiffDisplayModeAction
 import com.livteam.jsoninja.services.JsonDiffService
 
@@ -15,12 +16,15 @@ class JsonDiffRequestChain(
     private val diffService: JsonDiffService,
     val leftJson: String,
     val rightJson: String,
-    val semantic: Boolean = false
-) : SimpleDiffRequestChain(createInitialRequest(diffService, project, leftJson, rightJson, semantic)) {
+    val sortKeys: Boolean = false
+) : SimpleDiffRequestChain(createInitialRequest(diffService, project, leftJson, rightJson, sortKeys)) {
     
     init {
         // Add context actions to the diff request
-        val contextActions = listOf(SwitchDiffDisplayModeAction(this))
+        val contextActions = listOf(
+            SwitchDiffDisplayModeAction(this),
+            SortJsonDiffKeysOnceAction()
+        )
         putUserData(DiffUserDataKeys.CONTEXT_ACTIONS, contextActions)
     }
     
@@ -30,9 +34,9 @@ class JsonDiffRequestChain(
             project: Project,
             leftJson: String,
             rightJson: String,
-            semantic: Boolean
+            sortKeys: Boolean
         ): SimpleDiffRequest {
-            return diffService.createDiffRequest(leftJson, rightJson, semantic = semantic)
+            return diffService.createDiffRequest(leftJson, rightJson, semantic = sortKeys)
         }
     }
 }

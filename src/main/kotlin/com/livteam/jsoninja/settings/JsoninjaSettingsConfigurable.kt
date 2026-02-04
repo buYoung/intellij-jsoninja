@@ -24,6 +24,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
     private var iconPackComboBox: ComboBox<JsonIconPackWrapper>? = null
     private var pasteFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
     private var diffDisplayModeComboBox: ComboBox<JsonDiffDisplayModeWrapper>? = null
+    private var diffSortKeysCheckBox: JBCheckBox? = null
     private var jsonQueryTypeComboBox: ComboBox<JsonQueryTypeWrapper>? = null
     private var largeFileThresholdSpinner: JSpinner? = null
     private var showLargeFileWarningCheckBox: JBCheckBox? = null
@@ -115,6 +116,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         if (mainPanel == null) {
             indentSizeSpinner = JSpinner(SpinnerNumberModel(settings.indentSize, 0, 32, 1))
             sortKeysCheckBox = JBCheckBox(LocalizationBundle.message("settings.sortkeys.label"), settings.sortKeys)
+            diffSortKeysCheckBox = JBCheckBox(LocalizationBundle.message("settings.diff.sort.label"), settings.diffSortKeys)
             largeFileThresholdSpinner = JSpinner(SpinnerNumberModel(settings.largeFileThresholdMB, 1, 100, 1))
             showLargeFileWarningCheckBox = JBCheckBox(LocalizationBundle.message("settings.show.large.file.warning.label"), settings.showLargeFileWarning)
 
@@ -200,6 +202,9 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 row(LocalizationBundle.message("settings.diff.display.label")) {
                     cell(diffDisplayModeComboBox!!)
                 }
+                row {
+                    cell(diffSortKeysCheckBox!!)
+                }
                 row(LocalizationBundle.message("settings.query.type.label")) {
                     cell(jsonQueryTypeComboBox!!)
                 }
@@ -236,6 +241,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 (iconPackComboBox?.selectedItem as? JsonIconPackWrapper)?.pack?.name != currentIconPack.name ||
                 (pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentPasteFormatState.name ||
                 (diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper)?.mode?.name != currentDiffDisplayMode.name ||
+                diffSortKeysCheckBox?.isSelected != settings.diffSortKeys ||
                 (jsonQueryTypeComboBox?.selectedItem as? JsonQueryTypeWrapper)?.type?.name != currentJsonQueryType.name ||
                 largeFileThresholdSpinner?.value != settings.largeFileThresholdMB ||
                 showLargeFileWarningCheckBox?.isSelected != settings.showLargeFileWarning
@@ -252,6 +258,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         settings.pasteFormatState = selectedPasteFormatWrapper?.state?.name ?: settings.pasteFormatState
         val selectedDiffModeWrapper = diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper
         settings.diffDisplayMode = selectedDiffModeWrapper?.mode?.name ?: settings.diffDisplayMode
+        settings.diffSortKeys = diffSortKeysCheckBox?.isSelected ?: settings.diffSortKeys
         val selectedJsonQueryTypeWrapper = jsonQueryTypeComboBox?.selectedItem as? JsonQueryTypeWrapper
         settings.jsonQueryType = selectedJsonQueryTypeWrapper?.type?.name ?: settings.jsonQueryType
         settings.largeFileThresholdMB = largeFileThresholdSpinner?.value as? Int ?: settings.largeFileThresholdMB
@@ -302,6 +309,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             .toTypedArray()
         val selectedDiffModeWrapper = diffDisplayModes.find { it.mode == currentDiffDisplayMode }
         diffDisplayModeComboBox?.selectedItem = selectedDiffModeWrapper
+        diffSortKeysCheckBox?.isSelected = settings.diffSortKeys
         
         // Find the matching wrapper for the current json query type
         val currentJsonQueryType = JsonQueryType.fromString(settings.jsonQueryType)
@@ -323,6 +331,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         iconPackComboBox = null
         pasteFormatStateComboBox = null
         diffDisplayModeComboBox = null
+        diffSortKeysCheckBox = null
         jsonQueryTypeComboBox = null
         largeFileThresholdSpinner = null
         showLargeFileWarningCheckBox = null

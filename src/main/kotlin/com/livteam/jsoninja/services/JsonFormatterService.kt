@@ -122,7 +122,7 @@ class JsonFormatterService(private val project: Project) {
      * @param formatState 포맷 상태
      * @return 포맷팅된 JSON 문자열, 포맷팅 실패 시 원본 반환
      */
-    fun formatJson(json: String, formatState: JsonFormatState): String {
+    fun formatJson(json: String, formatState: JsonFormatState, sortOverride: Boolean? = null): String {
         var formatState = formatState
         val trimedJson = json.trim()
         val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
@@ -142,6 +142,8 @@ class JsonFormatterService(private val project: Project) {
                 true
             } else if (formatState == JsonFormatState.UGLIFY) {
                 false // UGLIFY 상태에서는 정렬하지 않음
+            } else if (sortOverride != null) {
+                sortOverride
             } else {
                 settings.sortKeys // 다른 상태에서는 설정값 사용
             }
