@@ -3,6 +3,7 @@
 ![빌드 상태](https://github.com/buYoung/intellij-jsoninja/workflows/Build/badge.svg)
 [![버전](https://img.shields.io/jetbrains/plugin/v/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
 [![다운로드](https://img.shields.io/jetbrains/plugin/d/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/C0C21TTT0W)
 
 
 ## 소개

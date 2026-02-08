@@ -3,6 +3,7 @@
 ![Build Status](https://github.com/buYoung/intellij-jsoninja/workflows/Build/badge.svg)
 [![Version](https://img.shields.io/jetbrains/plugin/v/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/26715.svg)](https://plugins.jetbrains.com/plugin/26715)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/C0C21TTT0W)
 
 
 ## Introduction
