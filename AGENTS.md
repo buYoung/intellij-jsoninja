@@ -26,7 +26,6 @@ This project is a JetBrains IDE plugin focused on JSON editing workflows such as
 - `src/test/kotlin/com/livteam/jsoninja`: test sources that mirror main package concerns when tests are added.
 - `docs`: contributor-oriented architecture and development guides.
 - `gradle`, `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`: build and toolchain configuration.
-- `pro`: separate nested workspace for pro plugin artifacts/sources; keep root plugin changes isolated unless explicitly requested.
 
 ## 3. Core Behaviors & Patterns
 - Logging is centralized through `logger<T>()` or `thisLogger()` with `LOG` fields and level-based diagnostics (`debug`/`warn`/`error`).
