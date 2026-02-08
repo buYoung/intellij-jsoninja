@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Added
+- JSON Diff Sorting: Added an option to pre-sort JSON data during comparison, making it easier to identify differences.
+
+### Changed
+- UI Structure Optimization: Refactored internal UI components (Panel, Tabs, Editor) to provide a smoother user experience and improved performance.
+- JSON Generator Improvements: Enhanced the JSON generation dialog structure for better usability.
+
+### Fixed
+- Tab Closing Fix: Fixed an issue where closing the last JSON tab did not reset the editor state or left the tool window open.
+
 ## [1.6.1] - 2025-12-11
 
 ### Added
