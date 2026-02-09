@@ -20,6 +20,7 @@ import com.intellij.ui.PopupHandler
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.actions.CopyJsonQueryAction
 import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
+import com.livteam.jsoninja.ui.onboarding.OnboardingTutorialTargetIds
 import java.awt.BorderLayout
 import javax.swing.JPanel
 
@@ -42,7 +43,9 @@ class JsonEditorView(
     val presenter: JsonEditorPresenter
 
     init {
+        name = OnboardingTutorialTargetIds.JSON_EDITOR
         editor = createJsonEditor()
+        editor.name = OnboardingTutorialTargetIds.JSON_EDITOR
         presenter = JsonEditorPresenter(project, this, model)
 
         initializeUI()
