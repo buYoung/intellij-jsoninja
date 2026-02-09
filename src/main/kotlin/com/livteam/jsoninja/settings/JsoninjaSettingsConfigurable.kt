@@ -219,6 +219,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 separator()
                 row {
                     button(LocalizationBundle.message("settings.onboarding.start.tutorial")) {
+                        SwingUtilities.getWindowAncestor(mainPanel)?.dispose()
                         project.getService(OnboardingService::class.java).startTutorial()
                     }
                 }

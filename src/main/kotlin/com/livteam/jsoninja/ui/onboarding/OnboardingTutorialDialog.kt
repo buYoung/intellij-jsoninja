@@ -26,7 +26,7 @@ class OnboardingTutorialDialog(
     private val project: Project,
     private val rootComponent: JComponent,
     private val onClosed: () -> Unit
-) : JDialog(WindowManager.getInstance().suggestParentWindow(project) as? Window), Disposable {
+) : JDialog(WindowManager.getInstance().getFrame(project) as? Window), Disposable {
 
     private data class TutorialStep(
         val titleKey: String,
