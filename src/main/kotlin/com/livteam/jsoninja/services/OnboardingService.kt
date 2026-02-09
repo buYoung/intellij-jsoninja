@@ -60,7 +60,7 @@ class OnboardingService(private val project: Project) {
     private fun openTutorialDialog(toolWindow: ToolWindow) {
         val currentDialog = tutorialDialog
         if (currentDialog != null && currentDialog.isShowing) {
-            currentDialog.window.toFront()
+            currentDialog.toFront()
             return
         }
 

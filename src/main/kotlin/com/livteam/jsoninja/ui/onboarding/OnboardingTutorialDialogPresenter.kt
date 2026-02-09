@@ -101,7 +101,8 @@ class OnboardingTutorialDialogPresenter(
         rootComponent = rootComponent,
         tooltipParent = tooltipParent,
         isDisposed = { disposed || project.isDisposed },
-        isStep8Active = { steps.getOrNull(currentStepIndex)?.stepNumber == STEP8_STEP_NUMBER }
+        isStep8Active = { steps.getOrNull(currentStepIndex)?.stepNumber == STEP8_STEP_NUMBER },
+        onStep8UiUpdated = { view.focusNextButtonIfEnabled() }
     )
     private var disposed = false
 
@@ -159,6 +160,12 @@ class OnboardingTutorialDialogPresenter(
                 showAnchorTooltip(step)
             }
         }
+
+        view.focusNextButtonIfEnabled()
+    }
+
+    fun focusNextButtonIfAvailable() {
+        view.focusNextButtonIfEnabled()
     }
 
     override fun dispose() {

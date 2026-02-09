@@ -2,44 +2,65 @@ package com.livteam.jsoninja.ui.onboarding
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.wm.WindowManager
 import com.livteam.jsoninja.LocalizationBundle
-import javax.swing.Action
+import java.awt.BorderLayout
+import java.awt.Dialog
+import java.awt.Dimension
+import java.awt.Window
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import javax.swing.JComponent
+import javax.swing.JDialog
+import javax.swing.JPanel
+import javax.swing.WindowConstants
 
 class OnboardingTutorialDialog(
-    project: Project,
+    private val project: Project,
     private val rootComponent: JComponent,
     private val onClosed: () -> Unit
-) : DialogWrapper(project, true), Disposable {
+) : JDialog(WindowManager.getInstance().getFrame(project) as? Window), Disposable {
     private var closed = false
     private val presenter = OnboardingTutorialDialogPresenter(
         project = project,
         rootComponent = rootComponent,
         tooltipParent = this,
-        onCancelRequested = { close(CANCEL_EXIT_CODE) }
+        onCancelRequested = { dispose() }
     )
 
     init {
         title = LocalizationBundle.message("onboarding.tutorial.title")
-        isModal = false
+        modalityType = Dialog.ModalityType.MODELESS
+        isAlwaysOnTop = true
+        isAutoRequestFocus = false
+        defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
+        minimumSize = Dimension(420, 260)
         isResizable = false
-        init()
+
+        contentPane = JPanel(BorderLayout()).apply {
+            add(presenter.createCenterPanel(), BorderLayout.CENTER)
+            add(presenter.createSouthPanel(), BorderLayout.SOUTH)
+        }
+        addWindowListener(object : WindowAdapter() {
+            override fun windowActivated(e: WindowEvent?) {
+                presenter.focusNextButtonIfAvailable()
+            }
+        })
         presenter.refreshStep(showTooltip = false)
+
+        pack()
+        setLocationRelativeTo(owner)
     }
 
     fun open() {
-        show()
+        if (!isVisible) {
+            isVisible = true
+        } else {
+            toFront()
+        }
         presenter.refreshStep(showTooltip = true)
+        presenter.focusNextButtonIfAvailable()
     }
-
-    override fun isShowing(): Boolean = window.isShowing
-
-    override fun createCenterPanel(): JComponent = presenter.createCenterPanel()
-
-    override fun createSouthPanel(): JComponent = presenter.createSouthPanel()
-
-    override fun createActions(): Array<Action> = emptyArray()
 
     override fun dispose() {
         if (closed) {

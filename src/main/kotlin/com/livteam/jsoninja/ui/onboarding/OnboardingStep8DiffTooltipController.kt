@@ -21,7 +21,8 @@ class OnboardingStep8DiffTooltipController(
     private val rootComponent: JComponent,
     private val tooltipParent: Disposable,
     private val isDisposed: () -> Boolean,
-    private val isStep8Active: () -> Boolean
+    private val isStep8Active: () -> Boolean,
+    private val onStep8UiUpdated: () -> Unit
 ) {
     private var actionTooltip: GotItTooltip? = null
     private var sortKeysTooltip: GotItTooltip? = null
@@ -53,6 +54,7 @@ class OnboardingStep8DiffTooltipController(
                 actionTooltipId = actionTooltipId,
                 sortTooltipId = sortTooltipId
             )
+            notifyUiUpdated()
         }
     }
 
@@ -102,6 +104,7 @@ class OnboardingStep8DiffTooltipController(
                 sortTooltipId = sortTooltipId,
                 attempt = attempt
             )
+            notifyUiUpdated()
             return
         }
 
@@ -138,6 +141,7 @@ class OnboardingStep8DiffTooltipController(
         if (actionShown && sortShown) {
             actionTooltip = actionGuideTooltip
             sortKeysTooltip = sortGuideTooltip
+            notifyUiUpdated()
             return
         }
 
@@ -151,6 +155,7 @@ class OnboardingStep8DiffTooltipController(
             sortTooltipId = sortTooltipId,
             attempt = attempt
         )
+        notifyUiUpdated()
     }
 
     private fun scheduleRetry(
@@ -272,6 +277,12 @@ class OnboardingStep8DiffTooltipController(
             current = current.parent
         }
         return null
+    }
+
+    private fun notifyUiUpdated() {
+        if (!isDisposed() && !project.isDisposed && isStep8Active()) {
+            onStep8UiUpdated()
+        }
     }
 
     companion object {
