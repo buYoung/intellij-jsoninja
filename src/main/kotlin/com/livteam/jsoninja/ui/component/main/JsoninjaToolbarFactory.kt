@@ -53,7 +53,6 @@ object JsoninjaToolbarFactory {
             .createActionToolbar("JsonHelperToolbar", actionGroup, true)
 
         actionToolbar.targetComponent = targetComponent
-        actionToolbar.updateActionsImmediately()
 
         val toolbarComponent = actionToolbar.component
         toolbarComponent.name = OnboardingTutorialTargetIds.TOOLBAR

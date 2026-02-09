@@ -22,8 +22,8 @@ class OnboardingTutorialDialog(
 
     init {
         title = LocalizationBundle.message("onboarding.tutorial.title")
-        setModal(false)
-        setResizable(false)
+        isModal = false
+        isResizable = false
         init()
         presenter.refreshStep(showTooltip = false)
     }
