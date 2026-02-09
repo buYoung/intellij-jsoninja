@@ -16,8 +16,7 @@ class OnboardingTutorialDialog(
     private val presenter = OnboardingTutorialDialogPresenter(
         rootComponent = rootComponent,
         tooltipParent = this,
-        onCancelRequested = { close(CANCEL_EXIT_CODE) },
-        onCompleteRequested = { close(OK_EXIT_CODE) }
+        onCancelRequested = { close(CANCEL_EXIT_CODE) }
     )
 
     init {

@@ -107,10 +107,7 @@ class OnboardingTutorialDialogView(
         stepBodyArea.text = stepBodyText
         stepBodyArea.caretPosition = 0
         prevButton.isEnabled = hasPrev
-        nextButton.text = if (isLastStep) {
-            LocalizationBundle.message("onboarding.tutorial.close")
-        } else {
-            LocalizationBundle.message("onboarding.tutorial.next")
-        }
+        nextButton.text = LocalizationBundle.message("onboarding.tutorial.next")
+        nextButton.isEnabled = !isLastStep
     }
 }

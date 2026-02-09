@@ -10,8 +10,7 @@ import javax.swing.Timer
 class OnboardingTutorialDialogPresenter(
     private val rootComponent: JComponent,
     private val tooltipParent: Disposable,
-    private val onCancelRequested: () -> Unit,
-    private val onCompleteRequested: () -> Unit
+    private val onCancelRequested: () -> Unit
 ) : Disposable {
 
     private data class TutorialStep(
@@ -94,9 +93,7 @@ class OnboardingTutorialDialogPresenter(
         if (currentStepIndex < steps.lastIndex) {
             currentStepIndex++
             refreshStep()
-            return
         }
-        onCompleteRequested()
     }
 
     private fun showAnchorTooltip(step: TutorialStep, attempt: Int = 0) {
