@@ -43,9 +43,7 @@ class JsonEditorView(
     val presenter: JsonEditorPresenter
 
     init {
-        name = OnboardingTutorialTargetIds.JSON_EDITOR
         editor = createJsonEditor()
-        editor.name = OnboardingTutorialTargetIds.JSON_EDITOR
         presenter = JsonEditorPresenter(project, this, model)
 
         initializeUI()
@@ -76,6 +74,7 @@ class JsonEditorView(
 
     private fun configureEditor(editorField: EditorTextField, fileType: com.intellij.openapi.fileTypes.FileType) {
         editorField.addSettingsProvider { editor ->
+            editor.contentComponent.name = OnboardingTutorialTargetIds.JSON_EDITOR
             editor.settings.applyEditorSettings()
             applyEditorAppearance(editor, fileType)
             applyEditorScrollbars(editor)

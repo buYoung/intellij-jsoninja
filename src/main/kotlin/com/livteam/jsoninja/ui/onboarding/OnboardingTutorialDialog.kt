@@ -200,11 +200,21 @@ class OnboardingTutorialDialog(
             project
         )
             .withHeader(LocalizationBundle.message(step.titleKey))
-            .withPosition(Balloon.Position.below)
             .withTimeout(7000)
 
+        val isJsonEditorStep = anchorTargetName == OnboardingTutorialTargetIds.JSON_EDITOR
+        tooltip.withPosition(
+            if (isJsonEditorStep) Balloon.Position.atRight else Balloon.Position.below
+        )
+
+        val tooltipAnchorPosition = if (isJsonEditorStep) {
+            GotItTooltip.RIGHT_MIDDLE
+        } else {
+            GotItTooltip.BOTTOM_MIDDLE
+        }
+
         if (tooltip.canShow()) {
-            tooltip.show(anchorComponent, GotItTooltip.BOTTOM_MIDDLE)
+            tooltip.show(anchorComponent, tooltipAnchorPosition)
             currentTooltip = tooltip
         } else {
             scheduleTooltipRetry(step, attempt)
