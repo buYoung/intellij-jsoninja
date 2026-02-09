@@ -1,49 +1,52 @@
 # AGENTS.md
 
 ## 1. Overview
-This repository implements a JetBrains IDE plugin for JSON-centric editing workflows such as formatting, querying, diffing, and sample generation. The architecture separates IDE integration points, JSON domain services, and tool-window UI composition.
+This repository implements JSONinja, a JetBrains IDE plugin focused on JSON editing workflows such as formatting, querying, diffing, and sample generation. The architecture separates IDE integration wiring, JSON domain services, and tool-window UI composition.
 
 ## 2. Folder Structure
-- `src/main/kotlin/com/livteam/jsoninja`: main plugin implementation.
-    - `actions`: `AnAction` entry points for menu/context/shortcut-triggered JSON operations.
-    - `diff`: diff extension and synchronization guards around diff editor behavior.
-    - `extensions`: IDE extension points such as paste preprocessing.
-    - `icons`: runtime icon selection logic and icon pack helpers.
-    - `listeners`: application and project lifecycle listeners.
-    - `model`: enums and shared state models for formatter/query/diff options.
-    - `onboarding`: onboarding domain models and flow state.
-    - `services`: JSON business logic (formatting, querying, diff preparation, random data generation).
-    - `settings`: persistent settings state and configurable binding.
-    - `ui`: tool-window, dialog, onboarding, and diff UI composition.
-        - `component`: presenter/view pairs for editors, tabs, query panel, and main panel.
-        - `dialog`: JSON generation and warning dialogs.
+- `src/main/kotlin/com/livteam/jsoninja`: core plugin source code.
+    - `actions`: `AnAction` entry points for menu/context/shortcut-triggered JSON commands.
+    - `diff`: diff extension behavior and sync guards to prevent recursive updates.
+    - `extensions`: IntelliJ extension points such as paste preprocessing.
+    - `icons`: runtime icon pack selection and icon mapping helpers.
+    - `listeners`: app/project startup and lifecycle listeners.
+    - `model`: shared enums and state models for format/query/diff options.
+    - `onboarding`: onboarding state and flow-related domain types.
+    - `services`: JSON business logic (format/query/diff preparation/random generation/onboarding orchestration).
+    - `settings`: persistent settings state and `Configurable` integration.
+    - `ui`: tool-window and dialog composition.
+        - `component`: presenter/view pairs for editors, tabs, query, and main panel state.
+        - `dialog`: warning and JSON generation dialogs.
         - `diff`: diff virtual files and request-chain helpers.
-        - `onboarding`: onboarding views and presentation wiring.
+        - `onboarding`: onboarding UI and step presentation.
         - `toolWindow`: tool-window factory and registration glue.
-    - `utils`: shared helpers (tool-window lookup, JSON path extraction, editor helpers).
-- `src/main/resources`: plugin descriptors and resources.
-    - `META-INF`: `plugin.xml` and plugin metadata.
-    - `icons`: SVG assets for classic/expui variants and `v2` icon packs.
+    - `utils`: shared editor/tool-window/path helpers.
+- `src/main/resources`: plugin metadata and static assets.
+    - `META-INF`: `plugin.xml` action/extension registration.
+    - `icons`: classic/expui SVG packs with `v2` variants.
+    - `images`: onboarding and UI image assets.
     - `messages`: localization bundles (`en`, `ko`, `ja`, `zh_CN`, default).
-- `src/test/kotlin/com/livteam/jsoninja`: test sources; mirror main package boundaries when tests are added.
-- `docs`: contributor-facing architecture and development guides.
+- `src/test/kotlin/com/livteam/jsoninja`: test sources; keep package layout aligned with main code when adding tests.
+- `docs`: contributor-facing development and structure guides.
+- `.github/workflows`: CI workflows for plugin build and release checks.
+- `tasks`, `todos`: project notes and backlog-style markdown documents.
 - `gradle`, `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`: Gradle wrapper/toolchain/build configuration.
 
 ## 3. Core Behaviors & Patterns
 - Logging follows `logger<T>()` or `thisLogger()` with `LOG` fields and level-based diagnostics (`debug`, `warn`, `error`).
 - Guard clauses are pervasive (`?: return`, early `return null`) to exit quickly on invalid project/editor/query/document state.
-- Services prefer safe fallbacks: invalid JSON/query input usually returns original content, `null`, or `false` instead of propagating exceptions.
-- Background work runs on pooled threads (`executeOnPooledThread`), while UI/document mutations are marshaled to EDT (`invokeLater`, `WriteCommandAction`, `runWriteAction`).
-- Diff/editor synchronization uses re-entrancy guards (`putUserData` keys, atomic flags, content hashes, alarms) to avoid self-triggered update loops.
+- Services favor safe fallbacks: invalid JSON/query input typically returns original content, `null`, or `false` rather than surfacing hard failures.
+- Background work runs on pooled threads (`executeOnPooledThread`), while UI/document mutation is marshaled to EDT (`invokeLater`, `WriteCommandAction`, `runWriteAction`).
+- Diff/editor synchronization uses re-entrancy guards (`putUserData` keys, atomic flags, content hashes) to avoid self-triggered update loops.
 - Query flow supports both Jayway JsonPath and JMESPath, selected by settings-level query type state.
 
 ## 4. Conventions
 - Package naming follows `com.livteam.jsoninja.*`; type names use PascalCase and members use lowerCamelCase.
 - Role-based suffixes are consistent: `*Action`, `*Service`, `*Presenter`, `*View`, `*SettingsState`, `*Configurable`.
-- Constants are commonly placed in `companion object` as `const val`; logger property name is typically `LOG`.
+- Constants are commonly placed in `companion object` as `const val`; logger fields are typically named `LOG`.
 - Domain options are modeled with `enum class`; shared UI/state payloads use `data class`.
 - Comments are concise and predominantly Korean, with selective English for API and interop context.
-- User-facing strings should come from localization bundles rather than hardcoded literals when practical.
+- User-facing text should come from localization bundles (`messages.LocalizationBundle`) instead of hardcoded literals when practical.
 
 ## 5. Working Agreements
 - Respond in Korean (keep tech terms in English, never translate code blocks)
