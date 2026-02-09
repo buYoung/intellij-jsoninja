@@ -21,6 +21,7 @@ import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JDialog
 import javax.swing.JPanel
+import javax.swing.Timer
 
 class OnboardingTutorialDialog(
     private val project: Project,
@@ -43,8 +44,8 @@ class OnboardingTutorialDialog(
         TutorialStep("onboarding.tutorial.step6.title", "onboarding.tutorial.step6.body", OnboardingTutorialTargetIds.ACTION_UNESCAPE),
         TutorialStep("onboarding.tutorial.step7.title", "onboarding.tutorial.step7.body", OnboardingTutorialTargetIds.ACTION_RANDOM_DATA),
         TutorialStep("onboarding.tutorial.step8.title", "onboarding.tutorial.step8.body", OnboardingTutorialTargetIds.ACTION_DIFF),
-        TutorialStep("onboarding.tutorial.step9.title", "onboarding.tutorial.step9.body"),
-        TutorialStep("onboarding.tutorial.step10.title", "onboarding.tutorial.step10.body")
+        TutorialStep("onboarding.tutorial.step9.title", "onboarding.tutorial.step9.body", OnboardingTutorialTargetIds.QUERY_FIELD),
+        TutorialStep("onboarding.tutorial.step10.title", "onboarding.tutorial.step10.body", OnboardingTutorialTargetIds.JSON_EDITOR)
     )
 
     private val stepCounterLabel = JBLabel()
@@ -58,6 +59,7 @@ class OnboardingTutorialDialog(
     private var currentStepIndex = 0
     private val tooltipSessionId = System.nanoTime()
     private var currentTooltip: GotItTooltip? = null
+    private var tooltipRetryTimer: Timer? = null
     private var closed = false
 
     init {
@@ -70,7 +72,7 @@ class OnboardingTutorialDialog(
 
         contentPane = createContentPanel()
         bindActions()
-        refreshStep()
+        refreshStep(showTooltip = false)
 
         pack()
         setLocationRelativeTo(owner)
@@ -91,6 +93,8 @@ class OnboardingTutorialDialog(
             return
         }
         closed = true
+        tooltipRetryTimer?.stop()
+        tooltipRetryTimer = null
         currentTooltip?.hidePopup()
         currentTooltip = null
         onClosed()
@@ -157,8 +161,10 @@ class OnboardingTutorialDialog(
         }
     }
 
-    private fun refreshStep() {
+    private fun refreshStep(showTooltip: Boolean = true) {
         val step = steps[currentStepIndex]
+        tooltipRetryTimer?.stop()
+        tooltipRetryTimer = null
 
         stepCounterLabel.text = LocalizationBundle.message(
             "onboarding.tutorial.step.counter",
@@ -172,15 +178,21 @@ class OnboardingTutorialDialog(
         prevButton.isEnabled = currentStepIndex > 0
         nextButton.isEnabled = currentStepIndex < steps.lastIndex
 
-        showAnchorTooltip(step)
+        if (showTooltip) {
+            showAnchorTooltip(step)
+        }
     }
 
-    private fun showAnchorTooltip(step: TutorialStep) {
+    private fun showAnchorTooltip(step: TutorialStep, attempt: Int = 0) {
         currentTooltip?.hidePopup()
         currentTooltip = null
 
         val anchorTargetName = step.anchorTargetName ?: return
-        val anchorComponent = findComponentByName(rootComponent, anchorTargetName) ?: return
+        val anchorComponent = resolveAnchorComponent(anchorTargetName)
+        if (anchorComponent == null || !anchorComponent.isShowing) {
+            scheduleTooltipRetry(step, attempt)
+            return
+        }
 
         val tooltip = GotItTooltip(
             "com.livteam.jsoninja.onboarding.step.$tooltipSessionId.$currentStepIndex",
@@ -194,6 +206,50 @@ class OnboardingTutorialDialog(
         if (tooltip.canShow()) {
             tooltip.show(anchorComponent, GotItTooltip.BOTTOM_MIDDLE)
             currentTooltip = tooltip
+        } else {
+            scheduleTooltipRetry(step, attempt)
+        }
+    }
+
+    private fun resolveAnchorComponent(targetName: String): JComponent? {
+        val namedComponent = findComponentByName(rootComponent, targetName)
+        if (namedComponent != null) return namedComponent
+
+        return findToolbarActionComponentByTarget(targetName)
+    }
+
+    private fun findToolbarActionComponentByTarget(targetName: String): JComponent? {
+        val actionIndex = TOOLBAR_ACTION_TARGET_IDS.indexOf(targetName)
+        if (actionIndex < 0) return null
+
+        val toolbar = findComponentByName(rootComponent, OnboardingTutorialTargetIds.TOOLBAR) ?: return null
+        val actionButtons = mutableListOf<JComponent>()
+        collectActionButtons(toolbar, actionButtons)
+        return actionButtons.getOrNull(actionIndex)
+    }
+
+    private fun collectActionButtons(component: Component, collector: MutableList<JComponent>) {
+        if (component is JComponent && component.javaClass.name.contains("ActionButton")) {
+            collector.add(component)
+        }
+
+        if (component !is Container) return
+
+        component.components.forEach { child ->
+            collectActionButtons(child, collector)
+        }
+    }
+
+    private fun scheduleTooltipRetry(step: TutorialStep, attempt: Int) {
+        if (closed || attempt >= MAX_TOOLTIP_RETRY || step != steps.getOrNull(currentStepIndex)) return
+
+        tooltipRetryTimer?.stop()
+        tooltipRetryTimer = Timer(TOOLTIP_RETRY_DELAY_MS) {
+            if (closed || step != steps.getOrNull(currentStepIndex)) return@Timer
+            showAnchorTooltip(step, attempt + 1)
+        }.apply {
+            isRepeats = false
+            start()
         }
     }
 
@@ -213,5 +269,20 @@ class OnboardingTutorialDialog(
             }
         }
         return null
+    }
+
+    companion object {
+        private const val MAX_TOOLTIP_RETRY = 8
+        private const val TOOLTIP_RETRY_DELAY_MS = 120
+        private val TOOLBAR_ACTION_TARGET_IDS = listOf(
+            OnboardingTutorialTargetIds.ACTION_ADD_TAB,
+            OnboardingTutorialTargetIds.ACTION_OPEN_FILE,
+            OnboardingTutorialTargetIds.ACTION_BEAUTIFY,
+            OnboardingTutorialTargetIds.ACTION_MINIFY,
+            OnboardingTutorialTargetIds.ACTION_ESCAPE,
+            OnboardingTutorialTargetIds.ACTION_UNESCAPE,
+            OnboardingTutorialTargetIds.ACTION_RANDOM_DATA,
+            OnboardingTutorialTargetIds.ACTION_DIFF
+        )
     }
 }
