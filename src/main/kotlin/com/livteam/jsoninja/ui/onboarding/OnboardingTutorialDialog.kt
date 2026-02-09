@@ -14,6 +14,7 @@ class OnboardingTutorialDialog(
 ) : DialogWrapper(project, true), Disposable {
     private var closed = false
     private val presenter = OnboardingTutorialDialogPresenter(
+        project = project,
         rootComponent = rootComponent,
         tooltipParent = this,
         onCancelRequested = { close(CANCEL_EXIT_CODE) }
