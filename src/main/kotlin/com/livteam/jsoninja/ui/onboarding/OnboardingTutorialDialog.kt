@@ -8,11 +8,15 @@ import java.awt.BorderLayout
 import java.awt.Dialog
 import java.awt.Dimension
 import java.awt.Window
+import java.awt.event.ActionEvent
+import java.awt.event.KeyEvent
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
+import javax.swing.AbstractAction
 import javax.swing.JComponent
 import javax.swing.JDialog
 import javax.swing.JPanel
+import javax.swing.KeyStroke
 import javax.swing.WindowConstants
 
 class OnboardingTutorialDialog(
@@ -32,7 +36,7 @@ class OnboardingTutorialDialog(
         title = LocalizationBundle.message("onboarding.tutorial.title")
         modalityType = Dialog.ModalityType.MODELESS
         isAlwaysOnTop = true
-        isAutoRequestFocus = false
+        isAutoRequestFocus = true
         defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
         minimumSize = Dimension(420, 260)
         isResizable = false
@@ -41,9 +45,10 @@ class OnboardingTutorialDialog(
             add(presenter.createCenterPanel(), BorderLayout.CENTER)
             add(presenter.createSouthPanel(), BorderLayout.SOUTH)
         }
+        bindEnterKeyToNextStep()
         addWindowListener(object : WindowAdapter() {
             override fun windowActivated(e: WindowEvent?) {
-                presenter.focusNextButtonIfAvailable()
+                presenter.onDialogActivated()
             }
         })
         presenter.refreshStep(showTooltip = false)
@@ -59,7 +64,7 @@ class OnboardingTutorialDialog(
             toFront()
         }
         presenter.refreshStep(showTooltip = true)
-        presenter.focusNextButtonIfAvailable()
+        presenter.onDialogActivated()
     }
 
     override fun dispose() {
@@ -71,5 +76,22 @@ class OnboardingTutorialDialog(
         presenter.dispose()
         onClosed()
         super.dispose()
+    }
+
+    private fun bindEnterKeyToNextStep() {
+        val actionKey = ENTER_TO_NEXT_ACTION_KEY
+        rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0),
+            actionKey
+        )
+        rootPane.actionMap.put(actionKey, object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent?) {
+                presenter.onEnterPressed()
+            }
+        })
+    }
+
+    companion object {
+        private const val ENTER_TO_NEXT_ACTION_KEY = "jsoninja.onboarding.enter.to.next"
     }
 }

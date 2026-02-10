@@ -11,21 +11,17 @@ import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.GridLayout
-import java.awt.Window
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
-import javax.swing.Timer
 
 class OnboardingTutorialDialogView(
     onCancelRequested: () -> Unit,
     onPrevRequested: () -> Unit,
     onNextRequested: () -> Unit
 ) {
-    private var focusRetryTimer: Timer? = null
-
     private val stepCounterLabel = JBLabel().apply {
         foreground = UIUtil.getContextHelpForeground()
         font = JBFont.small()
@@ -196,35 +192,10 @@ class OnboardingTutorialDialogView(
 
     fun focusNextButtonIfEnabled() {
         if (!nextButton.isEnabled) return
-        focusRetryTimer?.stop()
-        focusRetryTimer = null
-
         SwingUtilities.invokeLater {
-            requestNextButtonFocus()
+            if (!nextButton.isShowing || !nextButton.isEnabled) return@invokeLater
+            nextButton.requestFocusInWindow()
         }
-
-        var attempt = 0
-        focusRetryTimer = Timer(FOCUS_RETRY_DELAY_MS) {
-            attempt++
-            requestNextButtonFocus()
-            if (nextButton.hasFocus() || attempt >= FOCUS_RETRY_COUNT) {
-                (it.source as? Timer)?.stop()
-                focusRetryTimer = null
-            }
-        }.apply {
-            isRepeats = true
-            start()
-        }
-    }
-
-    private fun requestNextButtonFocus() {
-        if (!nextButton.isShowing || !nextButton.isEnabled) return
-        val ownerWindow = SwingUtilities.getWindowAncestor(nextButton) as? Window
-        if (ownerWindow != null && ownerWindow.isShowing) {
-            ownerWindow.toFront()
-            ownerWindow.requestFocus()
-        }
-        nextButton.requestFocusInWindow()
     }
 
     private fun updateDialogLayout(hasDetail: Boolean, hasBeforeAfter: Boolean, hasImage: Boolean) {
@@ -285,7 +256,5 @@ class OnboardingTutorialDialogView(
         private const val DETAIL_SECTION_HEIGHT = 70
         private const val BEFORE_AFTER_SECTION_HEIGHT = 170
         private const val IMAGE_SECTION_HEIGHT = 260
-        private const val FOCUS_RETRY_DELAY_MS = 150
-        private const val FOCUS_RETRY_COUNT = 40
     }
 }

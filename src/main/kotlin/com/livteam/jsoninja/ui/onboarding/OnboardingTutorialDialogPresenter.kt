@@ -90,6 +90,9 @@ class OnboardingTutorialDialogPresenter(
         onPrevRequested = ::moveToPrevStep,
         onNextRequested = ::moveToNextStep
     )
+    private val focusCoordinator = OnboardingTutorialFocusCoordinator(
+        requestNextButtonFocus = view::focusNextButtonIfEnabled
+    )
 
     private var currentStepIndex = 0
     private var lastRenderedStepIndex: Int? = null
@@ -102,7 +105,7 @@ class OnboardingTutorialDialogPresenter(
         tooltipParent = tooltipParent,
         isDisposed = { disposed || project.isDisposed },
         isStep8Active = { steps.getOrNull(currentStepIndex)?.stepNumber == STEP8_STEP_NUMBER },
-        onStep8UiUpdated = { view.focusNextButtonIfEnabled() }
+        onStep8UiUpdated = { onFocusEvent(OnboardingTutorialFocusCoordinator.Event.STEP8_UI_UPDATED) }
     )
     private var disposed = false
 
@@ -161,11 +164,15 @@ class OnboardingTutorialDialogPresenter(
             }
         }
 
-        view.focusNextButtonIfEnabled()
+        onFocusEvent(OnboardingTutorialFocusCoordinator.Event.STEP_RENDERED)
     }
 
-    fun focusNextButtonIfAvailable() {
-        view.focusNextButtonIfEnabled()
+    fun onDialogActivated() {
+        onFocusEvent(OnboardingTutorialFocusCoordinator.Event.DIALOG_ACTIVATED)
+    }
+
+    fun onEnterPressed() {
+        moveToNextStep()
     }
 
     override fun dispose() {
@@ -249,6 +256,13 @@ class OnboardingTutorialDialogPresenter(
         tooltipRetryTimer = null
         currentTooltip?.hidePopup()
         currentTooltip = null
+    }
+
+    private fun onFocusEvent(event: OnboardingTutorialFocusCoordinator.Event) {
+        focusCoordinator.onEvent(
+            event = event,
+            isLastStep = currentStepIndex == steps.lastIndex
+        )
     }
 
     companion object {
