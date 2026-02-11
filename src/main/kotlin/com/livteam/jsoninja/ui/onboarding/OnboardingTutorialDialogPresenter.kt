@@ -11,8 +11,7 @@ import javax.swing.Timer
 class OnboardingTutorialDialogPresenter(
     private val project: Project,
     private val rootComponent: JComponent,
-    private val tooltipParent: Disposable,
-    private val onCancelRequested: () -> Unit
+    private val tooltipParent: Disposable
 ) : Disposable {
 
     private data class TutorialStep(
@@ -86,7 +85,6 @@ class OnboardingTutorialDialogPresenter(
     )
 
     private val view = OnboardingTutorialDialogView(
-        onCancelRequested = onCancelRequested,
         onPrevRequested = ::moveToPrevStep,
         onNextRequested = ::moveToNextStep
     )
@@ -117,6 +115,10 @@ class OnboardingTutorialDialogPresenter(
         return view.createSouthPanel()
     }
 
+    fun isDontShowAgainSelected(): Boolean {
+        return view.isDontShowAgainSelected()
+    }
+
     fun refreshStep(showTooltip: Boolean = true) {
         val step = steps.getOrNull(currentStepIndex) ?: return
         val supplement = OnboardingTutorialStepSupplementProvider.get(step.stepNumber)
@@ -131,6 +133,7 @@ class OnboardingTutorialDialogPresenter(
         }
 
         view.renderStep(
+            stepNumber = step.stepNumber,
             stepCounterText = LocalizationBundle.message(
                 "onboarding.tutorial.step.counter",
                 currentStepIndex + 1,

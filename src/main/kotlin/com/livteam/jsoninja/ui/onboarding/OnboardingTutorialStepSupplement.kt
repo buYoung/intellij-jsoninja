@@ -9,11 +9,12 @@ data class OnboardingTutorialStepSupplement(
 )
 
 object OnboardingTutorialStepSupplementProvider {
+    private const val STEP1_ADD_TAB_GIF = "/images/onboarding/step_1.gif"
     private const val STEP8_DIFF_OVERVIEW_IMAGE = "/images/onboarding/step8-diff-overview.svg"
 
     private val supplements = mapOf(
         1 to OnboardingTutorialStepSupplement(
-            detailKey = "onboarding.tutorial.step1.detail"
+            imagePath = STEP1_ADD_TAB_GIF
         ),
         2 to OnboardingTutorialStepSupplement(
             detailKey = "onboarding.tutorial.step2.detail"

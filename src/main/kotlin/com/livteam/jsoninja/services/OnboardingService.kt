@@ -65,8 +65,11 @@ class OnboardingService(private val project: Project) {
         }
 
         val panelView = resolvePanelView(toolWindow) ?: return
-        tutorialDialog = OnboardingTutorialDialog(project, panelView) {
+        tutorialDialog = OnboardingTutorialDialog(project, panelView) { dontShowAgain ->
             tutorialDialog = null
+            if (dontShowAgain) {
+                markOnboardingSeen()
+            }
         }
         tutorialDialog?.open()
     }
