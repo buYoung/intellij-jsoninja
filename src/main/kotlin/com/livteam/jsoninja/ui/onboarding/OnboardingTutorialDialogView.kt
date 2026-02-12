@@ -1,7 +1,6 @@
 package com.livteam.jsoninja.ui.onboarding
 
 import com.intellij.openapi.util.IconLoader
-import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBFont
@@ -25,6 +24,9 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
+import javax.swing.JTextPane
+import javax.swing.text.SimpleAttributeSet
+import javax.swing.text.StyleConstants
 
 class OnboardingTutorialDialogView(
     onCancelRequested: () -> Unit,
@@ -163,21 +165,18 @@ class OnboardingTutorialDialogView(
         alignmentX = Component.CENTER_ALIGNMENT
     }
 
-    private val heroDescriptionLabel = JBLabel().apply {
-        horizontalAlignment = SwingConstants.CENTER
-        font = JBFont.regular().deriveFont(13f)
-        foreground = UIUtil.getContextHelpForeground()
-        alignmentX = Component.CENTER_ALIGNMENT
-    }
+    private val heroDescriptionArea = createHeroDescriptionPane()
+
+    private val heroImageSpacer = Box.createVerticalStrut(16)
 
     private val heroPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         isOpaque = false
         add(heroImageCard)
-        add(Box.createVerticalStrut(16))
+        add(heroImageSpacer)
         add(heroTitleLabel)
         add(Box.createVerticalStrut(8))
-        add(heroDescriptionLabel)
+        add(heroDescriptionArea)
     }
 
     private val detailPanel = JPanel(BorderLayout(0, 4)).apply {
@@ -280,26 +279,38 @@ class OnboardingTutorialDialogView(
 
         val imageIcon = loadIcon(imagePath)
         val hasImage = imageIcon != null
-        val isStep1Hero = stepNumber == STEP1_NUMBER && hasImage
-        stepBodyArea.isVisible = !isStep1Hero
-        detailPanel.isVisible = !isStep1Hero && hasDetail
-        beforeAfterPanel.isVisible = !isStep1Hero && hasBeforeAfter
-        imagePanel.isVisible = !isStep1Hero && hasImage
-        heroPanel.isVisible = isStep1Hero
+        val isHeroStep = stepNumber in STEP1_NUMBER..LAST_STEP_NUMBER
 
-        if (isStep1Hero) {
+        stepBodyArea.isVisible = !isHeroStep
+        detailPanel.isVisible = !isHeroStep && hasDetail
+        beforeAfterPanel.isVisible = !isHeroStep && hasBeforeAfter
+        imagePanel.isVisible = !isHeroStep && hasImage
+        heroPanel.isVisible = isHeroStep
+
+        if (isHeroStep) {
             heroIcon = imageIcon
+            heroImageCard.isVisible = hasImage
+            heroImageSpacer.isVisible = hasImage
             heroImagePanel.repaint()
-            heroTitleLabel.text = LocalizationBundle.message("onboarding.tutorial.step1.hero.title")
-            heroDescriptionLabel.text = toCenteredHtml(stepBodyText, HERO_DESCRIPTION_WIDTH)
+            heroTitleLabel.text = if (stepNumber == STEP1_NUMBER) {
+                LocalizationBundle.message("onboarding.tutorial.step1.hero.title")
+            } else {
+                stepTitleText
+            }
+            heroDescriptionArea.text = stepBodyText
+            setCenteredParagraph(heroDescriptionArea)
+            heroDescriptionArea.caretPosition = 0
             stepImageLabel.icon = null
             imageCaptionLabel.text = ""
             imageCaptionLabel.isVisible = false
         } else {
             heroIcon = null
+            heroImageCard.isVisible = true
+            heroImageSpacer.isVisible = true
             heroImagePanel.repaint()
             heroTitleLabel.text = ""
-            heroDescriptionLabel.text = ""
+            heroDescriptionArea.text = ""
+            setCenteredParagraph(heroDescriptionArea)
             stepImageLabel.icon = imageIcon
             stepImageLabel.text = ""
             imageCaptionLabel.text = imageCaptionText.orEmpty()
@@ -311,7 +322,7 @@ class OnboardingTutorialDialogView(
         nextButton.isEnabled = !isLastStep
         SwingUtilities.getRootPane(nextButton)?.defaultButton = if (nextButton.isEnabled) nextButton else null
 
-        updateDialogLayout(hasDetail, hasBeforeAfter, hasImage, isStep1Hero)
+        updateDialogLayout(hasDetail, hasBeforeAfter, hasImage, isHeroStep)
     }
 
     fun focusNextButtonIfEnabled() {
@@ -326,12 +337,12 @@ class OnboardingTutorialDialogView(
         hasDetail: Boolean,
         hasBeforeAfter: Boolean,
         hasImage: Boolean,
-        isStep1Hero: Boolean
+        isHeroStep: Boolean
     ) {
         if (!::centerPanel.isInitialized) return
 
-        val targetHeight = if (isStep1Hero) {
-            STEP1_DIALOG_HEIGHT
+        val targetHeight = if (isHeroStep) {
+            if (hasImage) HERO_DIALOG_HEIGHT else HERO_DIALOG_HEIGHT_NO_IMAGE
         } else {
             var calculatedHeight = BASE_DIALOG_HEIGHT
             if (hasDetail) calculatedHeight += DETAIL_SECTION_HEIGHT
@@ -371,6 +382,29 @@ class OnboardingTutorialDialogView(
         }
     }
 
+    private fun createHeroDescriptionPane(): JTextPane {
+        return JTextPane().apply {
+            isEditable = false
+            isOpaque = false
+            border = JBUI.Borders.empty()
+            font = JBFont.regular().deriveFont(13f)
+            foreground = UIUtil.getContextHelpForeground()
+            alignmentX = Component.CENTER_ALIGNMENT
+            isFocusable = false
+            margin = JBUI.insets(0)
+            minimumSize = Dimension(HERO_DESCRIPTION_WIDTH, 0)
+            maximumSize = Dimension(HERO_DESCRIPTION_WIDTH, Int.MAX_VALUE)
+            preferredSize = Dimension(HERO_DESCRIPTION_WIDTH, 0)
+        }
+    }
+
+    private fun setCenteredParagraph(textPane: JTextPane) {
+        val attributes = SimpleAttributeSet()
+        StyleConstants.setAlignment(attributes, StyleConstants.ALIGN_CENTER)
+        val document = textPane.styledDocument
+        document.setParagraphAttributes(0, document.length, attributes, false)
+    }
+
     private fun createExampleTextArea(): JBTextArea {
         return createTextArea().apply {
             margin = JBUI.insets(6, 0)
@@ -387,15 +421,13 @@ class OnboardingTutorialDialogView(
         return runCatching { IconLoader.getIcon(path, OnboardingTutorialDialogView::class.java) }.getOrNull()
     }
 
-    private fun toCenteredHtml(text: String, width: Int): String {
-        return "<html><div style='text-align:center; width:${width}px;'>${StringUtil.escapeXmlEntities(text)}</div></html>"
-    }
-
     companion object {
         private const val DIALOG_WIDTH = 560
         private const val BASE_DIALOG_HEIGHT = 210
-        private const val STEP1_DIALOG_HEIGHT = 540
+        private const val HERO_DIALOG_HEIGHT = 540
+        private const val HERO_DIALOG_HEIGHT_NO_IMAGE = 320
         private const val STEP1_NUMBER = 1
+        private const val LAST_STEP_NUMBER = 10
         private const val DETAIL_SECTION_HEIGHT = 70
         private const val BEFORE_AFTER_SECTION_HEIGHT = 170
         private const val IMAGE_SECTION_HEIGHT = 260
