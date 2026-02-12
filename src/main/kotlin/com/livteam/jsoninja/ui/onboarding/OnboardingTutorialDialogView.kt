@@ -2,7 +2,6 @@ package com.livteam.jsoninja.ui.onboarding
 
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.util.text.StringUtil
-import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBFont
@@ -28,6 +27,7 @@ import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 
 class OnboardingTutorialDialogView(
+    onCancelRequested: () -> Unit,
     onPrevRequested: () -> Unit,
     onNextRequested: () -> Unit
 ) {
@@ -196,8 +196,8 @@ class OnboardingTutorialDialogView(
         add(heroPanel)
     }
 
-    private val dontShowAgainCheckBox = JBCheckBox(LocalizationBundle.message("onboarding.tutorial.dont.show.again")).apply {
-        font = JBFont.small()
+    private val skipButton = JButton(LocalizationBundle.message("onboarding.tutorial.close")).apply {
+        addActionListener { onCancelRequested() }
     }
 
     private val prevButton = JButton(LocalizationBundle.message("onboarding.tutorial.prev")).apply {
@@ -235,7 +235,7 @@ class OnboardingTutorialDialogView(
 
             val leftPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
                 isOpaque = false
-                add(dontShowAgainCheckBox)
+                add(skipButton)
             }
 
             val rightPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0)).apply {
@@ -312,10 +312,6 @@ class OnboardingTutorialDialogView(
         SwingUtilities.getRootPane(nextButton)?.defaultButton = if (nextButton.isEnabled) nextButton else null
 
         updateDialogLayout(hasDetail, hasBeforeAfter, hasImage, isStep1Hero)
-    }
-
-    fun isDontShowAgainSelected(): Boolean {
-        return dontShowAgainCheckBox.isSelected
     }
 
     fun focusNextButtonIfEnabled() {

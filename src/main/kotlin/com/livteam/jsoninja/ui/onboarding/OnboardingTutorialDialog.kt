@@ -22,13 +22,14 @@ import javax.swing.WindowConstants
 class OnboardingTutorialDialog(
     private val project: Project,
     private val rootComponent: JComponent,
-    private val onClosed: (Boolean) -> Unit
+    private val onClosed: () -> Unit
 ) : JDialog(WindowManager.getInstance().getFrame(project) as? Window), Disposable {
     private var closed = false
     private val presenter = OnboardingTutorialDialogPresenter(
         project = project,
         rootComponent = rootComponent,
-        tooltipParent = this
+        tooltipParent = this,
+        onCancelRequested = { dispose() }
     )
 
     init {
@@ -73,7 +74,7 @@ class OnboardingTutorialDialog(
         }
         closed = true
         presenter.dispose()
-        onClosed(presenter.isDontShowAgainSelected())
+        onClosed()
         super.dispose()
     }
 

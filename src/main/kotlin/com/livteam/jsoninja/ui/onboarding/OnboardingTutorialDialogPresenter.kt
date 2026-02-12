@@ -11,7 +11,8 @@ import javax.swing.Timer
 class OnboardingTutorialDialogPresenter(
     private val project: Project,
     private val rootComponent: JComponent,
-    private val tooltipParent: Disposable
+    private val tooltipParent: Disposable,
+    private val onCancelRequested: () -> Unit
 ) : Disposable {
 
     private data class TutorialStep(
@@ -85,6 +86,7 @@ class OnboardingTutorialDialogPresenter(
     )
 
     private val view = OnboardingTutorialDialogView(
+        onCancelRequested = onCancelRequested,
         onPrevRequested = ::moveToPrevStep,
         onNextRequested = ::moveToNextStep
     )
@@ -113,10 +115,6 @@ class OnboardingTutorialDialogPresenter(
 
     fun createSouthPanel(): JComponent {
         return view.createSouthPanel()
-    }
-
-    fun isDontShowAgainSelected(): Boolean {
-        return view.isDontShowAgainSelected()
     }
 
     fun refreshStep(showTooltip: Boolean = true) {
