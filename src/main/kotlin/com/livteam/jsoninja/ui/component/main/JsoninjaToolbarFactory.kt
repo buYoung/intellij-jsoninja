@@ -10,9 +10,23 @@ import com.livteam.jsoninja.actions.PrettifyJsonAction
 import com.livteam.jsoninja.actions.ShowJsonDiffAction
 import com.livteam.jsoninja.actions.UglifyJsonAction
 import com.livteam.jsoninja.actions.UnescapeJsonAction
+import com.livteam.jsoninja.ui.onboarding.OnboardingTutorialTargetIds
+import java.awt.Component
+import java.awt.Container
 import javax.swing.JComponent
 
 object JsoninjaToolbarFactory {
+    private val tutorialActionTargetIds = listOf(
+        OnboardingTutorialTargetIds.ACTION_ADD_TAB,
+        OnboardingTutorialTargetIds.ACTION_OPEN_FILE,
+        OnboardingTutorialTargetIds.ACTION_BEAUTIFY,
+        OnboardingTutorialTargetIds.ACTION_MINIFY,
+        OnboardingTutorialTargetIds.ACTION_ESCAPE,
+        OnboardingTutorialTargetIds.ACTION_UNESCAPE,
+        OnboardingTutorialTargetIds.ACTION_RANDOM_DATA,
+        OnboardingTutorialTargetIds.ACTION_DIFF
+    )
+
     fun create(targetComponent: JComponent): JComponent {
         val actionGroup = DefaultActionGroup().apply {
             isPopup = true
@@ -40,6 +54,31 @@ object JsoninjaToolbarFactory {
 
         actionToolbar.targetComponent = targetComponent
 
-        return actionToolbar.component
+        val toolbarComponent = actionToolbar.component
+        toolbarComponent.name = OnboardingTutorialTargetIds.TOOLBAR
+        bindTutorialTargets(toolbarComponent)
+
+        return toolbarComponent
+    }
+
+    private fun bindTutorialTargets(toolbarComponent: JComponent) {
+        val actionButtons = mutableListOf<JComponent>()
+        collectActionButtons(toolbarComponent, actionButtons)
+
+        tutorialActionTargetIds.forEachIndexed { index, targetId ->
+            actionButtons.getOrNull(index)?.name = targetId
+        }
+    }
+
+    private fun collectActionButtons(component: Component, collector: MutableList<JComponent>) {
+        if (component is JComponent && component.javaClass.name.contains("ActionButton")) {
+            collector.add(component)
+        }
+
+        if (component !is Container) return
+
+        component.components.forEach { child ->
+            collectActionButtons(child, collector)
+        }
     }
 }

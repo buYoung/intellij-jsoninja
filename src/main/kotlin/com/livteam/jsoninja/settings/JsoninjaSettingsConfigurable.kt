@@ -12,6 +12,7 @@ import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.model.JsonIconPack
+import com.livteam.jsoninja.services.OnboardingService
 import javax.swing.*
 
 class JsoninjaSettingsConfigurable(private val project: Project) : Configurable {
@@ -214,6 +215,13 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 }
                 row {
                     cell(showLargeFileWarningCheckBox!!)
+                }
+                separator()
+                row {
+                    button(LocalizationBundle.message("settings.onboarding.start.tutorial")) {
+                        SwingUtilities.getWindowAncestor(mainPanel)?.dispose()
+                        project.getService(OnboardingService::class.java).startTutorial()
+                    }
                 }
             }
         }

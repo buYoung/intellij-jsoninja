@@ -28,51 +28,7 @@ class ShowJsonDiffAction : AnAction(
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        val jsonDiffService = project.service<JsonDiffService>()
-        val settings = JsoninjaSettingsState.getInstance(project)
-
-        // Get current JSON from active tab using utility
-        val currentJson = JsonHelperUtils.getCurrentJsonFromToolWindow(project)
-
-        // Create JSONs with default templates if no content
-        val leftJson = currentJson ?: "{}"
-        val rightJson = "{}"
-
-        // Get display mode from settings
-        val displayMode = try {
-            JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
-        } catch (e: IllegalArgumentException) {
-            JsonDiffDisplayMode.WINDOW
-        }
-
-        val diffSortKeys = settings.diffSortKeys
-
-        when (displayMode) {
-            JsonDiffDisplayMode.EDITOR_TAB -> showAsEditorTab(project, jsonDiffService, leftJson, rightJson, diffSortKeys)
-            JsonDiffDisplayMode.WINDOW -> showAsWindow(project, jsonDiffService, leftJson, rightJson, diffSortKeys)
-        }
-    }
-
-    private fun showAsEditorTab(
-        project: Project,
-        diffService: JsonDiffService,
-        leftJson: String,
-        rightJson: String,
-        sortKeys: Boolean
-    ) {
-        val diffFile = JsonDiffVirtualFile(project, diffService, leftJson, rightJson, sortKeys)
-        DiffEditorTabFilesManager.getInstance(project).showDiffFile(diffFile, true)
-    }
-
-    private fun showAsWindow(
-        project: Project,
-        diffService: JsonDiffService,
-        leftJson: String,
-        rightJson: String,
-        sortKeys: Boolean
-    ) {
-        val diffChain = JsonDiffRequestChain(project, diffService, leftJson, rightJson, sortKeys)
-        DiffManager.getInstance().showDiff(project, diffChain, DiffDialogHints.FRAME)
+        openDiffForCurrentJson(project)
     }
 
     override fun update(e: AnActionEvent) {
@@ -83,5 +39,54 @@ class ShowJsonDiffAction : AnAction(
 
     override fun getActionUpdateThread(): ActionUpdateThread {
         return ActionUpdateThread.BGT
+    }
+
+    companion object {
+        fun openDiffForCurrentJson(project: Project, forceWindow: Boolean = false) {
+            val jsonDiffService = project.service<JsonDiffService>()
+            val settings = JsoninjaSettingsState.getInstance(project)
+            val currentJson = JsonHelperUtils.getCurrentJsonFromToolWindow(project)
+            val leftJson = currentJson ?: "{}"
+            val rightJson = "{}"
+
+            val displayMode = if (forceWindow) {
+                JsonDiffDisplayMode.WINDOW
+            } else {
+                try {
+                    JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
+                } catch (_: IllegalArgumentException) {
+                    JsonDiffDisplayMode.WINDOW
+                }
+            }
+
+            val diffSortKeys = settings.diffSortKeys
+
+            when (displayMode) {
+                JsonDiffDisplayMode.EDITOR_TAB -> showAsEditorTab(project, jsonDiffService, leftJson, rightJson, diffSortKeys)
+                JsonDiffDisplayMode.WINDOW -> showAsWindow(project, jsonDiffService, leftJson, rightJson, diffSortKeys)
+            }
+        }
+
+        private fun showAsEditorTab(
+            project: Project,
+            diffService: JsonDiffService,
+            leftJson: String,
+            rightJson: String,
+            sortKeys: Boolean
+        ) {
+            val diffFile = JsonDiffVirtualFile(project, diffService, leftJson, rightJson, sortKeys)
+            DiffEditorTabFilesManager.getInstance(project).showDiffFile(diffFile, true)
+        }
+
+        private fun showAsWindow(
+            project: Project,
+            diffService: JsonDiffService,
+            leftJson: String,
+            rightJson: String,
+            sortKeys: Boolean
+        ) {
+            val diffChain = JsonDiffRequestChain(project, diffService, leftJson, rightJson, sortKeys)
+            DiffManager.getInstance().showDiff(project, diffChain, DiffDialogHints.FRAME)
+        }
     }
 }

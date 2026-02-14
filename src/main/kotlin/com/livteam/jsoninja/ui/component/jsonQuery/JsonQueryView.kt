@@ -2,6 +2,7 @@ package com.livteam.jsoninja.ui.component.jsonQuery
 
 import com.intellij.ui.SearchTextField
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.ui.onboarding.OnboardingTutorialTargetIds
 import java.awt.event.KeyAdapter
 import javax.swing.JComponent
 
@@ -13,6 +14,7 @@ class JsonQueryView {
     private val jmesPathField = SearchTextField()
 
     init {
+        jmesPathField.name = OnboardingTutorialTargetIds.QUERY_FIELD
         jmesPathField.textEditor.emptyText.text = LocalizationBundle.message("jmesPathPlaceholder")
     }
 
