@@ -43,45 +43,27 @@ class OnboardingTutorialDialogPresenter(
         ),
         TutorialStep(
             4,
-            "onboarding.tutorial.step4.title",
-            "onboarding.tutorial.step4.body",
-            OnboardingTutorialTargetIds.ACTION_MINIFY
-        ),
-        TutorialStep(
-            5,
             "onboarding.tutorial.step5.title",
             "onboarding.tutorial.step5.body",
             OnboardingTutorialTargetIds.ACTION_ESCAPE
         ),
         TutorialStep(
-            6,
-            "onboarding.tutorial.step6.title",
-            "onboarding.tutorial.step6.body",
-            OnboardingTutorialTargetIds.ACTION_UNESCAPE
-        ),
-        TutorialStep(
-            7,
+            5,
             "onboarding.tutorial.step7.title",
             "onboarding.tutorial.step7.body",
             OnboardingTutorialTargetIds.ACTION_RANDOM_DATA
         ),
         TutorialStep(
-            8,
+            6,
             "onboarding.tutorial.step8.title",
             "onboarding.tutorial.step8.body",
             OnboardingTutorialTargetIds.ACTION_DIFF
         ),
         TutorialStep(
-            9,
+            7,
             "onboarding.tutorial.step9.title",
             "onboarding.tutorial.step9.body",
             OnboardingTutorialTargetIds.QUERY_FIELD
-        ),
-        TutorialStep(
-            10,
-            "onboarding.tutorial.step10.title",
-            "onboarding.tutorial.step10.body",
-            OnboardingTutorialTargetIds.JSON_EDITOR
         )
     )
 
