@@ -110,6 +110,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
             }
         }
 
+        LOG.error("Fallback generation failed. No schema-compliant candidate was found.", cause)
         throw JsonSchemaGenerationException(
             message = "Unable to generate schema-compliant data.",
             jsonPointer = "#",

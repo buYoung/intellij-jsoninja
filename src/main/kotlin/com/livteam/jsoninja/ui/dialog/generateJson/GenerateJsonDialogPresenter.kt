@@ -55,7 +55,7 @@ class GenerateJsonDialogPresenter(
             schemaDataGenerationService.prepareSchema(schemaText)
             null
         } catch (generationException: JsonSchemaGenerationException) {
-            LOG.warn(
+            LOG.error(
                 "Schema validation failed in dialog. pointer=${generationException.jsonPointer}, message=${generationException.message}",
                 generationException
             )

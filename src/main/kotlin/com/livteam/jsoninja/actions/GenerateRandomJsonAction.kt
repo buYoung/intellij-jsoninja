@@ -50,7 +50,7 @@ class GenerateRandomJsonAction : AnAction(
                         panel.presenter.setRandomJsonData(generatedJson, skipFormatting = config.isJson5)
                     }
                 } catch (generationException: JsonSchemaGenerationException) {
-                    LOG.warn(
+                    LOG.error(
                         "Schema generation failed. pointer=${generationException.jsonPointer}, message=${generationException.message}",
                         generationException
                     )
