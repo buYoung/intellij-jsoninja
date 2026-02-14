@@ -8,11 +8,10 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import javax.swing.JComponent
 
 class GenerateJsonDialog(
-    project: Project?,
-    schemaPrefillProvider: (() -> String?)? = null
+    project: Project?
 ) : DialogWrapper(project) {
 
-    private val presenter = GenerateJsonDialogPresenter(project, schemaPrefillProvider) { pack() }
+    private val presenter = GenerateJsonDialogPresenter(project) { pack() }
 
     init {
         title = LocalizationBundle.message("dialog.generate.json.title")

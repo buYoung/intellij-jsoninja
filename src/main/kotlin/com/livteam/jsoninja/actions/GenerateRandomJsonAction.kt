@@ -23,7 +23,7 @@ class GenerateRandomJsonAction : AnAction(
         val project = e.project ?: return
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
 
-        val dialog = GenerateJsonDialog(project) { panel.presenter.getCurrentEditor()?.getText() }
+        val dialog = GenerateJsonDialog(project)
         if (dialog.showAndGet()) {
             val config = dialog.getConfig()
 

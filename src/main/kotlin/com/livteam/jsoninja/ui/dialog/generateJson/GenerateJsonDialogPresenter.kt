@@ -11,11 +11,10 @@ import javax.swing.JComponent
 
 class GenerateJsonDialogPresenter(
     private val project: Project?,
-    schemaPrefillProvider: (() -> String?)?,
     onLayoutChanged: () -> Unit
 ) {
     private val schemaDataGenerationService = project?.getService(JsonSchemaDataGenerationService::class.java)
-    private val view = GenerateJsonDialogView(project, schemaPrefillProvider, onLayoutChanged)
+    private val view = GenerateJsonDialogView(project, onLayoutChanged)
 
     fun dispose() {
         view.dispose()

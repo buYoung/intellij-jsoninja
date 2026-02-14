@@ -1,9 +1,13 @@
 package com.livteam.jsoninja.ui.dialog.generateJson
 
 import com.intellij.json.JsonFileType
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.components.JBCheckBox
@@ -19,14 +23,16 @@ import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonRootType
-import javax.swing.JButton
+import java.io.IOException
 import javax.swing.JComponent
+import javax.swing.JButton
 import javax.swing.JPanel
 import java.awt.BorderLayout
+import java.net.HttpURLConnection
+import java.net.URL
 
 class GenerateJsonDialogView(
     private val project: Project?,
-    private val schemaPrefillProvider: (() -> String?)?,
     private val onLayoutChanged: () -> Unit
 ) {
     private lateinit var rootTypeObject: JBRadioButton
@@ -38,9 +44,10 @@ class GenerateJsonDialogView(
     private lateinit var randomJson5Checkbox: JBCheckBox
 
     private lateinit var schemaEditor: EditorTextField
+    private lateinit var schemaUrlField: JBTextField
+    private lateinit var loadSchemaFromUrlButton: JButton
     private lateinit var schemaOutputCountField: JBTextField
     private lateinit var schemaJson5Checkbox: JBCheckBox
-    private lateinit var loadCurrentEditorButton: JButton
     private lateinit var tabbedPane: JBTabbedPane
 
     private val initialConfig = JsonGenerationConfig()
@@ -189,11 +196,16 @@ class GenerateJsonDialogView(
         val schemaPanel = JPanel(BorderLayout())
         val optionsPanel = panel {
             group(LocalizationBundle.message("dialog.generate.json.schema.group.input")) {
-                row {
-                    loadCurrentEditorButton = button(LocalizationBundle.message("dialog.generate.json.schema.load.current")) {
-                        loadSchemaFromCurrentEditor()
+                row(LocalizationBundle.message("dialog.generate.json.schema.url.label")) {
+                    schemaUrlField = textField()
+                        .align(AlignX.FILL)
+                        .resizableColumn()
+                        .comment(LocalizationBundle.message("dialog.generate.json.schema.url.comment"))
+                        .component
+                    loadSchemaFromUrlButton = button(LocalizationBundle.message("dialog.generate.json.schema.url.load.button")) {
+                        loadSchemaFromUrl()
                     }.component
-                }
+                }.layout(RowLayout.PARENT_GRID)
 
                 row(LocalizationBundle.message("dialog.generate.json.schema.output.count")) {
                     schemaOutputCountField = intTextField(1..100)
@@ -231,18 +243,85 @@ class GenerateJsonDialogView(
         }
     }
 
-    private fun loadSchemaFromCurrentEditor() {
-        val schemaPrefillText = schemaPrefillProvider?.invoke()?.trim().orEmpty()
-        if (schemaPrefillText.isBlank()) return
+    private fun loadSchemaFromUrl() {
+        val schemaUrl = schemaUrlField.text.trim()
+        if (schemaUrl.isBlank()) {
+            showSchemaUrlError(LocalizationBundle.message("dialog.generate.json.schema.url.empty"))
+            return
+        }
 
+        if (!schemaUrl.startsWith("http://") && !schemaUrl.startsWith("https://")) {
+            showSchemaUrlError(LocalizationBundle.message("dialog.generate.json.schema.url.invalid"))
+            return
+        }
+
+        loadSchemaFromUrlButton.isEnabled = false
+
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                val fetchedSchemaText = fetchSchemaText(schemaUrl)
+                if (fetchedSchemaText.trim().isEmpty()) {
+                    throw IOException(LocalizationBundle.message("dialog.generate.json.schema.url.fetch.empty"))
+                }
+
+                invokeLater(ModalityState.any()) {
+                    setSchemaEditorText(fetchedSchemaText)
+                }
+            } catch (exception: Exception) {
+                val message = exception.message
+                    ?: LocalizationBundle.message("dialog.generate.json.schema.url.fetch.failed")
+                invokeLater(ModalityState.any()) {
+                    showSchemaUrlError(message)
+                }
+            } finally {
+                invokeLater(ModalityState.any()) {
+                    loadSchemaFromUrlButton.isEnabled = true
+                }
+            }
+        }
+    }
+
+    private fun fetchSchemaText(schemaUrl: String): String {
+        val connection = URL(schemaUrl).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 15_000
+        connection.instanceFollowRedirects = true
+        connection.setRequestProperty("Accept", "application/schema+json, application/json;q=0.9, */*;q=0.8")
+
+        return try {
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                throw IOException(
+                    LocalizationBundle.message("dialog.generate.json.schema.url.http.status", responseCode)
+                )
+            }
+
+            connection.inputStream.bufferedReader().use { reader ->
+                reader.readText()
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun setSchemaEditorText(schemaText: String) {
         if (project == null) {
-            schemaEditor.text = schemaPrefillText
+            schemaEditor.text = schemaText
             return
         }
 
         WriteCommandAction.runWriteCommandAction(project) {
-            schemaEditor.text = schemaPrefillText
+            schemaEditor.text = schemaText
         }
+    }
+
+    private fun showSchemaUrlError(errorMessage: String) {
+        Messages.showErrorDialog(
+            project,
+            errorMessage,
+            LocalizationBundle.message("dialog.generate.json.error.title")
+        )
     }
 
     private fun validateRandomTab(): ValidationInfo? {
