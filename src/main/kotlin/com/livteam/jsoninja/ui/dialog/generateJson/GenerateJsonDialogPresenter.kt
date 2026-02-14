@@ -1,7 +1,6 @@
 package com.livteam.jsoninja.ui.dialog.generateJson
 
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.ui.ValidationInfo
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.schema.JsonSchemaDataGenerationService
@@ -14,7 +13,6 @@ class GenerateJsonDialogPresenter(
     private val project: Project?,
     onLayoutChanged: () -> Unit
 ) {
-    private val LOG = logger<GenerateJsonDialogPresenter>()
     private val schemaDataGenerationService = project?.getService(JsonSchemaDataGenerationService::class.java)
     private val view = GenerateJsonDialogView(project, onLayoutChanged)
 
@@ -52,19 +50,14 @@ class GenerateJsonDialogPresenter(
         }
 
         return try {
-            schemaDataGenerationService.prepareSchema(schemaText)
+            schemaDataGenerationService.validateSchemaText(schemaText)
             null
         } catch (generationException: JsonSchemaGenerationException) {
-            LOG.error(
-                "Schema validation failed in dialog. pointer=${generationException.jsonPointer}, message=${generationException.message}",
-                generationException
-            )
             ValidationInfo(
                 generationException.message ?: LocalizationBundle.message("validation.error.schema.invalid"),
                 view.getSchemaInputComponent()
             )
         } catch (exception: Exception) {
-            LOG.error("Unexpected schema validation error in dialog.", exception)
             ValidationInfo(
                 LocalizationBundle.message("validation.error.schema.invalid"),
                 view.getSchemaInputComponent()

@@ -29,6 +29,10 @@ class JsonSchemaValueGenerator(private val project: Project) {
     private val faker = Faker()
     private val jsonNodeFactory = JsonNodeFactory.instance
 
+    companion object {
+        private const val DEFAULT_OPTIONAL_PROPERTY_COUNT = 3
+    }
+
     fun generateValue(constraint: JsonSchemaConstraint): JsonNode {
         resolvePresetValue(constraint.schemaNode)?.let { return it.deepCopy() }
 
@@ -72,9 +76,11 @@ class JsonSchemaValueGenerator(private val project: Project) {
         val remainingPropertyNames = constraint.propertyConstraints.keys
             .filterNot { propertyName -> generatedPropertyNames.contains(propertyName) }
 
+        val effectiveMinProperties = constraint.minimumProperties
+            ?: (generatedPropertyNames.size + min(DEFAULT_OPTIONAL_PROPERTY_COUNT, remainingPropertyNames.size))
         val targetOptionalCount = min(
             remainingPropertyNames.size,
-            max(0, (constraint.minimumProperties ?: generatedPropertyNames.size) - generatedPropertyNames.size)
+            max(0, effectiveMinProperties - generatedPropertyNames.size)
         )
         remainingPropertyNames.take(targetOptionalCount).forEach { optionalPropertyName ->
             val propertyConstraint = constraint.propertyConstraints.getValue(optionalPropertyName)

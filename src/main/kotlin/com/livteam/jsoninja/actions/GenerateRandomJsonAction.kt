@@ -76,6 +76,15 @@ class GenerateRandomJsonAction : AnAction(
                             LocalizationBundle.message("dialog.generate.json.error.title")
                         )
                     }
+                } catch (error: Throwable) {
+                    LOG.error("Fatal error while generating JSON.", error)
+                    invokeLater(ModalityState.any()) {
+                        Messages.showErrorDialog(
+                            project,
+                            error.message ?: LocalizationBundle.message("dialog.generate.json.error.generic"),
+                            LocalizationBundle.message("dialog.generate.json.error.title")
+                        )
+                    }
                 }
             }
         }

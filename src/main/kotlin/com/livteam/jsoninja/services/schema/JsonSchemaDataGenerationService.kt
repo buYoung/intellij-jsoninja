@@ -29,6 +29,14 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         val rootConstraint: JsonSchemaConstraint
     )
 
+    /**
+     * EDT에서 호출 가능한 가벼운 스키마 텍스트 검증 (JSON 파싱 + 기본 구조 확인만 수행).
+     * 전체 $ref 해석 및 networknt 컴파일은 수행하지 않음.
+     */
+    fun validateSchemaText(schemaText: String) {
+        validationService.parseStrictSchema(schemaText)
+    }
+
     fun prepareSchema(schemaText: String): PreparedSchema {
         val parsedSchemaNode = validationService.parseStrictSchema(schemaText)
         val normalizedJsonSchema = normalizer.normalize(parsedSchemaNode)
