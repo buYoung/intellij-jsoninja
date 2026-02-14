@@ -9,6 +9,7 @@ import com.intellij.openapi.project.Project
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.JsonSchemaFactory
 import com.networknt.schema.SpecVersion
+import com.networknt.schema.SpecVersionDetector
 import com.networknt.schema.ValidationMessage
 
 @Service(Service.Level.PROJECT)
@@ -22,8 +23,10 @@ class JsonSchemaValidationService(private val project: Project) {
             configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, false)
         }
 
-    private val schemaFactory: JsonSchemaFactory =
-        JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012)
+    private val schemaFactoryByVersion: Map<SpecVersion.VersionFlag, JsonSchemaFactory> =
+        SpecVersion.VersionFlag.values().associateWith { versionFlag ->
+            JsonSchemaFactory.getInstance(versionFlag)
+        }
 
     data class SchemaValidationResult(
         val isValid: Boolean,
@@ -61,10 +64,13 @@ class JsonSchemaValidationService(private val project: Project) {
 
     fun compileSchema(schemaNode: JsonNode): JsonSchema {
         try {
+            val versionFlag = detectVersionFlag(schemaNode)
+            val schemaFactory = schemaFactoryByVersion[versionFlag]
+                ?: JsonSchemaFactory.getInstance(versionFlag)
             return schemaFactory.getSchema(schemaNode)
         } catch (exception: Exception) {
             throw JsonSchemaGenerationException(
-                message = "Failed to compile JSON Schema (2020-12): ${exception.message}",
+                message = "Failed to compile JSON Schema: ${exception.message}",
                 jsonPointer = "#",
                 cause = exception
             )
@@ -138,5 +144,10 @@ class JsonSchemaValidationService(private val project: Project) {
             return messageText.substring(atIndex + 4).trim()
         }
         return "#"
+    }
+
+    private fun detectVersionFlag(schemaNode: JsonNode): SpecVersion.VersionFlag {
+        return SpecVersionDetector.detectOptionalVersion(schemaNode, true)
+            .orElse(SpecVersion.VersionFlag.V202012)
     }
 }
