@@ -7,9 +7,12 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import javax.swing.JComponent
 
-class GenerateJsonDialog(project: Project?) : DialogWrapper(project) {
+class GenerateJsonDialog(
+    project: Project?,
+    schemaPrefillProvider: (() -> String?)? = null
+) : DialogWrapper(project) {
 
-    private val presenter = GenerateJsonDialogPresenter { pack() }
+    private val presenter = GenerateJsonDialogPresenter(project, schemaPrefillProvider) { pack() }
 
     init {
         title = LocalizationBundle.message("dialog.generate.json.title")
@@ -27,5 +30,10 @@ class GenerateJsonDialog(project: Project?) : DialogWrapper(project) {
 
     fun getConfig(): JsonGenerationConfig {
         return presenter.getConfig()
+    }
+
+    override fun dispose() {
+        presenter.dispose()
+        super.dispose()
     }
 }

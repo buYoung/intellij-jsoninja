@@ -68,6 +68,10 @@ class RandomJsonDataCreator(
         }
     }
 
+    fun applyJson5Features(jsonString: String): String {
+        return addJson5Features(jsonString)
+    }
+
     /**
      * 개발 친화적인 키 이름 생성 시도
      */

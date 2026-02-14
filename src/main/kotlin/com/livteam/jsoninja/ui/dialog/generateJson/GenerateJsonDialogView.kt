@@ -1,68 +1,117 @@
 package com.livteam.jsoninja.ui.dialog.generateJson
 
+import com.intellij.json.JsonFileType
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.ui.EditorTextField
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBRadioButton
+import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.layout.selected
+import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
+import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
+import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonRootType
+import javax.swing.JButton
 import javax.swing.JComponent
+import javax.swing.JPanel
+import java.awt.BorderLayout
 
-class GenerateJsonDialogView(private val onLayoutChanged: () -> Unit) {
-
+class GenerateJsonDialogView(
+    private val project: Project?,
+    private val schemaPrefillProvider: (() -> String?)?,
+    private val onLayoutChanged: () -> Unit
+) {
     private lateinit var rootTypeObject: JBRadioButton
     private lateinit var rootTypeArray: JBRadioButton
     private lateinit var objectPropertyCountField: JBTextField
     private lateinit var arrayElementCountField: JBTextField
     private lateinit var propertiesPerObjectInArrayField: JBTextField
     private lateinit var maxDepthField: JBTextField
-    private lateinit var json5Checkbox: JBCheckBox
+    private lateinit var randomJson5Checkbox: JBCheckBox
 
-    private val initialConfig = JsonGenerationConfig() // 기본값으로 시작
+    private lateinit var schemaEditor: EditorTextField
+    private lateinit var schemaOutputCountField: JBTextField
+    private lateinit var schemaJson5Checkbox: JBCheckBox
+    private lateinit var loadCurrentEditorButton: JButton
+    private lateinit var tabbedPane: JBTabbedPane
+
+    private val initialConfig = JsonGenerationConfig()
 
     val component: JComponent by lazy { createComponent() }
 
     fun validate(): ValidationInfo? {
-        if (rootTypeObject.isSelected) {
-            if (objectPropertyCountField.text.toIntOrNull() == null || objectPropertyCountField.text.toInt() <= 0) {
-                return ValidationInfo(
-                    LocalizationBundle.message("validation.error.positive.integer.required"),
-                    objectPropertyCountField
-                )
-            }
-        } else { // 배열 선택됨
-            if (arrayElementCountField.text.toIntOrNull() == null || arrayElementCountField.text.toInt() <= 0) {
-                return ValidationInfo(
-                    LocalizationBundle.message("validation.error.positive.integer.required"),
-                    arrayElementCountField
-                )
-            }
-            if (propertiesPerObjectInArrayField.text.toIntOrNull() == null || propertiesPerObjectInArrayField.text.toInt() <= 0) {
-                return ValidationInfo(
-                    LocalizationBundle.message("validation.error.positive.integer.required"),
-                    propertiesPerObjectInArrayField
-                )
-            }
+        return if (getGenerationMode() == JsonGenerationMode.RANDOM) {
+            validateRandomTab()
+        } else {
+            validateSchemaTab()
         }
-        return null
+    }
+
+    fun getGenerationMode(): JsonGenerationMode {
+        return if (tabbedPane.selectedIndex == 1) {
+            JsonGenerationMode.SCHEMA
+        } else {
+            JsonGenerationMode.RANDOM
+        }
+    }
+
+    fun getSchemaText(): String {
+        return schemaEditor.text
+    }
+
+    fun getSchemaInputComponent(): JComponent {
+        return schemaEditor
     }
 
     fun getConfig(): JsonGenerationConfig {
+        val generationMode = getGenerationMode()
         return JsonGenerationConfig(
+            generationMode = generationMode,
             jsonRootType = if (rootTypeObject.isSelected) JsonRootType.OBJECT else JsonRootType.ARRAY_OF_OBJECTS,
             objectPropertyCount = objectPropertyCountField.text.toIntOrNull() ?: initialConfig.objectPropertyCount,
             arrayElementCount = arrayElementCountField.text.toIntOrNull() ?: initialConfig.arrayElementCount,
             propertiesPerObjectInArray = propertiesPerObjectInArrayField.text.toIntOrNull()
                 ?: initialConfig.propertiesPerObjectInArray,
             maxDepth = maxDepthField.text.toIntOrNull() ?: initialConfig.maxDepth,
-            isJson5 = json5Checkbox.isSelected
+            isJson5 = if (generationMode == JsonGenerationMode.RANDOM) {
+                randomJson5Checkbox.isSelected
+            } else {
+                schemaJson5Checkbox.isSelected
+            },
+            schemaText = schemaEditor.text,
+            schemaOutputCount = schemaOutputCountField.text.toIntOrNull() ?: initialConfig.schemaOutputCount
         )
     }
 
+    fun dispose() {
+        (schemaEditor as? Disposable)?.let { disposableEditor ->
+            com.intellij.openapi.util.Disposer.dispose(disposableEditor)
+        }
+    }
+
     private fun createComponent(): JComponent {
+        tabbedPane = JBTabbedPane()
+        tabbedPane.addTab(LocalizationBundle.message("dialog.generate.json.tab.random"), createRandomPanel())
+        tabbedPane.addTab(LocalizationBundle.message("dialog.generate.json.tab.schema"), createSchemaPanel())
+        tabbedPane.addChangeListener {
+            onLayoutChanged()
+        }
+
+        return JPanel(BorderLayout()).apply {
+            preferredSize = JBUI.size(640, 500)
+            add(tabbedPane, BorderLayout.CENTER)
+        }
+    }
+
+    private fun createRandomPanel(): JComponent {
         return panel {
             group(LocalizationBundle.message("dialog.generate.json.group.structure")) {
                 buttonsGroup {
@@ -70,20 +119,18 @@ class GenerateJsonDialogView(private val onLayoutChanged: () -> Unit) {
                         rootTypeObject = radioButton(
                             LocalizationBundle.message("dialog.generate.json.radio.object"),
                             JsonRootType.OBJECT
-                        )
-                            .component
+                        ).component
                         rootTypeArray = radioButton(
                             LocalizationBundle.message("dialog.generate.json.radio.array"),
                             JsonRootType.ARRAY_OF_OBJECTS
-                        )
-                            .component
+                        ).component
                     }
                 }.bind(
                     { if (rootTypeObject.isSelected) JsonRootType.OBJECT else JsonRootType.ARRAY_OF_OBJECTS },
                     { selectedType ->
-                        rootTypeObject.isSelected = (selectedType == JsonRootType.OBJECT)
-                        rootTypeArray.isSelected = (selectedType == JsonRootType.ARRAY_OF_OBJECTS)
-                        updateFieldVisibility()
+                        rootTypeObject.isSelected = selectedType == JsonRootType.OBJECT
+                        rootTypeArray.isSelected = selectedType == JsonRootType.ARRAY_OF_OBJECTS
+                        onLayoutChanged()
                     }
                 )
             }
@@ -110,7 +157,7 @@ class GenerateJsonDialogView(private val onLayoutChanged: () -> Unit) {
                 }.visibleIf(rootTypeArray.selected)
 
                 row(LocalizationBundle.message("dialog.generate.json.label.props.per.object")) {
-                    propertiesPerObjectInArrayField = intTextField(1..100) // 범위 예시
+                    propertiesPerObjectInArrayField = intTextField(1..100)
                         .apply {
                             component.text = initialConfig.propertiesPerObjectInArray.toString()
                         }
@@ -119,33 +166,125 @@ class GenerateJsonDialogView(private val onLayoutChanged: () -> Unit) {
                         .component
                 }.visibleIf(rootTypeArray.selected)
 
-                separator()
-
-                row(LocalizationBundle.message("dialog.generate.json.label.max.depth")) { // "최대 생성 깊이 (Max Depth):"
-                    maxDepthField = intTextField(1..10) // 범위 예시: 1부터 10까지
-                        .apply { component.text = initialConfig.maxDepth.toString() } // 초기값 설정
+                row(LocalizationBundle.message("dialog.generate.json.label.max.depth")) {
+                    maxDepthField = intTextField(1..10)
+                        .apply { component.text = initialConfig.maxDepth.toString() }
                         .gap(RightGap.SMALL)
-                        .comment(LocalizationBundle.message("dialog.generate.json.comment.max.depth")) // "중첩 레벨 제한 (1 이상)"
+                        .comment(LocalizationBundle.message("dialog.generate.json.comment.max.depth"))
                         .component
                 }
             }
 
             group(LocalizationBundle.message("dialog.generate.json.group.options")) {
                 row {
-                    json5Checkbox = checkBox(LocalizationBundle.message("dialog.generate.json.checkbox.json5"))
+                    randomJson5Checkbox = checkBox(LocalizationBundle.message("dialog.generate.json.checkbox.json5"))
                         .apply { component.isSelected = initialConfig.isJson5 }
                         .component
                 }
             }
-
-            updateFieldVisibility()
         }
     }
 
-    private fun updateFieldVisibility() {
-        // DSL의 `visibleIf` 바인딩에 의존하지만, 나중에 복잡한 상호 의존성이 생기면
-        // 수동 호출이 필요할 수 있습니다. 현재는 DSL이 처리합니다.
-        // 이 함수는 향후 더 복잡한 로직에 유용할 수 있습니다.
-        onLayoutChanged() // 가시성 변경 시 다이얼로그 크기 조정
+    private fun createSchemaPanel(): JComponent {
+        val schemaPanel = JPanel(BorderLayout())
+        val optionsPanel = panel {
+            group(LocalizationBundle.message("dialog.generate.json.schema.group.input")) {
+                row {
+                    loadCurrentEditorButton = button(LocalizationBundle.message("dialog.generate.json.schema.load.current")) {
+                        loadSchemaFromCurrentEditor()
+                    }.component
+                }
+
+                row(LocalizationBundle.message("dialog.generate.json.schema.output.count")) {
+                    schemaOutputCountField = intTextField(1..100)
+                        .apply { component.text = initialConfig.schemaOutputCount.toString() }
+                        .gap(RightGap.SMALL)
+                        .comment(LocalizationBundle.message("dialog.generate.json.schema.output.count.comment"))
+                        .component
+                }
+
+                row {
+                    schemaJson5Checkbox = checkBox(LocalizationBundle.message("dialog.generate.json.checkbox.json5"))
+                        .apply { component.isSelected = initialConfig.isJson5 }
+                        .component
+                }
+            }
+        }
+
+        schemaEditor = createSchemaEditor()
+        schemaPanel.add(optionsPanel, BorderLayout.NORTH)
+        schemaPanel.add(schemaEditor, BorderLayout.CENTER)
+        return schemaPanel
+    }
+
+    private fun createSchemaEditor(): EditorTextField {
+        val initialSchemaText = LocalizationBundle.message("dialog.generate.json.schema.placeholder")
+        val document = JsonDocumentFactory.createJsonDocument(
+            initialSchemaText,
+            project,
+            SimpleJsonDocumentCreator(),
+            "json"
+        )
+        return EditorTextField(document, project, JsonFileType.INSTANCE, false, false).apply {
+            preferredSize = JBUI.size(620, 320)
+            putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
+        }
+    }
+
+    private fun loadSchemaFromCurrentEditor() {
+        val schemaPrefillText = schemaPrefillProvider?.invoke()?.trim().orEmpty()
+        if (schemaPrefillText.isBlank()) return
+
+        if (project == null) {
+            schemaEditor.text = schemaPrefillText
+            return
+        }
+
+        WriteCommandAction.runWriteCommandAction(project) {
+            schemaEditor.text = schemaPrefillText
+        }
+    }
+
+    private fun validateRandomTab(): ValidationInfo? {
+        if (rootTypeObject.isSelected) {
+            if (objectPropertyCountField.text.toIntOrNull() == null || objectPropertyCountField.text.toInt() <= 0) {
+                return ValidationInfo(
+                    LocalizationBundle.message("validation.error.positive.integer.required"),
+                    objectPropertyCountField
+                )
+            }
+        } else {
+            if (arrayElementCountField.text.toIntOrNull() == null || arrayElementCountField.text.toInt() <= 0) {
+                return ValidationInfo(
+                    LocalizationBundle.message("validation.error.positive.integer.required"),
+                    arrayElementCountField
+                )
+            }
+            if (propertiesPerObjectInArrayField.text.toIntOrNull() == null || propertiesPerObjectInArrayField.text.toInt() <= 0) {
+                return ValidationInfo(
+                    LocalizationBundle.message("validation.error.positive.integer.required"),
+                    propertiesPerObjectInArrayField
+                )
+            }
+        }
+        return null
+    }
+
+    private fun validateSchemaTab(): ValidationInfo? {
+        if (schemaOutputCountField.text.toIntOrNull() == null || schemaOutputCountField.text.toInt() <= 0) {
+            return ValidationInfo(
+                LocalizationBundle.message("validation.error.positive.integer.required.ge1"),
+                schemaOutputCountField
+            )
+        }
+
+        if (schemaEditor.text.trim().isBlank()) {
+            return ValidationInfo(
+                LocalizationBundle.message("validation.error.schema.required"),
+                schemaEditor
+            )
+        }
+
+        return null
     }
 }
