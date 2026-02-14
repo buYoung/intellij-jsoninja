@@ -286,7 +286,7 @@ class OnboardingStep8DiffTooltipController(
     }
 
     companion object {
-        private const val STEP8_STEP_NUMBER = 8
+        private const val STEP8_STEP_NUMBER = 6
         private const val MAX_TOOLTIP_RETRY = 20
         private const val TOOLTIP_RETRY_DELAY_MS = 250
     }

@@ -251,6 +251,6 @@ class OnboardingTutorialDialogPresenter(
     companion object {
         private const val MAX_TOOLTIP_RETRY = 10
         private const val TOOLTIP_RETRY_DELAY_MS = 150
-        private const val STEP8_STEP_NUMBER = 8
+        private const val STEP8_STEP_NUMBER = 6
     }
 }
