@@ -8,7 +8,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
+import java.io.IOException
 import java.math.BigDecimal
+import java.net.HttpURLConnection
+import java.net.URI
+import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -26,7 +30,8 @@ class JsonSchemaNormalizer(private val project: Project) {
     private data class SchemaDocumentContext(
         val rootNode: JsonNode,
         val anchorNodes: Map<String, JsonNode>,
-        val baseDirectory: Path?
+        val baseDirectory: Path?,
+        val baseUri: String?
     )
 
     fun normalize(schemaNode: JsonNode): NormalizedJsonSchema {
@@ -34,14 +39,17 @@ class JsonSchemaNormalizer(private val project: Project) {
         val rootDocumentContext = SchemaDocumentContext(
             rootNode = schemaNode.deepCopy(),
             anchorNodes = collectAnchorNodes(schemaNode),
-            baseDirectory = projectBasePath
+            baseDirectory = projectBasePath,
+            baseUri = null
         )
 
         val loadedDocumentContextByPath = mutableMapOf<Path, SchemaDocumentContext>()
+        val loadedRemoteDocumentContextByUri = mutableMapOf<String, SchemaDocumentContext>()
         val resolvedSchemaNode = resolveReferences(
             schemaNode = rootDocumentContext.rootNode,
             currentDocumentContext = rootDocumentContext,
             loadedDocumentContextByPath = loadedDocumentContextByPath,
+            loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
             resolutionStack = mutableSetOf()
         )
 
@@ -57,6 +65,7 @@ class JsonSchemaNormalizer(private val project: Project) {
         schemaNode: JsonNode,
         currentDocumentContext: SchemaDocumentContext,
         loadedDocumentContextByPath: MutableMap<Path, SchemaDocumentContext>,
+        loadedRemoteDocumentContextByUri: MutableMap<String, SchemaDocumentContext>,
         resolutionStack: MutableSet<String>
     ): JsonNode {
         if (schemaNode.isObject) {
@@ -69,6 +78,7 @@ class JsonSchemaNormalizer(private val project: Project) {
                     referenceValue = referenceValue,
                     currentDocumentContext = currentDocumentContext,
                     loadedDocumentContextByPath = loadedDocumentContextByPath,
+                    loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
                     resolutionStack = resolutionStack
                 )
 
@@ -91,6 +101,7 @@ class JsonSchemaNormalizer(private val project: Project) {
                     schemaNode = mergedSchemaNode,
                     currentDocumentContext = currentDocumentContext,
                     loadedDocumentContextByPath = loadedDocumentContextByPath,
+                    loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
                     resolutionStack = resolutionStack
                 )
             }
@@ -105,6 +116,7 @@ class JsonSchemaNormalizer(private val project: Project) {
                         schemaNode = field.value,
                         currentDocumentContext = currentDocumentContext,
                         loadedDocumentContextByPath = loadedDocumentContextByPath,
+                        loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
                         resolutionStack = resolutionStack
                     )
                 )
@@ -121,6 +133,7 @@ class JsonSchemaNormalizer(private val project: Project) {
                         schemaNode = arrayIterator.next(),
                         currentDocumentContext = currentDocumentContext,
                         loadedDocumentContextByPath = loadedDocumentContextByPath,
+                        loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
                         resolutionStack = resolutionStack
                     )
                 )
@@ -135,6 +148,7 @@ class JsonSchemaNormalizer(private val project: Project) {
         referenceValue: String,
         currentDocumentContext: SchemaDocumentContext,
         loadedDocumentContextByPath: MutableMap<Path, SchemaDocumentContext>,
+        loadedRemoteDocumentContextByUri: MutableMap<String, SchemaDocumentContext>,
         resolutionStack: MutableSet<String>
     ): JsonNode {
         val referenceKey = "${currentDocumentContext.baseDirectory}:${referenceValue}"
@@ -155,27 +169,47 @@ class JsonSchemaNormalizer(private val project: Project) {
                     )
                 }
 
-                referenceValue.startsWith("http://") || referenceValue.startsWith("https://") -> {
-                    throw JsonSchemaGenerationException(
-                        message = "Remote HTTP references are not supported: $referenceValue",
-                        jsonPointer = referenceValue
-                    )
-                }
-
                 else -> {
                     val referenceParts = referenceValue.split("#", limit = 2)
-                    val fileReference = referenceParts.first()
+                    val referenceTarget = referenceParts.first()
                     val fragmentValue = if (referenceParts.size == 2) "#${referenceParts[1]}" else "#"
-                    val referencedDocumentContext = loadReferencedDocumentContext(
-                        fileReference = fileReference,
-                        currentDocumentContext = currentDocumentContext,
-                        loadedDocumentContextByPath = loadedDocumentContextByPath
-                    )
-                    resolveFragmentReference(
-                        rootNode = referencedDocumentContext.rootNode,
-                        anchorNodes = referencedDocumentContext.anchorNodes,
-                        fragmentValue = fragmentValue
-                    )
+
+                    if (isHttpUrl(referenceTarget)) {
+                        val referencedDocumentContext = loadReferencedRemoteDocumentContext(
+                            referenceUri = referenceTarget,
+                            loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri
+                        )
+                        resolveFragmentReference(
+                            rootNode = referencedDocumentContext.rootNode,
+                            anchorNodes = referencedDocumentContext.anchorNodes,
+                            fragmentValue = fragmentValue
+                        )
+                    } else if (currentDocumentContext.baseUri != null) {
+                        val resolvedRemoteUri = resolveRelativeRemoteReference(
+                            referenceTarget = referenceTarget,
+                            baseUri = currentDocumentContext.baseUri
+                        )
+                        val referencedDocumentContext = loadReferencedRemoteDocumentContext(
+                            referenceUri = resolvedRemoteUri,
+                            loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri
+                        )
+                        resolveFragmentReference(
+                            rootNode = referencedDocumentContext.rootNode,
+                            anchorNodes = referencedDocumentContext.anchorNodes,
+                            fragmentValue = fragmentValue
+                        )
+                    } else {
+                        val referencedDocumentContext = loadReferencedDocumentContext(
+                            fileReference = referenceTarget,
+                            currentDocumentContext = currentDocumentContext,
+                            loadedDocumentContextByPath = loadedDocumentContextByPath
+                        )
+                        resolveFragmentReference(
+                            rootNode = referencedDocumentContext.rootNode,
+                            anchorNodes = referencedDocumentContext.anchorNodes,
+                            fragmentValue = fragmentValue
+                        )
+                    }
                 }
             }
         } finally {
@@ -213,10 +247,75 @@ class JsonSchemaNormalizer(private val project: Project) {
         val documentContext = SchemaDocumentContext(
             rootNode = referencedRootNode,
             anchorNodes = collectAnchorNodes(referencedRootNode),
-            baseDirectory = normalizedReferencedPath.parent
+            baseDirectory = normalizedReferencedPath.parent,
+            baseUri = null
         )
         loadedDocumentContextByPath[normalizedReferencedPath] = documentContext
         return documentContext
+    }
+
+    private fun loadReferencedRemoteDocumentContext(
+        referenceUri: String,
+        loadedRemoteDocumentContextByUri: MutableMap<String, SchemaDocumentContext>
+    ): SchemaDocumentContext {
+        loadedRemoteDocumentContextByUri[referenceUri]?.let { return it }
+
+        val schemaText = fetchRemoteSchemaText(referenceUri)
+        val referencedRootNode = try {
+            strictObjectMapper.readTree(schemaText)
+        } catch (exception: Exception) {
+            throw JsonSchemaGenerationException(
+                message = "Failed to parse referenced remote schema: ${exception.message}",
+                jsonPointer = referenceUri,
+                cause = exception
+            )
+        }
+
+        val documentContext = SchemaDocumentContext(
+            rootNode = referencedRootNode,
+            anchorNodes = collectAnchorNodes(referencedRootNode),
+            baseDirectory = null,
+            baseUri = referenceUri
+        )
+        loadedRemoteDocumentContextByUri[referenceUri] = documentContext
+        return documentContext
+    }
+
+    private fun fetchRemoteSchemaText(referenceUri: String): String {
+        val connection = URL(referenceUri).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 15_000
+        connection.instanceFollowRedirects = true
+        connection.setRequestProperty("Accept", "application/schema+json, application/json;q=0.9, */*;q=0.8")
+
+        return try {
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                throw IOException("Remote schema request failed with status code: $responseCode")
+            }
+            connection.inputStream.bufferedReader().use { reader ->
+                reader.readText()
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun resolveRelativeRemoteReference(referenceTarget: String, baseUri: String): String {
+        return try {
+            URI(baseUri).resolve(referenceTarget).toString()
+        } catch (exception: Exception) {
+            throw JsonSchemaGenerationException(
+                message = "Failed to resolve remote reference: $referenceTarget",
+                jsonPointer = referenceTarget,
+                cause = exception
+            )
+        }
+    }
+
+    private fun isHttpUrl(target: String): Boolean {
+        return target.startsWith("http://") || target.startsWith("https://")
     }
 
     private fun resolveReferencePath(fileReference: String, baseDirectory: Path?): Path {

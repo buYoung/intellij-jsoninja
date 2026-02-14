@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.ui.Messages
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
@@ -19,6 +20,8 @@ class GenerateRandomJsonAction : AnAction(
     LocalizationBundle.message("action.generate.random.json.text"),
     null
 ) {
+    private val LOG = logger<GenerateRandomJsonAction>()
+
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
@@ -47,6 +50,10 @@ class GenerateRandomJsonAction : AnAction(
                         panel.presenter.setRandomJsonData(generatedJson, skipFormatting = config.isJson5)
                     }
                 } catch (generationException: JsonSchemaGenerationException) {
+                    LOG.warn(
+                        "Schema generation failed. pointer=${generationException.jsonPointer}, message=${generationException.message}",
+                        generationException
+                    )
                     val pointerSuffix = generationException.jsonPointer?.let { jsonPointer ->
                         LocalizationBundle.message("dialog.generate.json.error.pointer", jsonPointer)
                     } ?: ""
@@ -61,6 +68,7 @@ class GenerateRandomJsonAction : AnAction(
                         )
                     }
                 } catch (exception: Exception) {
+                    LOG.error("Unexpected error while generating JSON.", exception)
                     invokeLater(ModalityState.any()) {
                         Messages.showErrorDialog(
                             project,
