@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.ui.dialog.generateJson.schema
 
+import com.intellij.ide.IdeEventQueue
 import com.intellij.json.JsonFileType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.EditorSettings
@@ -27,6 +28,7 @@ import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
+import java.awt.event.MouseEvent
 import javax.swing.JSeparator
 import javax.swing.JButton
 import javax.swing.JComponent
@@ -34,6 +36,7 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.ListCellRenderer
 import javax.swing.ListSelectionModel
+import javax.swing.SwingUtilities
 import javax.swing.UIManager
 import javax.swing.DefaultListModel
 import javax.swing.event.DocumentEvent
@@ -416,6 +419,7 @@ class GenerateSchemaJsonTabView(
         schemaUrlSuggestionPopup = JBPopupFactory.getInstance()
             .createComponentPopupBuilder(popupContent, schemaUrlSuggestionList)
             .setCancelOnClickOutside(true)
+            .setCancelCallback { shouldCancelSchemaUrlSuggestionPopup() }
             .setCancelOnOtherWindowOpen(true)
             .setCancelOnWindowDeactivation(true)
             .setCancelKeyEnabled(true)
@@ -436,6 +440,12 @@ class GenerateSchemaJsonTabView(
 
     private fun isSchemaUrlSuggestionPopupVisible(): Boolean {
         return schemaUrlSuggestionPopup?.isVisible == true
+    }
+
+    private fun shouldCancelSchemaUrlSuggestionPopup(): Boolean {
+        val currentEvent = IdeEventQueue.getInstance().trueCurrentEvent as? MouseEvent ?: return true
+        val eventComponent = currentEvent.component ?: return true
+        return !SwingUtilities.isDescendingFrom(eventComponent, schemaUrlSearchField)
     }
 
     private fun resolveGroupSeparatorColor(optionsPanel: JComponent): Color {
