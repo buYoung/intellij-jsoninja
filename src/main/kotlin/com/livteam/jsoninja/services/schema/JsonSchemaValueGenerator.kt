@@ -139,7 +139,7 @@ class JsonSchemaValueGenerator(private val project: Project) {
                 val generatedDependentNode = generateValue(dependentConstraint, schemaPropertyGenerationMode)
                 if (generatedDependentNode.isObject) {
                     val dependentObjectNode = generatedDependentNode as ObjectNode
-                    dependentObjectNode.fields().forEachRemaining { dependentField ->
+                    dependentObjectNode.properties().forEach { dependentField ->
                         if (!generatedObjectNode.has(dependentField.key)) {
                             generatedObjectNode.set<JsonNode>(dependentField.key, dependentField.value)
                             generatedPropertyNames.add(dependentField.key)
@@ -695,9 +695,7 @@ class JsonSchemaValueGenerator(private val project: Project) {
         }
 
         val mergedSchemaNode = baseSchemaNode.deepCopy() as ObjectNode
-        val overridingFieldIterator = overridingSchemaNode.fields()
-        while (overridingFieldIterator.hasNext()) {
-            val overridingField = overridingFieldIterator.next()
+        for (overridingField in overridingSchemaNode.properties()) {
             val existingFieldNode = mergedSchemaNode.path(overridingField.key)
             val mergedFieldNode = mergeSchemaField(
                 fieldName = overridingField.key,
