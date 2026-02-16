@@ -39,9 +39,6 @@ class GenerateSchemaJsonTabPresenter(
 
     init {
         view.setOnSchemaUrlInputChanged { filterSchemaStoreCatalogItemsByInput() }
-        view.setOnSchemaCatalogEntrySelected { selectedItem ->
-            handleSchemaCatalogEntrySelected(selectedItem)
-        }
         view.setOnLoadSchemaFromUrlRequested { loadSchemaFromUrl() }
         loadSchemaStoreCatalog()
     }
@@ -104,14 +101,6 @@ class GenerateSchemaJsonTabPresenter(
         view.dispose()
     }
 
-    private fun handleSchemaCatalogEntrySelected(selectedItem: SchemaUrlComboBoxItem.CatalogEntry) {
-        val currentEditorText = view.getSchemaUrlEditorText().trim()
-        if (currentEditorText != selectedItem.displayText) {
-            return
-        }
-
-        view.setSchemaUrlEditorText(selectedItem.schemaStoreCatalogItem.url)
-    }
 
     private fun loadSchemaStoreCatalog() {
         schemaStoreCatalogState = SchemaStoreCatalogState.LOADING

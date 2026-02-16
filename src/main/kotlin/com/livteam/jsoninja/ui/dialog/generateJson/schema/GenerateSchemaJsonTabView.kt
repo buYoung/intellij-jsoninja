@@ -15,7 +15,6 @@ import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
 import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import java.awt.BorderLayout
-import java.awt.event.ItemEvent
 import javax.swing.ComboBoxEditor
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
@@ -37,17 +36,12 @@ class GenerateSchemaJsonTabView(
     private var isUpdatingSchemaUrlComboBoxModel = false
 
     private var onSchemaUrlInputChangedCallback: (() -> Unit)? = null
-    private var onSchemaCatalogEntrySelectedCallback: ((SchemaUrlComboBoxItem.CatalogEntry) -> Unit)? = null
     private var onLoadSchemaFromUrlRequestedCallback: (() -> Unit)? = null
 
     val component: JComponent = createComponent()
 
     fun setOnSchemaUrlInputChanged(callback: () -> Unit) {
         onSchemaUrlInputChangedCallback = callback
-    }
-
-    fun setOnSchemaCatalogEntrySelected(callback: (SchemaUrlComboBoxItem.CatalogEntry) -> Unit) {
-        onSchemaCatalogEntrySelectedCallback = callback
     }
 
     fun setOnLoadSchemaFromUrlRequested(callback: () -> Unit) {
@@ -75,11 +69,22 @@ class GenerateSchemaJsonTabView(
     }
 
     fun getSchemaUrlInputText(): String {
+        val editorText = getSchemaUrlEditorText().trim()
         val selectedItem = schemaUrlComboBox.selectedItem
+        if (selectedItem is SchemaUrlComboBoxItem.CatalogEntry) {
+            if (editorText.isBlank() || editorText == selectedItem.displayText) {
+                return selectedItem.schemaStoreCatalogItem.url
+            }
+        }
+
+        if (editorText.isNotBlank()) {
+            return editorText
+        }
+
         if (selectedItem is SchemaUrlComboBoxItem.CatalogEntry) {
             return selectedItem.schemaStoreCatalogItem.url
         }
-
+        return editorText
         return getSchemaUrlEditorText().trim()
     }
 
@@ -104,10 +109,13 @@ class GenerateSchemaJsonTabView(
         try {
             schemaUrlComboBox.model = DefaultComboBoxModel(schemaUrlComboBoxItems.toTypedArray())
             schemaUrlComboBox.selectedItem = null
-            setSchemaUrlEditorText(editorText)
 
-            if (currentCaretPosition != null && currentCaretPosition <= editorText.length) {
-                editorComponent.caretPosition = currentCaretPosition
+            if (editorComponent == null || editorComponent.text != editorText) {
+                setSchemaUrlEditorText(editorText)
+
+                if (currentCaretPosition != null && currentCaretPosition <= editorText.length) {
+                    editorComponent?.caretPosition = currentCaretPosition
+                }
             }
         } finally {
             isUpdatingSchemaUrlComboBoxModel = false
@@ -174,14 +182,6 @@ class GenerateSchemaJsonTabView(
         }
         comboBox.isEditable = true
         attachSchemaUrlEditorDocumentListener(comboBox)
-        comboBox.addItemListener { itemEvent ->
-            if (itemEvent.stateChange != ItemEvent.SELECTED || isUpdatingSchemaUrlComboBoxModel) {
-                return@addItemListener
-            }
-
-            val selectedItem = itemEvent.item as? SchemaUrlComboBoxItem.CatalogEntry ?: return@addItemListener
-            onSchemaCatalogEntrySelectedCallback?.invoke(selectedItem)
-        }
 
         return comboBox
     }
