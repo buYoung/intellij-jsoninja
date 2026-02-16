@@ -186,7 +186,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         if (activeNode.isObject && completeNode.isObject) {
             val activeObjectNode = activeNode as ObjectNode
             val completeObjectNode = completeNode.deepCopy<ObjectNode>()
-            activeObjectNode.fields().forEachRemaining { activeField ->
+            activeObjectNode.properties().forEach { activeField ->
                 val mergedChildNode = if (completeObjectNode.has(activeField.key)) {
                     mergeActiveValuesIntoCompleteNode(activeField.value, completeObjectNode.path(activeField.key))
                 } else {

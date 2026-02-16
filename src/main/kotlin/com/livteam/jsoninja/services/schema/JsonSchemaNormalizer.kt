@@ -12,7 +12,6 @@ import java.io.IOException
 import java.math.BigDecimal
 import java.net.HttpURLConnection
 import java.net.URI
-import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -107,9 +106,7 @@ class JsonSchemaNormalizer(private val project: Project) {
             }
 
             val resolvedObjectNode = JsonNodeFactory.instance.objectNode()
-            val fieldIterator = schemaObjectNode.fields()
-            while (fieldIterator.hasNext()) {
-                val field = fieldIterator.next()
+            for (field in schemaObjectNode.properties()) {
                 resolvedObjectNode.set<JsonNode>(
                     field.key,
                     resolveReferences(
@@ -395,7 +392,7 @@ class JsonSchemaNormalizer(private val project: Project) {
     }
 
     private fun fetchRemoteSchemaText(referenceUri: String): String {
-        val connection = URL(referenceUri).openConnection() as HttpURLConnection
+        val connection = URI(referenceUri).toURL().openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
         connection.connectTimeout = 10_000
         connection.readTimeout = 15_000
@@ -539,9 +536,8 @@ class JsonSchemaNormalizer(private val project: Project) {
             if (!anchorName.isNullOrBlank()) {
                 anchorNodesByName[anchorName] = schemaNode
             }
-            val fieldIterator = schemaObjectNode.fields()
-            while (fieldIterator.hasNext()) {
-                collectAnchorNodesRecursive(fieldIterator.next().value, anchorNodesByName)
+            for (field in schemaObjectNode.properties()) {
+                collectAnchorNodesRecursive(field.value, anchorNodesByName)
             }
         } else if (schemaNode.isArray) {
             val arrayIterator = schemaNode.elements()
@@ -612,9 +608,7 @@ class JsonSchemaNormalizer(private val project: Project) {
             )
         }
 
-        val fieldIterator = schemaNode.fields()
-        while (fieldIterator.hasNext()) {
-            val field = fieldIterator.next()
+        for (field in schemaNode.properties()) {
             when {
                 field.value.isObject -> {
                     validateSchemaContradictions(field.value, buildJsonPointer(jsonPointer, field.key))
@@ -713,8 +707,8 @@ class JsonSchemaNormalizer(private val project: Project) {
         val propertyConstraints = mutableMapOf<String, JsonSchemaConstraint>()
         schemaNode.path("properties")
             .takeIf { it.isObject }
-            ?.fields()
-            ?.forEachRemaining { field ->
+            ?.properties()
+            ?.forEach { field ->
                 propertyConstraints[field.key] = createConstraint(
                     field.value,
                     buildJsonPointer(jsonPointer, "properties/${field.key}")
@@ -724,8 +718,8 @@ class JsonSchemaNormalizer(private val project: Project) {
         val patternPropertyConstraints = mutableMapOf<String, JsonSchemaConstraint>()
         schemaNode.path("patternProperties")
             .takeIf { it.isObject }
-            ?.fields()
-            ?.forEachRemaining { field ->
+            ?.properties()
+            ?.forEach { field ->
                 patternPropertyConstraints[field.key] = createConstraint(
                     field.value,
                     buildJsonPointer(jsonPointer, "patternProperties/${field.key}")
@@ -757,8 +751,8 @@ class JsonSchemaNormalizer(private val project: Project) {
         val dependentRequiredProperties = mutableMapOf<String, Set<String>>()
         schemaNode.path("dependentRequired")
             .takeIf { it.isObject }
-            ?.fields()
-            ?.forEachRemaining { field ->
+            ?.properties()
+            ?.forEach { field ->
                 val dependentPropertyNames = field.value
                     .takeIf { it.isArray }
                     ?.mapNotNull { dependentPropertyNode -> dependentPropertyNode.takeIf { it.isTextual }?.asText() }
@@ -770,8 +764,8 @@ class JsonSchemaNormalizer(private val project: Project) {
         val dependentSchemaConstraints = mutableMapOf<String, JsonSchemaConstraint>()
         schemaNode.path("dependentSchemas")
             .takeIf { it.isObject }
-            ?.fields()
-            ?.forEachRemaining { field ->
+            ?.properties()
+            ?.forEach { field ->
                 dependentSchemaConstraints[field.key] = createConstraint(
                     field.value,
                     buildJsonPointer(jsonPointer, "dependentSchemas/${field.key}")

@@ -19,7 +19,7 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGeneratio
 import io.burt.jmespath.jackson.JacksonRuntime
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import javax.swing.JComponent
 
 class GenerateSchemaJsonTabPresenter(
@@ -406,7 +406,7 @@ class GenerateSchemaJsonTabPresenter(
     }
 
     private fun fetchSchemaText(schemaUrl: String): String {
-        val connection = URL(schemaUrl).openConnection() as HttpURLConnection
+        val connection = URI(schemaUrl).toURL().openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
         connection.connectTimeout = 10_000
         connection.readTimeout = 15_000

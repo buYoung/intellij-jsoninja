@@ -1,6 +1,7 @@
 package com.livteam.jsoninja.services.schema
 
 import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
@@ -18,7 +19,7 @@ class JsonSchemaValidationService(private val project: Project) {
         .registerModule(KotlinModule.Builder().build())
         .apply {
             configure(JsonParser.Feature.ALLOW_COMMENTS, false)
-            configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, false)
+            configure(JsonReadFeature.ALLOW_TRAILING_COMMA.mappedFeature(), false)
             configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, false)
             configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, false)
         }

@@ -11,7 +11,7 @@ import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiLoadRequest
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import javax.swing.JComponent
@@ -136,16 +136,16 @@ class LoadJsonFromApiDialogPresenter(
 
     private fun isValidHttpUrl(requestUrl: String): Boolean {
         return try {
-            val parsedUrl = URL(requestUrl)
-            (parsedUrl.protocol == "http" || parsedUrl.protocol == "https") &&
-                parsedUrl.host.isNotBlank()
+            val parsedUri = URI(requestUrl)
+            val scheme = parsedUri.scheme
+            (scheme == "http" || scheme == "https") && !parsedUri.host.isNullOrBlank()
         } catch (_: Exception) {
             false
         }
     }
 
     private fun loadJsonResponse(apiLoadRequest: ApiLoadRequest): String {
-        val httpURLConnection = URL(apiLoadRequest.requestUrl).openConnection() as HttpURLConnection
+        val httpURLConnection = URI(apiLoadRequest.requestUrl).toURL().openConnection() as HttpURLConnection
         httpURLConnection.requestMethod = apiLoadRequest.requestMethod.name
         httpURLConnection.connectTimeout = 10_000
         httpURLConnection.readTimeout = 15_000
