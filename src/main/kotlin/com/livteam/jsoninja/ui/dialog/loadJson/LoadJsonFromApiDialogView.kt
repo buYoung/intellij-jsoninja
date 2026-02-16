@@ -16,8 +16,10 @@ import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
+import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
@@ -28,12 +30,9 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiRequestMethod
 import java.awt.BorderLayout
-import javax.swing.DefaultListCellRenderer
 import javax.swing.JButton
-import javax.swing.JComboBox
 import javax.swing.JComponent
 import javax.swing.JLabel
-import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 
@@ -41,10 +40,10 @@ class LoadJsonFromApiDialogView(
     private val project: Project
 ) {
     private lateinit var rootPanel: JPanel
-    private lateinit var requestMethodComboBox: JComboBox<ApiRequestMethod>
+    private lateinit var requestMethodComboBox: ComboBox<ApiRequestMethod>
     private lateinit var requestUrlTextField: JBTextField
     private lateinit var sendButton: JButton
-    private lateinit var authorizationTypeComboBox: JComboBox<ApiAuthorizationType>
+    private lateinit var authorizationTypeComboBox: ComboBox<ApiAuthorizationType>
     private lateinit var basicUsernameTextField: JBTextField
     private lateinit var basicPasswordTextField: JBPasswordField
     private lateinit var bearerTokenTextField: JBTextField
@@ -116,13 +115,22 @@ class LoadJsonFromApiDialogView(
     }
 
     private fun createComponent(): JComponent {
-        requestMethodComboBox = JComboBox(ApiRequestMethod.values()).apply {
-            renderer = createRequestMethodRenderer()
+        requestMethodComboBox = ComboBox(ApiRequestMethod.entries.toTypedArray()).apply {
+            renderer = SimpleListCellRenderer.create { label, value, _ ->
+                label.text = value?.name ?: ""
+            }
         }
         requestUrlTextField = JBTextField()
         sendButton = JButton(LocalizationBundle.message("dialog.load.json.api.send"))
-        authorizationTypeComboBox = JComboBox(ApiAuthorizationType.values()).apply {
-            renderer = createAuthorizationTypeRenderer()
+        authorizationTypeComboBox = ComboBox(ApiAuthorizationType.entries.toTypedArray()).apply {
+            renderer = SimpleListCellRenderer.create { label, value, _ ->
+                label.text = when (value) {
+                    ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
+                    ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
+                    ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
+                    null -> ""
+                }
+            }
         }
         basicUsernameTextField = JBTextField()
         basicPasswordTextField = JBPasswordField()
@@ -247,46 +255,6 @@ class LoadJsonFromApiDialogView(
         isWhitespacesShown = true
         isCaretRowShown = true
         isUseSoftWraps = true
-    }
-
-    private fun createRequestMethodRenderer(): DefaultListCellRenderer {
-        return object : DefaultListCellRenderer() {
-            override fun getListCellRendererComponent(
-                list: JList<*>?,
-                value: Any?,
-                index: Int,
-                isSelected: Boolean,
-                cellHasFocus: Boolean
-            ): java.awt.Component {
-                val component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
-                if (component is JLabel && value is ApiRequestMethod) {
-                    component.text = value.name
-                }
-                return component
-            }
-        }
-    }
-
-    private fun createAuthorizationTypeRenderer(): DefaultListCellRenderer {
-        return object : DefaultListCellRenderer() {
-            override fun getListCellRendererComponent(
-                list: JList<*>?,
-                value: Any?,
-                index: Int,
-                isSelected: Boolean,
-                cellHasFocus: Boolean
-            ): java.awt.Component {
-                val component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
-                if (component is JLabel && value is ApiAuthorizationType) {
-                    component.text = when (value) {
-                        ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
-                        ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
-                        ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
-                    }
-                }
-                return component
-            }
-        }
     }
 
     private fun attachInputListeners() {
