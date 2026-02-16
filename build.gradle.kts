@@ -44,6 +44,7 @@ dependencies {
     implementation(libs.jsonPath)
     implementation(libs.jmespathJackson)
     implementation(libs.dataFaker)
+    implementation(libs.jsonSchemaValidator)
 
     testImplementation(libs.junit)
 

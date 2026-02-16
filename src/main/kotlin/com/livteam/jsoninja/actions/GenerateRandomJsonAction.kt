@@ -3,36 +3,94 @@ package com.livteam.jsoninja.actions
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.ui.Messages
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
-import com.livteam.jsoninja.services.RandomJsonDataCreator // 이 서비스가 존재하거나 수정될 것이라고 가정합니다.
+import com.livteam.jsoninja.services.RandomJsonDataCreator
+import com.livteam.jsoninja.services.schema.JsonSchemaDataGenerationService
+import com.livteam.jsoninja.services.schema.JsonSchemaGenerationException
 import com.livteam.jsoninja.ui.dialog.generateJson.GenerateJsonDialog
+import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
+import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 
 class GenerateRandomJsonAction : AnAction(
     LocalizationBundle.message("action.generate.random.json.text"),
     LocalizationBundle.message("action.generate.random.json.text"),
     null
 ) {
+    private val LOG = logger<GenerateRandomJsonAction>()
+
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        val panel = JsonHelperActionUtils.getPanel(e) ?: return // 유틸리티를 사용해 활성 에디터 가져오기
+        val panel = JsonHelperActionUtils.getPanel(e) ?: return
 
         val dialog = GenerateJsonDialog(project)
         if (dialog.showAndGet()) {
-            // 다이얼로그가 OK 버튼으로 닫혔을 경우
-            val config = dialog.getConfig() // 다이얼로그에서 설정값 가져오기
-
-            // TODO: config를 사용하도록 RandomJsonDataCreator 수정 필요
-            // 현재는 임시로 기존 기본 생성기를 사용합니다.
-            val creator = RandomJsonDataCreator() // 최종적으로는 여기에 config를 전달해야 합니다.
+            val config = dialog.getConfig()
 
             ApplicationManager.getApplication().executeOnPooledThread {
-                // JSON5일 경우 주석/trailing comma 생성을 위해 prettyPrint가 true여야 함
-                // 일반 JSON일 경우 false로 생성해도 panel.setRandomJsonData에서 포맷팅 수행함
-                val prettyPrint = config.isJson5
-                val randomJson = creator.generateConfiguredJsonString(config, prettyPrint = prettyPrint)
+                try {
+                    val generatedJson = when (config.generationMode) {
+                        JsonGenerationMode.RANDOM -> {
+                            val creator = RandomJsonDataCreator()
+                            val prettyPrint = config.isJson5
+                            creator.generateConfiguredJsonString(config, prettyPrint = prettyPrint)
+                        }
 
-                panel.presenter.setRandomJsonData(randomJson, skipFormatting = config.isJson5)
+                        JsonGenerationMode.SCHEMA -> {
+                            val schemaDataGenerationService =
+                                project.getService(JsonSchemaDataGenerationService::class.java)
+                            schemaDataGenerationService.generateFromSchema(config)
+                        }
+                    }
+
+                    invokeLater(ModalityState.any()) {
+                        panel.presenter.setRandomJsonData(
+                            generatedJson,
+                            skipFormatting = shouldSkipFormatting(config)
+                        )
+                    }
+                } catch (generationException: JsonSchemaGenerationException) {
+                    LOG.error(
+                        "Schema generation failed. pointer=${generationException.jsonPointer}, message=${generationException.message}",
+                        generationException
+                    )
+                    val pointerSuffix = generationException.jsonPointer?.let { jsonPointer ->
+                        LocalizationBundle.message("dialog.generate.json.error.pointer", jsonPointer)
+                    } ?: ""
+                    val errorMessage = (generationException.message
+                        ?: LocalizationBundle.message("dialog.generate.json.error.generic")) + pointerSuffix
+
+                    invokeLater(ModalityState.any()) {
+                        Messages.showErrorDialog(
+                            project,
+                            errorMessage,
+                            LocalizationBundle.message("dialog.generate.json.error.title")
+                        )
+                    }
+                } catch (exception: Exception) {
+                    LOG.error("Unexpected error while generating JSON.", exception)
+                    invokeLater(ModalityState.any()) {
+                        Messages.showErrorDialog(
+                            project,
+                            exception.message ?: LocalizationBundle.message("dialog.generate.json.error.generic"),
+                            LocalizationBundle.message("dialog.generate.json.error.title")
+                        )
+                    }
+                } catch (error: Throwable) {
+                    LOG.error("Fatal error while generating JSON.", error)
+                    invokeLater(ModalityState.any()) {
+                        Messages.showErrorDialog(
+                            project,
+                            error.message ?: LocalizationBundle.message("dialog.generate.json.error.generic"),
+                            LocalizationBundle.message("dialog.generate.json.error.title")
+                        )
+                    }
+                }
             }
         }
     }
@@ -41,5 +99,14 @@ class GenerateRandomJsonAction : AnAction(
         // 활성 JSON 에디터가 있을 때만 액션을 활성화합니다.
         e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
         e.presentation.icon = JsoninjaIcons.getGenerateIcon(e.project)
+    }
+
+    private fun shouldSkipFormatting(config: JsonGenerationConfig): Boolean {
+        if (config.isJson5) {
+            return true
+        }
+
+        return config.generationMode == JsonGenerationMode.SCHEMA &&
+            config.schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
     }
 }
