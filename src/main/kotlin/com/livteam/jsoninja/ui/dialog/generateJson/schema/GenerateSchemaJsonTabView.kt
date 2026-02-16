@@ -16,6 +16,7 @@ import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import java.awt.BorderLayout
 import java.awt.event.ItemEvent
+import javax.swing.ComboBoxEditor
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
 import javax.swing.JComponent
@@ -95,12 +96,19 @@ class GenerateSchemaJsonTabView(
         editorText: String,
         showPopupWhenAvailable: Boolean
     ) {
+        val editorComponent = schemaUrlComboBox.editor.editorComponent as? JTextComponent
+        val currentCaretPosition = editorComponent?.caretPosition
+
         val wasPopupVisible = schemaUrlComboBox.isPopupVisible
         isUpdatingSchemaUrlComboBoxModel = true
         try {
             schemaUrlComboBox.model = DefaultComboBoxModel(schemaUrlComboBoxItems.toTypedArray())
             schemaUrlComboBox.selectedItem = null
             setSchemaUrlEditorText(editorText)
+
+            if (currentCaretPosition != null && currentCaretPosition <= editorText.length) {
+                editorComponent.caretPosition = currentCaretPosition
+            }
         } finally {
             isUpdatingSchemaUrlComboBoxModel = false
         }
@@ -156,7 +164,14 @@ class GenerateSchemaJsonTabView(
     }
 
     private fun createSchemaUrlComboBox(): ComboBox<SchemaUrlComboBoxItem> {
-        val comboBox = ComboBox<SchemaUrlComboBoxItem>()
+        val comboBox = object : ComboBox<SchemaUrlComboBoxItem>() {
+            override fun configureEditor(anEditor: ComboBoxEditor?, anItem: Any?) {
+                if (isUpdatingSchemaUrlComboBoxModel) {
+                    return
+                }
+                super.configureEditor(anEditor, anItem)
+            }
+        }
         comboBox.isEditable = true
         attachSchemaUrlEditorDocumentListener(comboBox)
         comboBox.addItemListener { itemEvent ->
@@ -175,14 +190,17 @@ class GenerateSchemaJsonTabView(
         val editorComponent = comboBox.editor.editorComponent as? JTextComponent ?: return
         editorComponent.document.addDocumentListener(object : DocumentListener {
             override fun insertUpdate(documentEvent: DocumentEvent?) {
+                if (isUpdatingSchemaUrlComboBoxModel) return
                 onSchemaUrlInputChangedCallback?.invoke()
             }
 
             override fun removeUpdate(documentEvent: DocumentEvent?) {
+                if (isUpdatingSchemaUrlComboBoxModel) return
                 onSchemaUrlInputChangedCallback?.invoke()
             }
 
             override fun changedUpdate(documentEvent: DocumentEvent?) {
+                if (isUpdatingSchemaUrlComboBoxModel) return
                 onSchemaUrlInputChangedCallback?.invoke()
             }
         })
