@@ -263,6 +263,10 @@ class GenerateJsonDialogView(
             }
 
             val selectedItem = itemEvent.item as? SchemaUrlComboBoxItem.CatalogEntry ?: return@addItemListener
+            val currentEditorText = getSchemaUrlEditorText().trim()
+            if (currentEditorText != selectedItem.displayText) {
+                return@addItemListener
+            }
             setSchemaUrlEditorText(selectedItem.schemaStoreCatalogItem.url)
         }
         updateSchemaUrlComboBoxModel(
@@ -410,6 +414,7 @@ class GenerateJsonDialogView(
             return
         }
 
+        val wasPopupVisible = schemaUrlComboBox.isPopupVisible
         isUpdatingSchemaUrlComboBoxModel = true
         try {
             schemaUrlComboBox.model = DefaultComboBoxModel(schemaUrlComboBoxItems.toTypedArray())
@@ -417,6 +422,10 @@ class GenerateJsonDialogView(
             setSchemaUrlEditorText(editorText)
         } finally {
             isUpdatingSchemaUrlComboBoxModel = false
+        }
+
+        if (wasPopupVisible && schemaUrlComboBox.itemCount > 0 && schemaStoreCatalogState == SchemaStoreCatalogState.READY) {
+            schemaUrlComboBox.showPopup()
         }
     }
 
