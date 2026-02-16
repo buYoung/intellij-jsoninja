@@ -6,6 +6,7 @@ import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.ValidationInfo
@@ -239,8 +240,18 @@ class GenerateJsonDialogView(
         )
         return EditorTextField(document, project, JsonFileType.INSTANCE, false, false).apply {
             preferredSize = JBUI.size(620, 320)
+            addSettingsProvider { editor ->
+                editor.settings.applySchemaEditorSettings()
+                editor.setHorizontalScrollbarVisible(true)
+                editor.setVerticalScrollbarVisible(true)
+                editor.isEmbeddedIntoDialogWrapper = true
+            }
             putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
         }
+    }
+
+    private fun EditorSettings.applySchemaEditorSettings() {
+        isLineNumbersShown = true
     }
 
     private fun loadSchemaFromUrl() {
