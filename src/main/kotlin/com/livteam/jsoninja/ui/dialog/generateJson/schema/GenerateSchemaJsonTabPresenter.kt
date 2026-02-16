@@ -15,6 +15,7 @@ import com.livteam.jsoninja.services.schema.JsonSchemaDataGenerationService
 import com.livteam.jsoninja.services.schema.JsonSchemaGenerationException
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import io.burt.jmespath.jackson.JacksonRuntime
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -88,12 +89,14 @@ class GenerateSchemaJsonTabPresenter(
     }
 
     fun getConfig(): JsonGenerationConfig {
+        val schemaPropertyGenerationMode = view.getSchemaPropertyGenerationMode()
+        val isCommentedMode = schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
         return JsonGenerationConfig(
             generationMode = JsonGenerationMode.SCHEMA,
-            isJson5 = view.isJson5Selected(),
+            isJson5 = view.isJson5Selected() || isCommentedMode,
             schemaText = view.getSchemaText(),
             schemaOutputCount = view.getSchemaOutputCountText().toIntOrNull() ?: initialConfig.schemaOutputCount,
-            schemaPropertyGenerationMode = view.getSchemaPropertyGenerationMode()
+            schemaPropertyGenerationMode = schemaPropertyGenerationMode
         )
     }
 

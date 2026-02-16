@@ -13,7 +13,9 @@ import com.livteam.jsoninja.services.RandomJsonDataCreator
 import com.livteam.jsoninja.services.schema.JsonSchemaDataGenerationService
 import com.livteam.jsoninja.services.schema.JsonSchemaGenerationException
 import com.livteam.jsoninja.ui.dialog.generateJson.GenerateJsonDialog
+import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 
 class GenerateRandomJsonAction : AnAction(
     LocalizationBundle.message("action.generate.random.json.text"),
@@ -47,7 +49,10 @@ class GenerateRandomJsonAction : AnAction(
                     }
 
                     invokeLater(ModalityState.any()) {
-                        panel.presenter.setRandomJsonData(generatedJson, skipFormatting = config.isJson5)
+                        panel.presenter.setRandomJsonData(
+                            generatedJson,
+                            skipFormatting = shouldSkipFormatting(config)
+                        )
                     }
                 } catch (generationException: JsonSchemaGenerationException) {
                     LOG.error(
@@ -94,5 +99,14 @@ class GenerateRandomJsonAction : AnAction(
         // 활성 JSON 에디터가 있을 때만 액션을 활성화합니다.
         e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
         e.presentation.icon = JsoninjaIcons.getGenerateIcon(e.project)
+    }
+
+    private fun shouldSkipFormatting(config: JsonGenerationConfig): Boolean {
+        if (config.isJson5) {
+            return true
+        }
+
+        return config.generationMode == JsonGenerationMode.SCHEMA &&
+            config.schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
     }
 }

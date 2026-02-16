@@ -126,7 +126,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         val commentedSchemaNodes = mutableListOf<CommentedSchemaNodes>()
         repeat(schemaOutputCount) {
             val activeNode = generateSingleNode(preparedSchema, SchemaPropertyGenerationMode.REQUIRED_ONLY)
-            val completeNode = generateSingleNode(preparedSchema, SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL)
+            val completeNode = generateCompleteNodeForCommentedMode(preparedSchema, activeNode)
             val mergedCompleteNode = mergeActiveValuesIntoCompleteNode(activeNode, completeNode)
             commentedSchemaNodes.add(
                 CommentedSchemaNodes(
@@ -161,6 +161,25 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         }
         arrayLines.add("]")
         return arrayLines.joinToString("\n")
+    }
+
+    private fun generateCompleteNodeForCommentedMode(preparedSchema: PreparedSchema, activeNode: JsonNode): JsonNode {
+        val generatedCompleteNode = runCatching {
+            generateSingleNode(preparedSchema, SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL)
+        }.recoverCatching {
+            valueGenerator.generateValue(
+                preparedSchema.rootConstraint,
+                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
+            )
+        }.getOrElse {
+            buildMinimalValueCandidate(preparedSchema.resolvedSchemaNode, depth = 0)
+        }
+
+        if (!generatedCompleteNode.isObject || !activeNode.isObject) {
+            return generatedCompleteNode
+        }
+
+        return mergeActiveValuesIntoCompleteNode(activeNode, generatedCompleteNode)
     }
 
     private fun mergeActiveValuesIntoCompleteNode(activeNode: JsonNode, completeNode: JsonNode): JsonNode {
@@ -221,6 +240,13 @@ class JsonSchemaDataGenerationService(private val project: Project) {
                 indentDepth = indentDepth
             )
         }
+        if (activeNode.isObject && completeNode.isObject) {
+            return renderObjectWithNodeDifference(
+                activeObjectNode = activeNode as ObjectNode,
+                completeObjectNode = completeNode as ObjectNode,
+                indentDepth = indentDepth
+            )
+        }
 
         val arrayConstraint = resolveArrayConstraint(constraint)
         if (arrayConstraint != null && activeNode.isArray && completeNode.isArray) {
@@ -268,13 +294,14 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         val optionalCommentPropertyNames = objectConstraint.propertyConstraints.keys
             .filter { propertyName ->
                 !objectConstraint.requiredProperties.contains(propertyName) &&
-                    !activeObjectNode.has(propertyName) &&
-                    completeObjectNode.has(propertyName)
+                    !activeObjectNode.has(propertyName)
             }
 
         optionalCommentPropertyNames.forEach { optionalPropertyName ->
             val optionalPropertyConstraint = objectConstraint.propertyConstraints[optionalPropertyName]
             val optionalPropertyNode = completeObjectNode.path(optionalPropertyName)
+                .takeUnless { it.isMissingNode }
+                ?: buildCommentPreviewNode(optionalPropertyConstraint)
             val renderedOptionalPropertyValueLines = renderNodeWithOptionalComments(
                 activeNode = optionalPropertyNode,
                 completeNode = optionalPropertyNode,
@@ -292,6 +319,72 @@ class JsonSchemaDataGenerationService(private val project: Project) {
 
         lines.add("$currentIndent}")
         return lines
+    }
+
+    private fun renderObjectWithNodeDifference(
+        activeObjectNode: ObjectNode,
+        completeObjectNode: ObjectNode,
+        indentDepth: Int
+    ): List<String> {
+        val lines = mutableListOf<String>()
+        val currentIndent = indent(indentDepth)
+        lines.add("$currentIndent{")
+
+        val activePropertyNames = activeObjectNode.fieldNames().asSequence().toList()
+        activePropertyNames.forEachIndexed { index, propertyName ->
+            val activePropertyNode = activeObjectNode.path(propertyName)
+            val completePropertyNode = completeObjectNode.path(propertyName).takeUnless { it.isMissingNode } ?: activePropertyNode
+            val renderedPropertyValueLines = renderNodeWithOptionalComments(
+                activeNode = activePropertyNode,
+                completeNode = completePropertyNode,
+                constraint = null,
+                indentDepth = indentDepth + 1
+            )
+            val propertyLines = buildPropertyLines(
+                propertyName = propertyName,
+                renderedPropertyValueLines = renderedPropertyValueLines,
+                indentDepth = indentDepth + 1,
+                hasTrailingComma = index < activePropertyNames.lastIndex
+            )
+            lines.addAll(propertyLines)
+        }
+
+        val optionalCommentPropertyNames = completeObjectNode.fieldNames().asSequence().toList()
+            .filter { propertyName -> !activeObjectNode.has(propertyName) }
+        optionalCommentPropertyNames.forEach { optionalPropertyName ->
+            val optionalPropertyNode = completeObjectNode.path(optionalPropertyName)
+            val renderedOptionalPropertyValueLines = renderNodeWithOptionalComments(
+                activeNode = optionalPropertyNode,
+                completeNode = optionalPropertyNode,
+                constraint = null,
+                indentDepth = indentDepth + 1
+            )
+            val optionalPropertyLines = buildPropertyLines(
+                propertyName = optionalPropertyName,
+                renderedPropertyValueLines = renderedOptionalPropertyValueLines,
+                indentDepth = indentDepth + 1,
+                hasTrailingComma = true
+            )
+            lines.addAll(convertToCommentedLines(optionalPropertyLines, indentDepth + 1))
+        }
+
+        lines.add("$currentIndent}")
+        return lines
+    }
+
+    private fun buildCommentPreviewNode(optionalPropertyConstraint: JsonSchemaConstraint?): JsonNode {
+        if (optionalPropertyConstraint == null) {
+            return TextNode("value")
+        }
+
+        return runCatching {
+            valueGenerator.generateValue(
+                optionalPropertyConstraint,
+                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
+            )
+        }.getOrElse {
+            buildMinimalValueCandidate(optionalPropertyConstraint.schemaNode, depth = 0)
+        }
     }
 
     private fun renderArrayWithOptionalComments(
@@ -343,9 +436,96 @@ class JsonSchemaDataGenerationService(private val project: Project) {
     private fun resolveObjectConstraint(constraint: JsonSchemaConstraint?): ObjectSchemaConstraint? {
         return when (constraint) {
             is ObjectSchemaConstraint -> constraint
-            is CompositeSchemaConstraint -> constraint.baseConstraint as? ObjectSchemaConstraint
+            is CompositeSchemaConstraint -> {
+                val allOfObjectConstraints = constraint.allOfConstraints.mapNotNull { allOfConstraint ->
+                    resolveObjectConstraint(allOfConstraint)
+                }
+                if (allOfObjectConstraints.isNotEmpty()) {
+                    mergeObjectConstraints(constraint, allOfObjectConstraints)
+                } else {
+                    resolveObjectConstraint(constraint.baseConstraint)
+                        ?: findFirstObjectConstraint(constraint.anyOfConstraints)
+                        ?: findFirstObjectConstraint(constraint.oneOfConstraints)
+                }
+            }
             else -> null
         }
+    }
+
+    private fun findFirstObjectConstraint(constraints: List<JsonSchemaConstraint>): ObjectSchemaConstraint? {
+        constraints.forEach { candidateConstraint ->
+            val resolvedObjectConstraint = resolveObjectConstraint(candidateConstraint)
+            if (resolvedObjectConstraint != null) {
+                return resolvedObjectConstraint
+            }
+        }
+        return null
+    }
+
+    private fun mergeObjectConstraints(
+        parentConstraint: CompositeSchemaConstraint,
+        allOfObjectConstraints: List<ObjectSchemaConstraint>
+    ): ObjectSchemaConstraint {
+        val mergedPropertyConstraints = linkedMapOf<String, JsonSchemaConstraint>()
+        val mergedRequiredProperties = linkedSetOf<String>()
+        val mergedPatternPropertyConstraints = linkedMapOf<String, JsonSchemaConstraint>()
+        var mergedAdditionalPropertiesConstraint: JsonSchemaConstraint? = null
+        var allowsAdditionalProperties = true
+        var mergedUnevaluatedPropertiesConstraint: JsonSchemaConstraint? = null
+        var allowsUnevaluatedProperties = true
+        val mergedDependentRequiredProperties = linkedMapOf<String, MutableSet<String>>()
+        val mergedDependentSchemaConstraints = linkedMapOf<String, JsonSchemaConstraint>()
+        var mergedMinimumProperties: Int? = null
+        var mergedMaximumProperties: Int? = null
+
+        allOfObjectConstraints.forEach { allOfObjectConstraint ->
+            mergedPropertyConstraints.putAll(allOfObjectConstraint.propertyConstraints)
+            mergedRequiredProperties.addAll(allOfObjectConstraint.requiredProperties)
+            mergedPatternPropertyConstraints.putAll(allOfObjectConstraint.patternPropertyConstraints)
+
+            mergedAdditionalPropertiesConstraint =
+                allOfObjectConstraint.additionalPropertiesConstraint ?: mergedAdditionalPropertiesConstraint
+            allowsAdditionalProperties = allowsAdditionalProperties && allOfObjectConstraint.allowsAdditionalProperties
+
+            mergedUnevaluatedPropertiesConstraint =
+                allOfObjectConstraint.unevaluatedPropertiesConstraint ?: mergedUnevaluatedPropertiesConstraint
+            allowsUnevaluatedProperties = allowsUnevaluatedProperties && allOfObjectConstraint.allowsUnevaluatedProperties
+
+            allOfObjectConstraint.dependentRequiredProperties.forEach { (triggerPropertyName, dependentPropertyNames) ->
+                val existingDependentPropertyNames = mergedDependentRequiredProperties.getOrPut(triggerPropertyName) {
+                    linkedSetOf()
+                }
+                existingDependentPropertyNames.addAll(dependentPropertyNames)
+            }
+            mergedDependentSchemaConstraints.putAll(allOfObjectConstraint.dependentSchemaConstraints)
+
+            val minimumProperties = allOfObjectConstraint.minimumProperties
+            if (minimumProperties != null) {
+                mergedMinimumProperties = mergedMinimumProperties?.let { maxOf(it, minimumProperties) } ?: minimumProperties
+            }
+            val maximumProperties = allOfObjectConstraint.maximumProperties
+            if (maximumProperties != null) {
+                mergedMaximumProperties = mergedMaximumProperties?.let { minOf(it, maximumProperties) } ?: maximumProperties
+            }
+        }
+
+        return ObjectSchemaConstraint(
+            jsonPointer = parentConstraint.jsonPointer,
+            schemaNode = parentConstraint.schemaNode,
+            propertyConstraints = mergedPropertyConstraints,
+            requiredProperties = mergedRequiredProperties,
+            patternPropertyConstraints = mergedPatternPropertyConstraints,
+            additionalPropertiesConstraint = mergedAdditionalPropertiesConstraint,
+            allowsAdditionalProperties = allowsAdditionalProperties,
+            unevaluatedPropertiesConstraint = mergedUnevaluatedPropertiesConstraint,
+            allowsUnevaluatedProperties = allowsUnevaluatedProperties,
+            dependentRequiredProperties = mergedDependentRequiredProperties.mapValues { (_, dependentPropertyNames) ->
+                dependentPropertyNames.toSet()
+            },
+            dependentSchemaConstraints = mergedDependentSchemaConstraints,
+            minimumProperties = mergedMinimumProperties,
+            maximumProperties = mergedMaximumProperties
+        )
     }
 
     private fun resolveArrayConstraint(constraint: JsonSchemaConstraint?): ArraySchemaConstraint? {
