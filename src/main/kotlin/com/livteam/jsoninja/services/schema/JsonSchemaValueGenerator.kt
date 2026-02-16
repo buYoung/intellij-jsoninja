@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.node.TextNode
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import net.datafaker.Faker
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -19,7 +20,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.random.Random
 
 @Service(Service.Level.PROJECT)
@@ -29,24 +29,28 @@ class JsonSchemaValueGenerator(private val project: Project) {
     private val faker = Faker()
     private val jsonNodeFactory = JsonNodeFactory.instance
 
-    companion object {
-        private const val DEFAULT_OPTIONAL_PROPERTY_COUNT = 3
-    }
-
-    fun generateValue(constraint: JsonSchemaConstraint): JsonNode {
+    fun generateValue(
+        constraint: JsonSchemaConstraint,
+        schemaPropertyGenerationMode: SchemaPropertyGenerationMode = SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
+    ): JsonNode {
         resolvePresetValue(constraint.schemaNode)?.let { return it.deepCopy() }
+
+        val effectiveSchemaPropertyGenerationMode = when (schemaPropertyGenerationMode) {
+            SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED -> SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
+            else -> schemaPropertyGenerationMode
+        }
 
         return when (constraint) {
             is BooleanLiteralSchemaConstraint -> generateBooleanLiteral(constraint)
-            is ObjectSchemaConstraint -> generateObjectValue(constraint)
-            is ArraySchemaConstraint -> generateArrayValue(constraint)
+            is ObjectSchemaConstraint -> generateObjectValue(constraint, effectiveSchemaPropertyGenerationMode)
+            is ArraySchemaConstraint -> generateArrayValue(constraint, effectiveSchemaPropertyGenerationMode)
             is StringSchemaConstraint -> generateStringValue(constraint)
             is NumberSchemaConstraint -> generateNumberValue(constraint)
             is IntegerSchemaConstraint -> generateIntegerValue(constraint)
-            is BooleanSchemaConstraint -> BooleanNode.valueOf(Random.nextBoolean())
+            is BooleanSchemaConstraint -> BooleanNode.valueOf(faker.bool().bool())
             is NullSchemaConstraint -> NullNode.instance
-            is CompositeSchemaConstraint -> generateCompositeValue(constraint)
-            is AnySchemaConstraint -> TextNode("value")
+            is CompositeSchemaConstraint -> generateCompositeValue(constraint, effectiveSchemaPropertyGenerationMode)
+            is AnySchemaConstraint -> TextNode(generateRandomFakerString())
         }
     }
 
@@ -57,10 +61,13 @@ class JsonSchemaValueGenerator(private val project: Project) {
                 jsonPointer = constraint.jsonPointer
             )
         }
-        return TextNode("value")
+        return TextNode(generateRandomFakerString())
     }
 
-    private fun generateObjectValue(constraint: ObjectSchemaConstraint): JsonNode {
+    private fun generateObjectValue(
+        constraint: ObjectSchemaConstraint,
+        schemaPropertyGenerationMode: SchemaPropertyGenerationMode
+    ): JsonNode {
         val generatedObjectNode = jsonNodeFactory.objectNode()
         val generatedPropertyNames = mutableSetOf<String>()
 
@@ -68,30 +75,42 @@ class JsonSchemaValueGenerator(private val project: Project) {
             val propertyConstraint = constraint.propertyConstraints[requiredPropertyName]
             generatedObjectNode.set<JsonNode>(
                 requiredPropertyName,
-                generateValue(propertyConstraint ?: AnySchemaConstraint(constraint.jsonPointer, jsonNodeFactory.objectNode()))
+                generateValue(
+                    propertyConstraint ?: AnySchemaConstraint(constraint.jsonPointer, jsonNodeFactory.objectNode()),
+                    schemaPropertyGenerationMode
+                )
             )
             generatedPropertyNames.add(requiredPropertyName)
         }
 
-        val remainingPropertyNames = constraint.propertyConstraints.keys
+        val optionalPropertyNames = constraint.propertyConstraints.keys
             .filterNot { propertyName -> generatedPropertyNames.contains(propertyName) }
+        val optionalPropertyNamesToGenerate = when (schemaPropertyGenerationMode) {
+            SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL -> optionalPropertyNames
+            SchemaPropertyGenerationMode.REQUIRED_ONLY -> {
+                val minimumProperties = constraint.minimumProperties ?: generatedPropertyNames.size
+                val minimumOptionalPropertyCount = max(0, minimumProperties - generatedPropertyNames.size)
+                optionalPropertyNames.take(minimumOptionalPropertyCount)
+            }
+            SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED -> optionalPropertyNames
+        }
 
-        val effectiveMinProperties = constraint.minimumProperties
-            ?: (generatedPropertyNames.size + min(DEFAULT_OPTIONAL_PROPERTY_COUNT, remainingPropertyNames.size))
-        val targetOptionalCount = min(
-            remainingPropertyNames.size,
-            max(0, effectiveMinProperties - generatedPropertyNames.size)
-        )
-        remainingPropertyNames.take(targetOptionalCount).forEach { optionalPropertyName ->
+        optionalPropertyNamesToGenerate.forEach { optionalPropertyName ->
             val propertyConstraint = constraint.propertyConstraints.getValue(optionalPropertyName)
-            generatedObjectNode.set<JsonNode>(optionalPropertyName, generateValue(propertyConstraint))
+            generatedObjectNode.set<JsonNode>(
+                optionalPropertyName,
+                generateValue(propertyConstraint, schemaPropertyGenerationMode)
+            )
             generatedPropertyNames.add(optionalPropertyName)
         }
 
         constraint.patternPropertyConstraints.forEach { (patternExpression, patternConstraint) ->
             val generatedPropertyName = generatePropertyNameFromPattern(patternExpression)
             if (!generatedObjectNode.has(generatedPropertyName)) {
-                generatedObjectNode.set<JsonNode>(generatedPropertyName, generateValue(patternConstraint))
+                generatedObjectNode.set<JsonNode>(
+                    generatedPropertyName,
+                    generateValue(patternConstraint, schemaPropertyGenerationMode)
+                )
                 generatedPropertyNames.add(generatedPropertyName)
             }
         }
@@ -102,7 +121,10 @@ class JsonSchemaValueGenerator(private val project: Project) {
                     if (!generatedObjectNode.has(dependentPropertyName)) {
                         val dependentPropertyConstraint = constraint.propertyConstraints[dependentPropertyName]
                             ?: AnySchemaConstraint(constraint.jsonPointer, jsonNodeFactory.objectNode())
-                        generatedObjectNode.set<JsonNode>(dependentPropertyName, generateValue(dependentPropertyConstraint))
+                        generatedObjectNode.set<JsonNode>(
+                            dependentPropertyName,
+                            generateValue(dependentPropertyConstraint, schemaPropertyGenerationMode)
+                        )
                         generatedPropertyNames.add(dependentPropertyName)
                     }
                 }
@@ -111,7 +133,7 @@ class JsonSchemaValueGenerator(private val project: Project) {
 
         constraint.dependentSchemaConstraints.forEach { (triggerPropertyName, dependentConstraint) ->
             if (generatedObjectNode.has(triggerPropertyName)) {
-                val generatedDependentNode = generateValue(dependentConstraint)
+                val generatedDependentNode = generateValue(dependentConstraint, schemaPropertyGenerationMode)
                 if (generatedDependentNode.isObject) {
                     val dependentObjectNode = generatedDependentNode as ObjectNode
                     dependentObjectNode.fields().forEachRemaining { dependentField ->
@@ -137,7 +159,10 @@ class JsonSchemaValueGenerator(private val project: Project) {
         return generatedObjectNode
     }
 
-    private fun generateArrayValue(constraint: ArraySchemaConstraint): JsonNode {
+    private fun generateArrayValue(
+        constraint: ArraySchemaConstraint,
+        schemaPropertyGenerationMode: SchemaPropertyGenerationMode
+    ): JsonNode {
         val generatedArrayNode = jsonNodeFactory.arrayNode()
         val minimumItems = constraint.minimumItems ?: 0
         val maximumItems = constraint.maximumItems ?: max(3, minimumItems)
@@ -151,14 +176,14 @@ class JsonSchemaValueGenerator(private val project: Project) {
 
         constraint.prefixItemConstraints.forEach { prefixConstraint ->
             if (generatedArrayNode.size() < maximumItems) {
-                generatedArrayNode.add(generateValue(prefixConstraint))
+                generatedArrayNode.add(generateValue(prefixConstraint, schemaPropertyGenerationMode))
             }
         }
 
         val targetCount = max(minimumItems, generatedArrayNode.size())
         while (generatedArrayNode.size() < targetCount && generatedArrayNode.size() < maximumItems) {
             val itemConstraint = constraint.itemConstraint ?: AnySchemaConstraint(constraint.jsonPointer, jsonNodeFactory.objectNode())
-            generatedArrayNode.add(generateValue(itemConstraint))
+            generatedArrayNode.add(generateValue(itemConstraint, schemaPropertyGenerationMode))
         }
 
         val containsConstraint = constraint.containsConstraint
@@ -172,7 +197,7 @@ class JsonSchemaValueGenerator(private val project: Project) {
                         jsonPointer = constraint.jsonPointer
                     )
                 }
-                generatedArrayNode.add(generateValue(containsConstraint))
+                generatedArrayNode.add(generateValue(containsConstraint, schemaPropertyGenerationMode))
                 matchedContainsCount = countContainsMatches(generatedArrayNode, containsConstraint)
             }
 
@@ -186,7 +211,12 @@ class JsonSchemaValueGenerator(private val project: Project) {
         }
 
         if (constraint.uniqueItems) {
-            enforceUniqueArrayItems(generatedArrayNode, constraint.itemConstraint, constraint.jsonPointer)
+            enforceUniqueArrayItems(
+                generatedArrayNode,
+                constraint.itemConstraint,
+                constraint.jsonPointer,
+                schemaPropertyGenerationMode
+            )
         }
 
         return generatedArrayNode
@@ -201,7 +231,8 @@ class JsonSchemaValueGenerator(private val project: Project) {
     private fun enforceUniqueArrayItems(
         generatedArrayNode: ArrayNode,
         itemConstraint: JsonSchemaConstraint?,
-        jsonPointer: String
+        jsonPointer: String,
+        schemaPropertyGenerationMode: SchemaPropertyGenerationMode
     ) {
         val elementTextValues = mutableSetOf<String>()
         for (index in 0 until generatedArrayNode.size()) {
@@ -209,7 +240,7 @@ class JsonSchemaValueGenerator(private val project: Project) {
             val elementText = existingElement.toString()
             if (!elementTextValues.add(elementText)) {
                 val replacementConstraint = itemConstraint ?: AnySchemaConstraint(jsonPointer, jsonNodeFactory.objectNode())
-                val replacementElement = generateValue(replacementConstraint)
+                val replacementElement = generateValue(replacementConstraint, schemaPropertyGenerationMode)
                 if (!elementTextValues.add(replacementElement.toString())) {
                     throw JsonSchemaGenerationException(
                         message = "Unable to satisfy uniqueItems constraint.",
@@ -287,17 +318,20 @@ class JsonSchemaValueGenerator(private val project: Project) {
         return IntNode(generatedValue.toInt())
     }
 
-    private fun generateCompositeValue(constraint: CompositeSchemaConstraint): JsonNode {
+    private fun generateCompositeValue(
+        constraint: CompositeSchemaConstraint,
+        schemaPropertyGenerationMode: SchemaPropertyGenerationMode
+    ): JsonNode {
         if (constraint.oneOfConstraints.isNotEmpty()) {
-            return generateOneOfValue(constraint)
+            return generateOneOfValue(constraint, schemaPropertyGenerationMode)
         }
 
         if (constraint.anyOfConstraints.isNotEmpty()) {
-            return generateAnyOfValue(constraint)
+            return generateAnyOfValue(constraint, schemaPropertyGenerationMode)
         }
 
         if (constraint.ifConstraint != null || constraint.thenConstraint != null || constraint.elseConstraint != null) {
-            return generateConditionalValue(constraint)
+            return generateConditionalValue(constraint, schemaPropertyGenerationMode)
         }
 
         if (constraint.allOfConstraints.isNotEmpty()) {
@@ -307,7 +341,7 @@ class JsonSchemaValueGenerator(private val project: Project) {
                 mergeSchemaNodes(accumulatedSchemaNode, allOfConstraint.schemaNode)
             }
             val mergedConstraint = normalizer.createConstraint(mergedSchemaNode, constraint.jsonPointer)
-            val generatedNode = generateValue(mergedConstraint)
+            val generatedNode = generateValue(mergedConstraint, schemaPropertyGenerationMode)
             if (!validationService.validateAgainstSchemaNode(constraint.schemaNode, generatedNode)) {
                 throw JsonSchemaGenerationException(
                     message = "Unable to satisfy allOf constraints.",
@@ -317,7 +351,9 @@ class JsonSchemaValueGenerator(private val project: Project) {
             return generatedNode
         }
 
-        val generatedBaseNode = constraint.baseConstraint?.let { generateValue(it) } ?: TextNode("value")
+        val generatedBaseNode = constraint.baseConstraint?.let {
+            generateValue(it, schemaPropertyGenerationMode)
+        } ?: TextNode(generateRandomFakerString())
         constraint.notConstraint?.let { notConstraint ->
             if (validationService.validateAgainstSchemaNode(notConstraint.schemaNode, generatedBaseNode)) {
                 throw JsonSchemaGenerationException(
@@ -336,7 +372,10 @@ class JsonSchemaValueGenerator(private val project: Project) {
         return generatedBaseNode
     }
 
-    private fun generateOneOfValue(constraint: CompositeSchemaConstraint): JsonNode {
+    private fun generateOneOfValue(
+        constraint: CompositeSchemaConstraint,
+        schemaPropertyGenerationMode: SchemaPropertyGenerationMode
+    ): JsonNode {
         val baseSchemaWithoutOneOf = removeKeywordFromSchema(constraint.schemaNode, "oneOf")
         constraint.oneOfConstraints.forEachIndexed { index, oneOfConstraint ->
             val candidateSchemaNode = mergeSchemaNodes(baseSchemaWithoutOneOf, oneOfConstraint.schemaNode)
@@ -344,7 +383,8 @@ class JsonSchemaValueGenerator(private val project: Project) {
                 normalizer.createConstraint(
                     candidateSchemaNode,
                     "${constraint.jsonPointer}/oneOf/$index"
-                )
+                ),
+                schemaPropertyGenerationMode
             )
 
             val validBranchCount = constraint.oneOfConstraints.count { branchConstraint ->
@@ -362,7 +402,10 @@ class JsonSchemaValueGenerator(private val project: Project) {
         )
     }
 
-    private fun generateAnyOfValue(constraint: CompositeSchemaConstraint): JsonNode {
+    private fun generateAnyOfValue(
+        constraint: CompositeSchemaConstraint,
+        schemaPropertyGenerationMode: SchemaPropertyGenerationMode
+    ): JsonNode {
         val baseSchemaWithoutAnyOf = removeKeywordFromSchema(constraint.schemaNode, "anyOf")
         constraint.anyOfConstraints.forEachIndexed { index, anyOfConstraint ->
             val candidateSchemaNode = mergeSchemaNodes(baseSchemaWithoutAnyOf, anyOfConstraint.schemaNode)
@@ -370,7 +413,8 @@ class JsonSchemaValueGenerator(private val project: Project) {
                 normalizer.createConstraint(
                     candidateSchemaNode,
                     "${constraint.jsonPointer}/anyOf/$index"
-                )
+                ),
+                schemaPropertyGenerationMode
             )
             if (validationService.validateAgainstSchemaNode(constraint.schemaNode, generatedCandidate)) {
                 return generatedCandidate
@@ -383,7 +427,10 @@ class JsonSchemaValueGenerator(private val project: Project) {
         )
     }
 
-    private fun generateConditionalValue(constraint: CompositeSchemaConstraint): JsonNode {
+    private fun generateConditionalValue(
+        constraint: CompositeSchemaConstraint,
+        schemaPropertyGenerationMode: SchemaPropertyGenerationMode
+    ): JsonNode {
         val baseSchemaWithoutConditional = removeKeywordsFromSchema(
             schemaNode = constraint.schemaNode,
             keywordNames = setOf("if", "then", "else")
@@ -395,7 +442,10 @@ class JsonSchemaValueGenerator(private val project: Project) {
 
         if (ifConstraint != null && thenConstraint != null) {
             val thenSchemaNode = mergeSchemaNodes(baseSchemaWithoutConditional, thenConstraint.schemaNode)
-            val generatedThenNode = generateValue(normalizer.createConstraint(thenSchemaNode, constraint.jsonPointer))
+            val generatedThenNode = generateValue(
+                normalizer.createConstraint(thenSchemaNode, constraint.jsonPointer),
+                schemaPropertyGenerationMode
+            )
             val validatesIf = validationService.validateAgainstSchemaNode(ifConstraint.schemaNode, generatedThenNode)
             val validatesFull = validationService.validateAgainstSchemaNode(constraint.schemaNode, generatedThenNode)
             if (validatesIf && validatesFull) {
@@ -405,7 +455,10 @@ class JsonSchemaValueGenerator(private val project: Project) {
 
         if (ifConstraint != null && elseConstraint != null) {
             val elseSchemaNode = mergeSchemaNodes(baseSchemaWithoutConditional, elseConstraint.schemaNode)
-            val generatedElseNode = generateValue(normalizer.createConstraint(elseSchemaNode, constraint.jsonPointer))
+            val generatedElseNode = generateValue(
+                normalizer.createConstraint(elseSchemaNode, constraint.jsonPointer),
+                schemaPropertyGenerationMode
+            )
             val validatesIf = validationService.validateAgainstSchemaNode(ifConstraint.schemaNode, generatedElseNode)
             val validatesFull = validationService.validateAgainstSchemaNode(constraint.schemaNode, generatedElseNode)
             if (!validatesIf && validatesFull) {
@@ -413,8 +466,12 @@ class JsonSchemaValueGenerator(private val project: Project) {
             }
         }
 
-        val generatedFallbackNode = constraint.baseConstraint?.let { generateValue(it) }
-            ?: generateValue(normalizer.createConstraint(baseSchemaWithoutConditional, constraint.jsonPointer))
+        val generatedFallbackNode = constraint.baseConstraint?.let {
+            generateValue(it, schemaPropertyGenerationMode)
+        } ?: generateValue(
+            normalizer.createConstraint(baseSchemaWithoutConditional, constraint.jsonPointer),
+            schemaPropertyGenerationMode
+        )
 
         if (!validationService.validateAgainstSchemaNode(constraint.schemaNode, generatedFallbackNode)) {
             throw JsonSchemaGenerationException(
@@ -460,30 +517,30 @@ class JsonSchemaValueGenerator(private val project: Project) {
                 "date-time" -> Instant.now().atOffset(ZoneOffset.UTC).toString()
                 "date" -> LocalDate.now(ZoneOffset.UTC).toString()
                 "ipv4" -> faker.internet().ipV4Address()
-                else -> "value"
+                else -> generateRandomFakerString()
             }
         }
 
         patternExpression?.let { pattern ->
             if (pattern == "^[0-9]+$" || pattern == "^[\\\\d]+$") {
-                return "123456"
+                return faker.number().digits(Random.nextInt(4, 12))
             }
             if (pattern == "^[A-Za-z]+$" || pattern == "^[a-zA-Z]+$") {
-                return "sampleText"
+                return faker.regexify("[A-Za-z]{${Random.nextInt(4, 12)}}")
             }
             if (pattern == "^[a-zA-Z0-9_-]+$") {
-                return "sample_value_1"
+                return faker.regexify("[A-Za-z0-9_-]{${Random.nextInt(6, 14)}}")
             }
 
             val fixedDigitPattern = Regex("""^\^\\d\{(\d+)}\$$""")
             val fixedDigitMatch = fixedDigitPattern.matchEntire(pattern)
             if (fixedDigitMatch != null) {
                 val digitCount = fixedDigitMatch.groupValues[1].toInt()
-                return "1".repeat(digitCount)
+                return faker.regexify("\\\\d{$digitCount}")
             }
         }
 
-        return "value"
+        return generateRandomFakerString()
     }
 
     private fun generateNumericValue(
@@ -512,11 +569,36 @@ class JsonSchemaValueGenerator(private val project: Project) {
             )
         }
 
-        var candidateValue = lowerBound
-
-        if (multipleOfValue != null && multipleOfValue.compareTo(BigDecimal.ZERO) > 0) {
-            val multiplier = lowerBound.divide(multipleOfValue, 0, RoundingMode.CEILING)
-            candidateValue = multiplier.multiply(multipleOfValue)
+        val candidateValue = if (multipleOfValue != null && multipleOfValue.compareTo(BigDecimal.ZERO) > 0) {
+            val minimumMultiplier = lowerBound.divide(multipleOfValue, 0, RoundingMode.CEILING)
+            val maximumMultiplier = upperBound.divide(multipleOfValue, 0, RoundingMode.FLOOR)
+            if (minimumMultiplier > maximumMultiplier) {
+                throw JsonSchemaGenerationException(
+                    message = "Unable to satisfy multipleOf with the given bounds.",
+                    jsonPointer = jsonPointer
+                )
+            }
+            val selectedMultiplier = pickRandomMultiplier(minimumMultiplier, maximumMultiplier)
+            selectedMultiplier.multiply(multipleOfValue)
+        } else if (integerOnly) {
+            val lowerIntegerBound = lowerBound.setScale(0, RoundingMode.CEILING)
+            val upperIntegerBound = upperBound.setScale(0, RoundingMode.FLOOR)
+            if (lowerIntegerBound > upperIntegerBound) {
+                throw JsonSchemaGenerationException(
+                    message = "Numeric bounds are contradictory.",
+                    jsonPointer = jsonPointer
+                )
+            }
+            pickRandomMultiplier(lowerIntegerBound, upperIntegerBound)
+        } else {
+            val lowerDouble = lowerBound.toDouble()
+            val upperDouble = upperBound.toDouble()
+            if (!lowerDouble.isFinite() || !upperDouble.isFinite() || lowerDouble == upperDouble) {
+                lowerBound
+            } else {
+                val randomValue = Random.nextDouble(lowerDouble, upperDouble)
+                BigDecimal.valueOf(randomValue)
+            }
         }
 
         if (candidateValue > upperBound) {
@@ -527,12 +609,46 @@ class JsonSchemaValueGenerator(private val project: Project) {
         }
 
         if (integerOnly) {
-            candidateValue = candidateValue.setScale(0, RoundingMode.CEILING)
-        } else if (candidateValue.scale() > 6) {
-            candidateValue = candidateValue.setScale(6, RoundingMode.HALF_UP)
+            return candidateValue.setScale(0, RoundingMode.CEILING)
         }
 
-        return candidateValue
+        return if (candidateValue.scale() > 6) {
+            candidateValue.setScale(6, RoundingMode.HALF_UP)
+        } else {
+            candidateValue
+        }
+    }
+
+    private fun pickRandomMultiplier(minimumValue: BigDecimal, maximumValue: BigDecimal): BigDecimal {
+        val minimumLongValue = runCatching { minimumValue.longValueExact() }.getOrNull()
+        val maximumLongValue = runCatching { maximumValue.longValueExact() }.getOrNull()
+        if (minimumLongValue == null || maximumLongValue == null || minimumLongValue > maximumLongValue) {
+            return minimumValue
+        }
+
+        if (minimumLongValue == maximumLongValue) {
+            return BigDecimal.valueOf(minimumLongValue)
+        }
+
+        if (maximumLongValue == Long.MAX_VALUE) {
+            return minimumValue
+        }
+
+        val selectedLongValue = Random.nextLong(minimumLongValue, maximumLongValue + 1)
+        return BigDecimal.valueOf(selectedLongValue)
+    }
+
+    private fun generateRandomFakerString(): String {
+        return when (Random.nextInt(8)) {
+            0 -> faker.name().fullName()
+            1 -> faker.internet().emailAddress()
+            2 -> faker.company().name()
+            3 -> faker.address().cityName()
+            4 -> faker.commerce().productName()
+            5 -> faker.job().title()
+            6 -> faker.lorem().word()
+            else -> faker.regexify("[A-Za-z0-9]{12}")
+        }
     }
 
     private fun generatePropertyNameFromPattern(patternExpression: String): String {

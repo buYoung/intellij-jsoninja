@@ -2,7 +2,9 @@ package com.livteam.jsoninja.services.schema
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.NullNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.databind.node.TextNode
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.components.Service
@@ -12,6 +14,7 @@ import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.RandomJsonDataCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import com.networknt.schema.JsonSchema
 
 @Service(Service.Level.PROJECT)
@@ -27,6 +30,11 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         val resolvedSchemaNode: JsonNode,
         val compiledSchema: JsonSchema,
         val rootConstraint: JsonSchemaConstraint
+    )
+
+    private data class CommentedSchemaNodes(
+        val activeNode: JsonNode,
+        val completeNode: JsonNode
     )
 
     /**
@@ -65,10 +73,13 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         }
 
         val preparedSchema = prepareSchema(config.schemaText)
+        if (config.schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED) {
+            return generateCommentedSchemaOutput(preparedSchema, config.schemaOutputCount)
+        }
 
         val generatedNodes = mutableListOf<JsonNode>()
         repeat(config.schemaOutputCount) {
-            val generatedNode = generateSingleNode(preparedSchema)
+            val generatedNode = generateSingleNode(preparedSchema, config.schemaPropertyGenerationMode)
             generatedNodes.add(generatedNode)
         }
 
@@ -91,9 +102,12 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         }
     }
 
-    private fun generateSingleNode(preparedSchema: PreparedSchema): JsonNode {
+    private fun generateSingleNode(
+        preparedSchema: PreparedSchema,
+        schemaPropertyGenerationMode: SchemaPropertyGenerationMode
+    ): JsonNode {
         return try {
-            val generatedNode = valueGenerator.generateValue(preparedSchema.rootConstraint)
+            val generatedNode = valueGenerator.generateValue(preparedSchema.rootConstraint, schemaPropertyGenerationMode)
             val instanceValidationResult = validationService.validateInstance(preparedSchema.compiledSchema, generatedNode)
             if (!instanceValidationResult.isValid) {
                 throw JsonSchemaGenerationException(
@@ -106,6 +120,283 @@ class JsonSchemaDataGenerationService(private val project: Project) {
             LOG.warn("Primary generation failed. Trying fallback strategy.", generationException)
             generateFallbackNode(preparedSchema, generationException)
         }
+    }
+
+    private fun generateCommentedSchemaOutput(preparedSchema: PreparedSchema, schemaOutputCount: Int): String {
+        val commentedSchemaNodes = mutableListOf<CommentedSchemaNodes>()
+        repeat(schemaOutputCount) {
+            val activeNode = generateSingleNode(preparedSchema, SchemaPropertyGenerationMode.REQUIRED_ONLY)
+            val completeNode = generateSingleNode(preparedSchema, SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL)
+            val mergedCompleteNode = mergeActiveValuesIntoCompleteNode(activeNode, completeNode)
+            commentedSchemaNodes.add(
+                CommentedSchemaNodes(
+                    activeNode = activeNode,
+                    completeNode = mergedCompleteNode
+                )
+            )
+        }
+
+        if (commentedSchemaNodes.size == 1) {
+            return renderCommentedJson5(
+                rootConstraint = preparedSchema.rootConstraint,
+                activeNode = commentedSchemaNodes.first().activeNode,
+                completeNode = commentedSchemaNodes.first().completeNode
+            )
+        }
+
+        val arrayLines = mutableListOf<String>()
+        arrayLines.add("[")
+        commentedSchemaNodes.forEachIndexed { index, commentedSchemaNode ->
+            val renderedNodeLines = renderCommentedJson5(
+                rootConstraint = preparedSchema.rootConstraint,
+                activeNode = commentedSchemaNode.activeNode,
+                completeNode = commentedSchemaNode.completeNode
+            ).lines().map { renderedLine -> "$INDENT_UNIT$renderedLine" }.toMutableList()
+
+            if (index < commentedSchemaNodes.lastIndex && renderedNodeLines.isNotEmpty()) {
+                val lastLineIndex = renderedNodeLines.lastIndex
+                renderedNodeLines[lastLineIndex] = renderedNodeLines[lastLineIndex] + ","
+            }
+            arrayLines.addAll(renderedNodeLines)
+        }
+        arrayLines.add("]")
+        return arrayLines.joinToString("\n")
+    }
+
+    private fun mergeActiveValuesIntoCompleteNode(activeNode: JsonNode, completeNode: JsonNode): JsonNode {
+        if (activeNode.isObject && completeNode.isObject) {
+            val activeObjectNode = activeNode as ObjectNode
+            val completeObjectNode = completeNode.deepCopy<ObjectNode>()
+            activeObjectNode.fields().forEachRemaining { activeField ->
+                val mergedChildNode = if (completeObjectNode.has(activeField.key)) {
+                    mergeActiveValuesIntoCompleteNode(activeField.value, completeObjectNode.path(activeField.key))
+                } else {
+                    activeField.value.deepCopy()
+                }
+                completeObjectNode.set<JsonNode>(activeField.key, mergedChildNode)
+            }
+            return completeObjectNode
+        }
+
+        if (activeNode.isArray && completeNode.isArray) {
+            val activeArrayNode = activeNode as ArrayNode
+            val completeArrayNode = completeNode.deepCopy<ArrayNode>()
+            val overlappingSize = minOf(activeArrayNode.size(), completeArrayNode.size())
+            for (index in 0 until overlappingSize) {
+                val mergedChildNode = mergeActiveValuesIntoCompleteNode(activeArrayNode[index], completeArrayNode[index])
+                completeArrayNode.set(index, mergedChildNode)
+            }
+            return completeArrayNode
+        }
+
+        return activeNode.deepCopy()
+    }
+
+    private fun renderCommentedJson5(
+        rootConstraint: JsonSchemaConstraint,
+        activeNode: JsonNode,
+        completeNode: JsonNode
+    ): String {
+        val renderedLines = renderNodeWithOptionalComments(
+            activeNode = activeNode,
+            completeNode = completeNode,
+            constraint = rootConstraint,
+            indentDepth = 0
+        )
+        return renderedLines.joinToString("\n")
+    }
+
+    private fun renderNodeWithOptionalComments(
+        activeNode: JsonNode,
+        completeNode: JsonNode,
+        constraint: JsonSchemaConstraint?,
+        indentDepth: Int
+    ): List<String> {
+        val objectConstraint = resolveObjectConstraint(constraint)
+        if (objectConstraint != null && activeNode.isObject && completeNode.isObject) {
+            return renderObjectWithOptionalComments(
+                objectConstraint = objectConstraint,
+                activeObjectNode = activeNode as ObjectNode,
+                completeObjectNode = completeNode as ObjectNode,
+                indentDepth = indentDepth
+            )
+        }
+
+        val arrayConstraint = resolveArrayConstraint(constraint)
+        if (arrayConstraint != null && activeNode.isArray && completeNode.isArray) {
+            return renderArrayWithOptionalComments(
+                arrayConstraint = arrayConstraint,
+                activeArrayNode = activeNode as ArrayNode,
+                completeArrayNode = completeNode as ArrayNode,
+                indentDepth = indentDepth
+            )
+        }
+
+        return renderPlainNode(activeNode, indentDepth)
+    }
+
+    private fun renderObjectWithOptionalComments(
+        objectConstraint: ObjectSchemaConstraint,
+        activeObjectNode: ObjectNode,
+        completeObjectNode: ObjectNode,
+        indentDepth: Int
+    ): List<String> {
+        val lines = mutableListOf<String>()
+        val currentIndent = indent(indentDepth)
+        lines.add("$currentIndent{")
+
+        val activePropertyNames = activeObjectNode.fieldNames().asSequence().toList()
+        activePropertyNames.forEachIndexed { index, propertyName ->
+            val propertyConstraint = objectConstraint.propertyConstraints[propertyName]
+            val activePropertyNode = activeObjectNode.path(propertyName)
+            val completePropertyNode = completeObjectNode.path(propertyName).takeUnless { it.isMissingNode } ?: activePropertyNode
+            val renderedPropertyValueLines = renderNodeWithOptionalComments(
+                activeNode = activePropertyNode,
+                completeNode = completePropertyNode,
+                constraint = propertyConstraint,
+                indentDepth = indentDepth + 1
+            )
+            val propertyLines = buildPropertyLines(
+                propertyName = propertyName,
+                renderedPropertyValueLines = renderedPropertyValueLines,
+                indentDepth = indentDepth + 1,
+                hasTrailingComma = index < activePropertyNames.lastIndex
+            )
+            lines.addAll(propertyLines)
+        }
+
+        val optionalCommentPropertyNames = objectConstraint.propertyConstraints.keys
+            .filter { propertyName ->
+                !objectConstraint.requiredProperties.contains(propertyName) &&
+                    !activeObjectNode.has(propertyName) &&
+                    completeObjectNode.has(propertyName)
+            }
+
+        optionalCommentPropertyNames.forEach { optionalPropertyName ->
+            val optionalPropertyConstraint = objectConstraint.propertyConstraints[optionalPropertyName]
+            val optionalPropertyNode = completeObjectNode.path(optionalPropertyName)
+            val renderedOptionalPropertyValueLines = renderNodeWithOptionalComments(
+                activeNode = optionalPropertyNode,
+                completeNode = optionalPropertyNode,
+                constraint = optionalPropertyConstraint,
+                indentDepth = indentDepth + 1
+            )
+            val optionalPropertyLines = buildPropertyLines(
+                propertyName = optionalPropertyName,
+                renderedPropertyValueLines = renderedOptionalPropertyValueLines,
+                indentDepth = indentDepth + 1,
+                hasTrailingComma = true
+            )
+            lines.addAll(convertToCommentedLines(optionalPropertyLines, indentDepth + 1))
+        }
+
+        lines.add("$currentIndent}")
+        return lines
+    }
+
+    private fun renderArrayWithOptionalComments(
+        arrayConstraint: ArraySchemaConstraint,
+        activeArrayNode: ArrayNode,
+        completeArrayNode: ArrayNode,
+        indentDepth: Int
+    ): List<String> {
+        if (activeArrayNode.isEmpty) {
+            return listOf("${indent(indentDepth)}[]")
+        }
+
+        val lines = mutableListOf<String>()
+        val currentIndent = indent(indentDepth)
+        lines.add("$currentIndent[")
+        for (index in 0 until activeArrayNode.size()) {
+            val elementConstraint = arrayConstraint.prefixItemConstraints.getOrNull(index) ?: arrayConstraint.itemConstraint
+            val activeElementNode = activeArrayNode[index]
+            val completeElementNode = completeArrayNode.path(index).takeUnless { it.isMissingNode } ?: activeElementNode
+            val renderedElementLines = renderNodeWithOptionalComments(
+                activeNode = activeElementNode,
+                completeNode = completeElementNode,
+                constraint = elementConstraint,
+                indentDepth = indentDepth + 1
+            ).toMutableList()
+            if (index < activeArrayNode.size() - 1 && renderedElementLines.isNotEmpty()) {
+                val lastElementLineIndex = renderedElementLines.lastIndex
+                renderedElementLines[lastElementLineIndex] = renderedElementLines[lastElementLineIndex] + ","
+            }
+            lines.addAll(renderedElementLines)
+        }
+        lines.add("$currentIndent]")
+        return lines
+    }
+
+    private fun renderPlainNode(node: JsonNode, indentDepth: Int): List<String> {
+        val serializedNode = if (node.isContainerNode) {
+            objectMapper.writerWithDefaultPrettyPrinter()
+                .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .writeValueAsString(node)
+        } else {
+            objectMapper.writeValueAsString(node)
+        }
+
+        val baseIndent = indent(indentDepth)
+        return serializedNode.lines().map { serializedLine -> "$baseIndent$serializedLine" }
+    }
+
+    private fun resolveObjectConstraint(constraint: JsonSchemaConstraint?): ObjectSchemaConstraint? {
+        return when (constraint) {
+            is ObjectSchemaConstraint -> constraint
+            is CompositeSchemaConstraint -> constraint.baseConstraint as? ObjectSchemaConstraint
+            else -> null
+        }
+    }
+
+    private fun resolveArrayConstraint(constraint: JsonSchemaConstraint?): ArraySchemaConstraint? {
+        return when (constraint) {
+            is ArraySchemaConstraint -> constraint
+            is CompositeSchemaConstraint -> constraint.baseConstraint as? ArraySchemaConstraint
+            else -> null
+        }
+    }
+
+    private fun buildPropertyLines(
+        propertyName: String,
+        renderedPropertyValueLines: List<String>,
+        indentDepth: Int,
+        hasTrailingComma: Boolean
+    ): List<String> {
+        if (renderedPropertyValueLines.isEmpty()) {
+            return emptyList()
+        }
+
+        val propertyIndent = indent(indentDepth)
+        val normalizedValueLines = renderedPropertyValueLines.map { renderedValueLine ->
+            renderedValueLine.removePrefix(propertyIndent)
+        }
+        val escapedPropertyName = propertyName
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+
+        val propertyLines = mutableListOf<String>()
+        propertyLines.add("$propertyIndent\"$escapedPropertyName\": ${normalizedValueLines.first()}")
+        normalizedValueLines.drop(1).forEach { normalizedValueLine ->
+            propertyLines.add("$propertyIndent$normalizedValueLine")
+        }
+
+        if (hasTrailingComma) {
+            val lastLineIndex = propertyLines.lastIndex
+            propertyLines[lastLineIndex] = propertyLines[lastLineIndex] + ","
+        }
+        return propertyLines
+    }
+
+    private fun convertToCommentedLines(propertyLines: List<String>, indentDepth: Int): List<String> {
+        val propertyIndent = indent(indentDepth)
+        return propertyLines.map { propertyLine ->
+            val normalizedPropertyLine = propertyLine.removePrefix(propertyIndent)
+            "$propertyIndent// $normalizedPropertyLine"
+        }
+    }
+
+    private fun indent(indentDepth: Int): String {
+        return INDENT_UNIT.repeat(indentDepth)
     }
 
     private fun generateFallbackNode(preparedSchema: PreparedSchema, cause: Exception): JsonNode {
@@ -246,5 +537,9 @@ class JsonSchemaDataGenerationService(private val project: Project) {
                 }
         }
         return emptyList()
+    }
+
+    companion object {
+        private const val INDENT_UNIT = "  "
     }
 }

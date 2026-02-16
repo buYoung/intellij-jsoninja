@@ -92,7 +92,8 @@ class GenerateSchemaJsonTabPresenter(
             generationMode = JsonGenerationMode.SCHEMA,
             isJson5 = view.isJson5Selected(),
             schemaText = view.getSchemaText(),
-            schemaOutputCount = view.getSchemaOutputCountText().toIntOrNull() ?: initialConfig.schemaOutputCount
+            schemaOutputCount = view.getSchemaOutputCountText().toIntOrNull() ?: initialConfig.schemaOutputCount,
+            schemaPropertyGenerationMode = view.getSchemaPropertyGenerationMode()
         )
     }
 

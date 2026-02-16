@@ -11,6 +11,7 @@ import com.intellij.ui.EditorTextField
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBList
+import com.intellij.ui.components.JBRadioButton
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
@@ -19,6 +20,7 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
 import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -52,6 +54,9 @@ class GenerateSchemaJsonTabView(
     private lateinit var schemaUrlSuggestionList: JBList<SchemaUrlComboBoxItem>
     private lateinit var loadSchemaFromUrlButton: JButton
     private lateinit var schemaOutputCountField: JBTextField
+    private lateinit var schemaRequiredAndOptionalRadioButton: JBRadioButton
+    private lateinit var schemaRequiredOnlyRadioButton: JBRadioButton
+    private lateinit var schemaRequiredAndOptionalCommentedRadioButton: JBRadioButton
     private lateinit var schemaJson5Checkbox: JBCheckBox
     private var schemaUrlSuggestionPopup: JBPopup? = null
     private var selectedSchemaStoreCatalogItem: SchemaStoreCatalogItem? = null
@@ -79,6 +84,14 @@ class GenerateSchemaJsonTabView(
     fun getSchemaOutputCountText(): String = schemaOutputCountField.text
 
     fun getSchemaOutputCountField(): JComponent = schemaOutputCountField
+
+    fun getSchemaPropertyGenerationMode(): SchemaPropertyGenerationMode {
+        return when {
+            schemaRequiredOnlyRadioButton.isSelected -> SchemaPropertyGenerationMode.REQUIRED_ONLY
+            schemaRequiredAndOptionalCommentedRadioButton.isSelected -> SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
+            else -> SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
+        }
+    }
 
     fun isJson5Selected(): Boolean = schemaJson5Checkbox.isSelected
 
@@ -181,9 +194,41 @@ class GenerateSchemaJsonTabView(
                         .component
                 }
 
+                group(LocalizationBundle.message("dialog.generate.json.schema.property.mode.label")) {
+                    buttonsGroup {
+                        row {
+                            schemaRequiredAndOptionalRadioButton = radioButton(
+                                LocalizationBundle.message("dialog.generate.json.schema.property.mode.required.optional"),
+                                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
+                            ).component
+                        }
+                        row {
+                            schemaRequiredOnlyRadioButton = radioButton(
+                                LocalizationBundle.message("dialog.generate.json.schema.property.mode.required.only"),
+                                SchemaPropertyGenerationMode.REQUIRED_ONLY
+                            ).component
+                        }
+                        row {
+                            schemaRequiredAndOptionalCommentedRadioButton = radioButton(
+                                LocalizationBundle.message("dialog.generate.json.schema.property.mode.required.optional.commented"),
+                                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
+                            ).component
+                        }
+                    }.bind(
+                        { getSchemaPropertyGenerationMode() },
+                        { selectedMode ->
+                            setSchemaPropertyGenerationMode(selectedMode)
+                            updateSchemaJson5CheckboxState(selectedMode)
+                        }
+                    )
+                }
+
                 row {
                     schemaJson5Checkbox = checkBox(LocalizationBundle.message("dialog.generate.json.checkbox.json5"))
-                        .apply { component.isSelected = initialConfig.isJson5 }
+                        .apply {
+                            component.isSelected = initialConfig.isJson5
+                            updateSchemaJson5CheckboxState(getSchemaPropertyGenerationMode())
+                        }
                         .component
                 }
 
@@ -207,6 +252,29 @@ class GenerateSchemaJsonTabView(
         schemaPanel.add(schemaEditorContainer, BorderLayout.CENTER)
 
         return schemaPanel
+    }
+
+    private fun setSchemaPropertyGenerationMode(schemaPropertyGenerationMode: SchemaPropertyGenerationMode) {
+        schemaRequiredAndOptionalRadioButton.isSelected =
+            schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
+        schemaRequiredOnlyRadioButton.isSelected =
+            schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_ONLY
+        schemaRequiredAndOptionalCommentedRadioButton.isSelected =
+            schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
+    }
+
+    private fun updateSchemaJson5CheckboxState(schemaPropertyGenerationMode: SchemaPropertyGenerationMode) {
+        if (!::schemaJson5Checkbox.isInitialized) {
+            return
+        }
+
+        val isCommentedMode = schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
+        if (isCommentedMode) {
+            schemaJson5Checkbox.isSelected = true
+            schemaJson5Checkbox.isEnabled = false
+        } else {
+            schemaJson5Checkbox.isEnabled = true
+        }
     }
 
     private fun createSchemaUrlSearchField(): SearchTextField {
