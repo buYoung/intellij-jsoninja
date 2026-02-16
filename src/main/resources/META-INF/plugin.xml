@@ -80,6 +80,9 @@
             <action id="com.livteam.jsoninja.action.GenerateRandomJsonAction"
                     class="com.livteam.jsoninja.actions.GenerateRandomJsonAction"
                     icon="/icons/random_json.svg"/>
+            <action id="com.livteam.jsoninja.action.LoadJsonFromApiAction"
+                    class="com.livteam.jsoninja.actions.LoadJsonFromApiAction"
+                    icon="AllIcons.Actions.Download"/>
             <separator/>
             <action id="com.livteam.jsoninja.action.CloseTabAction"
                     class="com.livteam.jsoninja.actions.CloseTabAction">

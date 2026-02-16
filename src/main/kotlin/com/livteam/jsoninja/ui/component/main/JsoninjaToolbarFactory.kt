@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.livteam.jsoninja.actions.AddTabAction
 import com.livteam.jsoninja.actions.EscapeJsonAction
 import com.livteam.jsoninja.actions.GenerateRandomJsonAction
+import com.livteam.jsoninja.actions.LoadJsonFromApiAction
 import com.livteam.jsoninja.actions.OpenJsonFileAction
 import com.livteam.jsoninja.actions.PrettifyJsonAction
 import com.livteam.jsoninja.actions.ShowJsonDiffAction
@@ -47,6 +48,7 @@ object JsoninjaToolbarFactory {
             add(GenerateRandomJsonAction())
             // JSON Diff 액션 추가
             add(ShowJsonDiffAction())
+            add(LoadJsonFromApiAction())
         }
 
         val actionToolbar = ActionManager.getInstance()
