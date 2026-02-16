@@ -4,6 +4,29 @@
 
 ## [Unreleased]
 
+### Added
+
+- JSON Schema Data Generation: Added support for generating sample JSON data based on JSON Schema (2020-12 draft).
+    - Paste or write a JSON Schema directly in the editor, or load one from a URL.
+    - SchemaStore catalog integration: search and select from well-known schemas with autocomplete suggestions.
+    - Three property generation modes: Required & Optional, Required Only, and Required & Optional (Optional Commented).
+    - Schema validation and normalization with `$ref` resolution.
+    - Generate multiple output instances at once.
+- Load JSON from API: Fetch JSON responses from external APIs directly within the plugin.
+    - Supports GET, POST, PUT, DELETE methods.
+    - Authorization options: None, Basic Auth, Bearer Token.
+    - Built-in request body editor with JSON syntax highlighting.
+    - Response validation ensures only valid JSON is loaded into the editor.
+- Onboarding Tutorial: A guided, step-by-step onboarding experience for new users.
+    - Welcome dialog shown on first plugin startup.
+    - 7-step interactive tutorial with GotIt tooltips anchored to toolbar buttons.
+    - Each step includes GIF animations demonstrating key features.
+    - Accessible anytime from the plugin settings.
+
+### Changed
+
+- JSON Generator Dialog: Redesigned with a tabbed interface separating Random and Schema generation modes.
+
 ## [1.7.0] - 2026-02-08
 
 ### Added
