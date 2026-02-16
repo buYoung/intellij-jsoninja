@@ -104,8 +104,8 @@ class GenerateSchemaJsonTabPresenter(
 
     private fun loadSchemaStoreCatalog() {
         schemaStoreCatalogState = SchemaStoreCatalogState.LOADING
-        view.updateSchemaUrlComboBoxModel(
-            schemaUrlComboBoxItems = listOf(
+        view.updateSchemaUrlSuggestions(
+            schemaUrlSuggestionItems = listOf(
                 SchemaUrlComboBoxItem.StatusEntry(
                     LocalizationBundle.message("dialog.generate.json.schema.store.loading")
                 )
@@ -135,8 +135,8 @@ class GenerateSchemaJsonTabPresenter(
                     if (isDisposed) return@invokeLater
                     schemaStoreCatalogItems = emptyList()
                     schemaStoreCatalogState = SchemaStoreCatalogState.FAILED
-                    view.updateSchemaUrlComboBoxModel(
-                        schemaUrlComboBoxItems = listOf(
+                    view.updateSchemaUrlSuggestions(
+                        schemaUrlSuggestionItems = listOf(
                             SchemaUrlComboBoxItem.StatusEntry(
                                 LocalizationBundle.message("dialog.generate.json.schema.store.unavailable")
                             )
@@ -197,8 +197,8 @@ class GenerateSchemaJsonTabPresenter(
         }
 
         if (filteredSchemaStoreCatalogItems.isEmpty()) {
-            view.updateSchemaUrlComboBoxModel(
-                schemaUrlComboBoxItems = listOf(
+            view.updateSchemaUrlSuggestions(
+                schemaUrlSuggestionItems = listOf(
                     SchemaUrlComboBoxItem.StatusEntry(
                         LocalizationBundle.message("dialog.generate.json.schema.store.no.match")
                     )
@@ -209,8 +209,8 @@ class GenerateSchemaJsonTabPresenter(
             return
         }
 
-        view.updateSchemaUrlComboBoxModel(
-            schemaUrlComboBoxItems = filteredSchemaStoreCatalogItems.map { schemaStoreCatalogItem ->
+        view.updateSchemaUrlSuggestions(
+            schemaUrlSuggestionItems = filteredSchemaStoreCatalogItems.map { schemaStoreCatalogItem ->
                 SchemaUrlComboBoxItem.CatalogEntry(schemaStoreCatalogItem)
             },
             editorText = editorText,

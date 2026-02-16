@@ -4,9 +4,13 @@ import com.intellij.json.JsonFileType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.ui.popup.JBPopup
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.EditorTextField
+import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.components.JBList
+import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
 import com.intellij.util.ui.JBUI
@@ -15,25 +19,38 @@ import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
 import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import java.awt.BorderLayout
-import javax.swing.ComboBoxEditor
-import javax.swing.DefaultComboBoxModel
+import java.awt.Point
+import java.awt.event.FocusAdapter
+import java.awt.event.FocusEvent
+import java.awt.event.KeyAdapter
+import java.awt.event.KeyEvent
 import javax.swing.JButton
 import javax.swing.JComponent
+import javax.swing.JLabel
 import javax.swing.JPanel
+import javax.swing.ListCellRenderer
+import javax.swing.ListSelectionModel
+import javax.swing.UIManager
+import javax.swing.DefaultListModel
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
-import javax.swing.text.JTextComponent
+import com.intellij.ui.awt.RelativePoint
 
 class GenerateSchemaJsonTabView(
     private val project: Project?,
     private val initialConfig: JsonGenerationConfig
 ) {
     private lateinit var schemaEditor: EditorTextField
-    private lateinit var schemaUrlComboBox: ComboBox<SchemaUrlComboBoxItem>
+    private lateinit var schemaUrlSearchField: SearchTextField
+    private lateinit var schemaUrlSuggestionList: JBList<SchemaUrlComboBoxItem>
     private lateinit var loadSchemaFromUrlButton: JButton
     private lateinit var schemaOutputCountField: JBTextField
     private lateinit var schemaJson5Checkbox: JBCheckBox
-    private var isUpdatingSchemaUrlComboBoxModel = false
+    private var schemaUrlSuggestionPopup: JBPopup? = null
+    private var selectedSchemaStoreCatalogItem: SchemaStoreCatalogItem? = null
+    private var schemaUrlSuggestionItems: List<SchemaUrlComboBoxItem> = emptyList()
+    private var isUpdatingSchemaUrlEditorText = false
+    private var isDisposed = false
 
     private var onSchemaUrlInputChangedCallback: (() -> Unit)? = null
     private var onLoadSchemaFromUrlRequestedCallback: (() -> Unit)? = null
@@ -59,33 +76,31 @@ class GenerateSchemaJsonTabView(
     fun isJson5Selected(): Boolean = schemaJson5Checkbox.isSelected
 
     fun getSchemaUrlEditorText(): String {
-        val editorComponent = schemaUrlComboBox.editor.editorComponent as? JTextComponent ?: return ""
-        return editorComponent.text
+        return schemaUrlSearchField.textEditor.text
     }
 
     fun setSchemaUrlEditorText(schemaUrlText: String) {
-        val editorComponent = schemaUrlComboBox.editor.editorComponent as? JTextComponent ?: return
-        editorComponent.text = schemaUrlText
+        val editorComponent = schemaUrlSearchField.textEditor
+        val currentCaretPosition = editorComponent.caretPosition
+        isUpdatingSchemaUrlEditorText = true
+        try {
+            editorComponent.text = schemaUrlText
+            if (currentCaretPosition <= schemaUrlText.length) {
+                editorComponent.caretPosition = currentCaretPosition
+            }
+        } finally {
+            isUpdatingSchemaUrlEditorText = false
+        }
     }
 
     fun getSchemaUrlInputText(): String {
         val editorText = getSchemaUrlEditorText().trim()
-        val selectedItem = schemaUrlComboBox.selectedItem
-        if (selectedItem is SchemaUrlComboBoxItem.CatalogEntry) {
-            if (editorText.isBlank() || editorText == selectedItem.displayText) {
-                return selectedItem.schemaStoreCatalogItem.url
-            }
+        val selectedCatalogItem = selectedSchemaStoreCatalogItem
+        if (selectedCatalogItem != null && (editorText.isBlank() || editorText == selectedCatalogItem.name)) {
+            return selectedCatalogItem.url
         }
 
-        if (editorText.isNotBlank()) {
-            return editorText
-        }
-
-        if (selectedItem is SchemaUrlComboBoxItem.CatalogEntry) {
-            return selectedItem.schemaStoreCatalogItem.url
-        }
         return editorText
-        return getSchemaUrlEditorText().trim()
     }
 
     fun setSchemaEditorText(schemaText: String) {
@@ -96,37 +111,38 @@ class GenerateSchemaJsonTabView(
         loadSchemaFromUrlButton.isEnabled = isEnabled
     }
 
-    fun updateSchemaUrlComboBoxModel(
-        schemaUrlComboBoxItems: List<SchemaUrlComboBoxItem>,
+    fun updateSchemaUrlSuggestions(
+        schemaUrlSuggestionItems: List<SchemaUrlComboBoxItem>,
         editorText: String,
         showPopupWhenAvailable: Boolean
     ) {
-        val editorComponent = schemaUrlComboBox.editor.editorComponent as? JTextComponent
-        val currentCaretPosition = editorComponent?.caretPosition
+        if (isDisposed) {
+            return
+        }
+        this.schemaUrlSuggestionItems = schemaUrlSuggestionItems
+        refreshSchemaUrlSuggestionList(schemaUrlSuggestionItems)
 
-        val wasPopupVisible = schemaUrlComboBox.isPopupVisible
-        isUpdatingSchemaUrlComboBoxModel = true
-        try {
-            schemaUrlComboBox.model = DefaultComboBoxModel(schemaUrlComboBoxItems.toTypedArray())
-            schemaUrlComboBox.selectedItem = null
-
-            if (editorComponent == null || editorComponent.text != editorText) {
-                setSchemaUrlEditorText(editorText)
-
-                if (currentCaretPosition != null && currentCaretPosition <= editorText.length) {
-                    editorComponent?.caretPosition = currentCaretPosition
-                }
+        val editorComponent = schemaUrlSearchField.textEditor
+        if (editorComponent.text != editorText) {
+            setSchemaUrlEditorText(editorText)
+            val selectedCatalogItem = selectedSchemaStoreCatalogItem
+            if (selectedCatalogItem != null && editorText.isNotBlank() && editorText != selectedCatalogItem.name) {
+                selectedSchemaStoreCatalogItem = null
             }
-        } finally {
-            isUpdatingSchemaUrlComboBoxModel = false
         }
 
-        if (showPopupWhenAvailable && wasPopupVisible && schemaUrlComboBox.itemCount > 0) {
-            schemaUrlComboBox.showPopup()
+        if (showPopupWhenAvailable && schemaUrlSuggestionItems.isNotEmpty()) {
+            showSchemaUrlSuggestionPopup()
+            selectFirstSelectableSuggestion()
+            return
         }
+
+        hideSchemaUrlSuggestionPopup()
     }
 
     fun dispose() {
+        isDisposed = true
+        hideSchemaUrlSuggestionPopup()
         (schemaEditor as? Disposable)?.let { disposableEditor ->
             com.intellij.openapi.util.Disposer.dispose(disposableEditor)
         }
@@ -134,12 +150,13 @@ class GenerateSchemaJsonTabView(
 
     private fun createComponent(): JComponent {
         val schemaPanel = JPanel(BorderLayout())
-        schemaUrlComboBox = createSchemaUrlComboBox()
+        schemaUrlSearchField = createSchemaUrlSearchField()
+        schemaUrlSuggestionList = createSchemaUrlSuggestionList()
 
         val optionsPanel = panel {
             group(LocalizationBundle.message("dialog.generate.json.schema.group.input")) {
                 row(LocalizationBundle.message("dialog.generate.json.schema.url.label")) {
-                    cell(schemaUrlComboBox)
+                    cell(schemaUrlSearchField)
                         .align(AlignX.FILL)
                         .resizableColumn()
                         .comment(LocalizationBundle.message("dialog.generate.json.schema.url.comment"))
@@ -171,39 +188,236 @@ class GenerateSchemaJsonTabView(
         return schemaPanel
     }
 
-    private fun createSchemaUrlComboBox(): ComboBox<SchemaUrlComboBoxItem> {
-        val comboBox = object : ComboBox<SchemaUrlComboBoxItem>() {
-            override fun configureEditor(anEditor: ComboBoxEditor?, anItem: Any?) {
-                if (isUpdatingSchemaUrlComboBoxModel) {
-                    return
-                }
-                super.configureEditor(anEditor, anItem)
-            }
-        }
-        comboBox.isEditable = true
-        attachSchemaUrlEditorDocumentListener(comboBox)
+    private fun createSchemaUrlSearchField(): SearchTextField {
+        val searchTextField = SearchTextField()
+        attachSchemaUrlEditorDocumentListener(searchTextField)
+        searchTextField.textEditor.addKeyListener(object : KeyAdapter() {
+            override fun keyPressed(keyEvent: KeyEvent) {
+                when (keyEvent.keyCode) {
+                    KeyEvent.VK_DOWN -> {
+                        if (schemaUrlSuggestionItems.isNotEmpty()) {
+                            showSchemaUrlSuggestionPopup()
+                            selectFirstSelectableSuggestion()
+                            keyEvent.consume()
+                        }
+                    }
 
-        return comboBox
+                    KeyEvent.VK_ENTER -> {
+                        if (isSchemaUrlSuggestionPopupVisible() && applySelectedSchemaUrlSuggestion()) {
+                            keyEvent.consume()
+                        }
+                    }
+
+                    KeyEvent.VK_ESCAPE -> {
+                        if (isSchemaUrlSuggestionPopupVisible()) {
+                            hideSchemaUrlSuggestionPopup()
+                            keyEvent.consume()
+                        }
+                    }
+                }
+            }
+        })
+        searchTextField.textEditor.addFocusListener(object : FocusAdapter() {
+            override fun focusGained(focusEvent: FocusEvent?) {
+                if (schemaUrlSuggestionItems.isNotEmpty()) {
+                    showSchemaUrlSuggestionPopup()
+                    selectFirstSelectableSuggestion()
+                }
+            }
+        })
+
+        return searchTextField
     }
 
-    private fun attachSchemaUrlEditorDocumentListener(comboBox: ComboBox<SchemaUrlComboBoxItem>) {
-        val editorComponent = comboBox.editor.editorComponent as? JTextComponent ?: return
-        editorComponent.document.addDocumentListener(object : DocumentListener {
+    private fun attachSchemaUrlEditorDocumentListener(searchTextField: SearchTextField) {
+        searchTextField.textEditor.document.addDocumentListener(object : DocumentListener {
             override fun insertUpdate(documentEvent: DocumentEvent?) {
-                if (isUpdatingSchemaUrlComboBoxModel) return
-                onSchemaUrlInputChangedCallback?.invoke()
+                handleSchemaUrlEditorTextChanged()
             }
 
             override fun removeUpdate(documentEvent: DocumentEvent?) {
-                if (isUpdatingSchemaUrlComboBoxModel) return
-                onSchemaUrlInputChangedCallback?.invoke()
+                handleSchemaUrlEditorTextChanged()
             }
 
             override fun changedUpdate(documentEvent: DocumentEvent?) {
-                if (isUpdatingSchemaUrlComboBoxModel) return
-                onSchemaUrlInputChangedCallback?.invoke()
+                handleSchemaUrlEditorTextChanged()
             }
         })
+    }
+
+    private fun handleSchemaUrlEditorTextChanged() {
+        if (isUpdatingSchemaUrlEditorText) {
+            return
+        }
+
+        val editorText = getSchemaUrlEditorText().trim()
+        val selectedCatalogItem = selectedSchemaStoreCatalogItem
+        if (selectedCatalogItem != null && editorText.isNotBlank() && editorText != selectedCatalogItem.name) {
+            selectedSchemaStoreCatalogItem = null
+        }
+
+        onSchemaUrlInputChangedCallback?.invoke()
+    }
+
+    private fun createSchemaUrlSuggestionList(): JBList<SchemaUrlComboBoxItem> {
+        val suggestionList = JBList<SchemaUrlComboBoxItem>()
+        suggestionList.selectionMode = ListSelectionModel.SINGLE_SELECTION
+        suggestionList.cellRenderer = createSchemaUrlSuggestionRenderer()
+        suggestionList.addListSelectionListener {
+            val selectedSuggestion = suggestionList.selectedValue
+            if (selectedSuggestion is SchemaUrlComboBoxItem.StatusEntry) {
+                suggestionList.clearSelection()
+            }
+        }
+        suggestionList.addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mouseClicked(mouseEvent: java.awt.event.MouseEvent) {
+                if (mouseEvent.clickCount != 1) {
+                    return
+                }
+
+                val clickedIndex = suggestionList.locationToIndex(mouseEvent.point)
+                if (clickedIndex < 0) {
+                    return
+                }
+                val clickedCellBounds = suggestionList.getCellBounds(clickedIndex, clickedIndex) ?: return
+                if (!clickedCellBounds.contains(mouseEvent.point)) {
+                    return
+                }
+
+                val clickedItem = suggestionList.model.getElementAt(clickedIndex)
+                suggestionList.selectedIndex = clickedIndex
+                applySchemaUrlSuggestion(clickedItem)
+            }
+        })
+        suggestionList.addKeyListener(object : KeyAdapter() {
+            override fun keyPressed(keyEvent: KeyEvent) {
+                when (keyEvent.keyCode) {
+                    KeyEvent.VK_ENTER -> {
+                        if (applySelectedSchemaUrlSuggestion()) {
+                            keyEvent.consume()
+                        }
+                    }
+
+                    KeyEvent.VK_ESCAPE -> {
+                        hideSchemaUrlSuggestionPopup()
+                        keyEvent.consume()
+                    }
+                }
+            }
+        })
+        return suggestionList
+    }
+
+    private fun createSchemaUrlSuggestionRenderer(): ListCellRenderer<in SchemaUrlComboBoxItem> {
+        val defaultRenderer = JBList<SchemaUrlComboBoxItem>().cellRenderer as ListCellRenderer<in SchemaUrlComboBoxItem>
+        return ListCellRenderer { list, value, index, isSelected, cellHasFocus ->
+            val renderedComponent = defaultRenderer.getListCellRendererComponent(
+                list,
+                value,
+                index,
+                isSelected,
+                cellHasFocus
+            )
+
+            if (renderedComponent is JLabel && value is SchemaUrlComboBoxItem.StatusEntry) {
+                renderedComponent.isEnabled = false
+                renderedComponent.foreground = UIManager.getColor("Label.disabledForeground")
+            }
+
+            renderedComponent
+        }
+    }
+
+    private fun refreshSchemaUrlSuggestionList(schemaUrlSuggestionItems: List<SchemaUrlComboBoxItem>) {
+        val listModel = DefaultListModel<SchemaUrlComboBoxItem>()
+        schemaUrlSuggestionItems.forEach { schemaUrlSuggestionItem ->
+            listModel.addElement(schemaUrlSuggestionItem)
+        }
+        schemaUrlSuggestionList.model = listModel
+        schemaUrlSuggestionList.clearSelection()
+    }
+
+    private fun applySelectedSchemaUrlSuggestion(): Boolean {
+        val selectedItem = schemaUrlSuggestionList.selectedValue
+            ?: schemaUrlSuggestionItems.firstOrNull { schemaUrlSuggestionItem ->
+                schemaUrlSuggestionItem is SchemaUrlComboBoxItem.CatalogEntry
+            }
+            ?: return false
+
+        return applySchemaUrlSuggestion(selectedItem)
+    }
+
+    private fun applySchemaUrlSuggestion(schemaUrlSuggestionItem: SchemaUrlComboBoxItem): Boolean {
+        if (schemaUrlSuggestionItem !is SchemaUrlComboBoxItem.CatalogEntry) {
+            return false
+        }
+
+        selectedSchemaStoreCatalogItem = schemaUrlSuggestionItem.schemaStoreCatalogItem
+        setSchemaUrlEditorText(schemaUrlSuggestionItem.schemaStoreCatalogItem.name)
+        hideSchemaUrlSuggestionPopup()
+        return true
+    }
+
+    private fun selectFirstSelectableSuggestion() {
+        val firstSelectableIndex = schemaUrlSuggestionItems.indexOfFirst { schemaUrlSuggestionItem ->
+            schemaUrlSuggestionItem is SchemaUrlComboBoxItem.CatalogEntry
+        }
+        if (firstSelectableIndex < 0) {
+            schemaUrlSuggestionList.clearSelection()
+            return
+        }
+
+        schemaUrlSuggestionList.selectedIndex = firstSelectableIndex
+        schemaUrlSuggestionList.ensureIndexIsVisible(firstSelectableIndex)
+    }
+
+    private fun showSchemaUrlSuggestionPopup() {
+        if (isDisposed || schemaUrlSuggestionItems.isEmpty()) {
+            return
+        }
+        val popupAnchorComponent = schemaUrlSearchField.textEditor
+        if (!popupAnchorComponent.isShowing) {
+            return
+        }
+
+        if (schemaUrlSuggestionPopup?.isVisible == true) {
+            hideSchemaUrlSuggestionPopup()
+        }
+
+        val popupWidth = popupAnchorComponent.width.takeIf { it > 0 } ?: 420
+        val popupContent = JPanel(BorderLayout()).apply {
+            add(
+                JBScrollPane(schemaUrlSuggestionList).apply {
+                    border = JBUI.Borders.empty()
+                    preferredSize = JBUI.size(popupWidth, 200)
+                },
+                BorderLayout.CENTER
+            )
+        }
+
+        schemaUrlSuggestionPopup = JBPopupFactory.getInstance()
+            .createComponentPopupBuilder(popupContent, schemaUrlSuggestionList)
+            .setCancelOnClickOutside(true)
+            .setCancelOnOtherWindowOpen(true)
+            .setCancelOnWindowDeactivation(true)
+            .setCancelKeyEnabled(true)
+            .setMovable(false)
+            .setResizable(false)
+            .setRequestFocus(false)
+            .createPopup()
+            .also { popup ->
+                val anchorPoint = RelativePoint(popupAnchorComponent, Point(0, popupAnchorComponent.height))
+                popup.show(anchorPoint)
+            }
+    }
+
+    private fun hideSchemaUrlSuggestionPopup() {
+        schemaUrlSuggestionPopup?.cancel()
+        schemaUrlSuggestionPopup = null
+    }
+
+    private fun isSchemaUrlSuggestionPopupVisible(): Boolean {
+        return schemaUrlSuggestionPopup?.isVisible == true
     }
 
     private fun createSchemaEditor(): EditorTextField {
