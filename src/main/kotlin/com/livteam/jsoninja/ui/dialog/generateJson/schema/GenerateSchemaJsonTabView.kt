@@ -19,11 +19,15 @@ import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
 import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import java.awt.BorderLayout
+import java.awt.Color
+import java.awt.Component
+import java.awt.Container
 import java.awt.Point
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
+import javax.swing.JSeparator
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JLabel
@@ -160,9 +164,10 @@ class GenerateSchemaJsonTabView(
                         .align(AlignX.FILL)
                         .resizableColumn()
                         .comment(LocalizationBundle.message("dialog.generate.json.schema.url.comment"))
-                    loadSchemaFromUrlButton = button(LocalizationBundle.message("dialog.generate.json.schema.url.load.button")) {
-                        onLoadSchemaFromUrlRequestedCallback?.invoke()
-                    }.component
+                    loadSchemaFromUrlButton =
+                        button(LocalizationBundle.message("dialog.generate.json.schema.url.load.button")) {
+                            onLoadSchemaFromUrlRequestedCallback?.invoke()
+                        }.component
                 }.layout(RowLayout.PARENT_GRID)
 
                 row(LocalizationBundle.message("dialog.generate.json.schema.output.count")) {
@@ -178,12 +183,25 @@ class GenerateSchemaJsonTabView(
                         .apply { component.isSelected = initialConfig.isJson5 }
                         .component
                 }
+
             }
         }
 
         schemaEditor = createSchemaEditor()
+        val groupSeparatorColor = resolveGroupSeparatorColor(optionsPanel)
+        val schemaEditorContainer = JPanel(BorderLayout()).apply {
+            val dividerPanel = JPanel(BorderLayout()).apply {
+                border = JBUI.Borders.empty(8, 0, 10, 0)
+                add(JSeparator().apply {
+                    foreground = groupSeparatorColor
+                    background = groupSeparatorColor
+                }, BorderLayout.NORTH)
+            }
+            add(dividerPanel, BorderLayout.NORTH)
+            add(schemaEditor, BorderLayout.CENTER)
+        }
         schemaPanel.add(optionsPanel, BorderLayout.NORTH)
-        schemaPanel.add(schemaEditor, BorderLayout.CENTER)
+        schemaPanel.add(schemaEditorContainer, BorderLayout.CENTER)
 
         return schemaPanel
     }
@@ -418,6 +436,31 @@ class GenerateSchemaJsonTabView(
 
     private fun isSchemaUrlSuggestionPopupVisible(): Boolean {
         return schemaUrlSuggestionPopup?.isVisible == true
+    }
+
+    private fun resolveGroupSeparatorColor(optionsPanel: JComponent): Color {
+        val groupSeparatorColor = findFirstSeparator(optionsPanel)?.foreground
+        return groupSeparatorColor
+            ?: UIManager.getColor("Group.separatorColor")
+            ?: UIManager.getColor("Separator.foreground")
+            ?: UIManager.getColor("Label.foreground")
+    }
+
+    private fun findFirstSeparator(component: Component): JSeparator? {
+        if (component is JSeparator) {
+            return component
+        }
+        if (component !is Container) {
+            return null
+        }
+
+        component.components.forEach { childComponent ->
+            val separator = findFirstSeparator(childComponent)
+            if (separator != null) {
+                return separator
+            }
+        }
+        return null
     }
 
     private fun createSchemaEditor(): EditorTextField {

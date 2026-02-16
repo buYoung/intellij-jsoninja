@@ -190,10 +190,18 @@ class GenerateSchemaJsonTabPresenter(
         val filteredSchemaStoreCatalogItems = if (normalizedFilterKeyword.isBlank()) {
             schemaStoreCatalogItems
         } else {
-            schemaStoreCatalogItems.filter { schemaStoreCatalogItem ->
-                schemaStoreCatalogItem.name.lowercase().contains(normalizedFilterKeyword) ||
-                    schemaStoreCatalogItem.url.lowercase().contains(normalizedFilterKeyword)
-            }
+            schemaStoreCatalogItems
+                .mapNotNull { schemaStoreCatalogItem ->
+                    calculateSearchScore(schemaStoreCatalogItem, normalizedFilterKeyword)?.let { searchScore ->
+                        schemaStoreCatalogItem to searchScore
+                    }
+                }
+                .sortedWith(
+                    compareByDescending<Pair<SchemaStoreCatalogItem, Int>> { it.second }
+                        .thenBy { it.first.name.length }
+                        .thenBy { it.first.name.lowercase() }
+                )
+                .map { it.first }
         }
 
         if (filteredSchemaStoreCatalogItems.isEmpty()) {
@@ -216,6 +224,133 @@ class GenerateSchemaJsonTabPresenter(
             editorText = editorText,
             showPopupWhenAvailable = true
         )
+    }
+
+    private fun calculateSearchScore(
+        schemaStoreCatalogItem: SchemaStoreCatalogItem,
+        searchKeyword: String
+    ): Int? {
+        val normalizedName = schemaStoreCatalogItem.name.lowercase()
+        val normalizedUrl = schemaStoreCatalogItem.url.lowercase()
+
+        var bestSearchScore = 0
+
+        if (normalizedName == searchKeyword) {
+            bestSearchScore = maxOf(bestSearchScore, 10_000)
+        }
+
+        if (normalizedUrl == searchKeyword) {
+            bestSearchScore = maxOf(bestSearchScore, 9_500)
+        }
+
+        if (normalizedName.startsWith(searchKeyword)) {
+            bestSearchScore = maxOf(bestSearchScore, 9_000)
+        }
+
+        if (normalizedUrl.startsWith(searchKeyword)) {
+            bestSearchScore = maxOf(bestSearchScore, 8_500)
+        }
+
+        val nameContainsPosition = normalizedName.indexOf(searchKeyword)
+        if (nameContainsPosition >= 0) {
+            bestSearchScore = maxOf(bestSearchScore, 8_000 - nameContainsPosition.coerceAtMost(500))
+        }
+
+        val urlContainsPosition = normalizedUrl.indexOf(searchKeyword)
+        if (urlContainsPosition >= 0) {
+            bestSearchScore = maxOf(bestSearchScore, 7_500 - urlContainsPosition.coerceAtMost(500))
+        }
+
+        val fuzzyNameSearchScore = calculateBestTokenSimilarityScore(
+            text = normalizedName,
+            searchKeyword = searchKeyword,
+            baseScore = 6_000
+        )
+        if (fuzzyNameSearchScore > 0) {
+            bestSearchScore = maxOf(bestSearchScore, fuzzyNameSearchScore)
+        }
+
+        val fuzzyUrlSearchScore = calculateBestTokenSimilarityScore(
+            text = normalizedUrl,
+            searchKeyword = searchKeyword,
+            baseScore = 5_500
+        )
+        if (fuzzyUrlSearchScore > 0) {
+            bestSearchScore = maxOf(bestSearchScore, fuzzyUrlSearchScore)
+        }
+
+        return bestSearchScore.takeIf { it > 0 }
+    }
+
+    private fun calculateBestTokenSimilarityScore(
+        text: String,
+        searchKeyword: String,
+        baseScore: Int
+    ): Int {
+        if (searchKeyword.length < MINIMUM_SEARCH_LENGTH_FOR_FUZZY_MATCHING) {
+            return 0
+        }
+
+        val searchTokens = extractSearchTokens(text)
+        if (searchTokens.isEmpty()) {
+            return 0
+        }
+
+        var bestSimilaritySearchScore = 0
+        searchTokens.forEach { searchToken ->
+            val maximumLength = maxOf(searchToken.length, searchKeyword.length)
+            if (maximumLength == 0) {
+                return@forEach
+            }
+
+            val editDistance = calculateLevenshteinDistance(searchToken, searchKeyword)
+            val similarityRatio = 1.0 - (editDistance.toDouble() / maximumLength.toDouble())
+            if (similarityRatio >= MINIMUM_TOKEN_SIMILARITY) {
+                val similaritySearchScore = baseScore + (similarityRatio * 1_000).toInt()
+                bestSimilaritySearchScore = maxOf(bestSimilaritySearchScore, similaritySearchScore)
+            }
+        }
+
+        return bestSimilaritySearchScore
+    }
+
+    private fun extractSearchTokens(text: String): List<String> {
+        return text.split(SEARCH_TOKEN_SEPARATOR_REGEX)
+            .map { rawToken -> rawToken.trim() }
+            .filter { token -> token.isNotBlank() }
+    }
+
+    private fun calculateLevenshteinDistance(firstText: String, secondText: String): Int {
+        if (firstText == secondText) {
+            return 0
+        }
+        if (firstText.isEmpty()) {
+            return secondText.length
+        }
+        if (secondText.isEmpty()) {
+            return firstText.length
+        }
+
+        var previousDistanceRow = IntArray(secondText.length + 1) { index -> index }
+        var currentDistanceRow = IntArray(secondText.length + 1)
+
+        for (firstTextIndex in 1..firstText.length) {
+            currentDistanceRow[0] = firstTextIndex
+            for (secondTextIndex in 1..secondText.length) {
+                val substitutionCost = if (firstText[firstTextIndex - 1] == secondText[secondTextIndex - 1]) 0 else 1
+                currentDistanceRow[secondTextIndex] = minOf(
+                    currentDistanceRow[secondTextIndex - 1] + 1,
+                    previousDistanceRow[secondTextIndex] + 1,
+                    previousDistanceRow[secondTextIndex - 1] + substitutionCost
+                )
+            }
+
+            val nextPreviousDistanceRow = previousDistanceRow
+            previousDistanceRow = currentDistanceRow
+            currentDistanceRow = nextPreviousDistanceRow
+        }
+
+        return previousDistanceRow[secondText.length]
     }
 
     private fun loadSchemaFromUrl() {
@@ -305,5 +440,8 @@ class GenerateSchemaJsonTabPresenter(
 
     companion object {
         private const val SCHEMA_STORE_CATALOG_URL = "https://www.schemastore.org/api/json/catalog.json"
+        private val SEARCH_TOKEN_SEPARATOR_REGEX = Regex("[^a-z0-9]+")
+        private const val MINIMUM_SEARCH_LENGTH_FOR_FUZZY_MATCHING = 3
+        private const val MINIMUM_TOKEN_SIMILARITY = 0.6
     }
 }
