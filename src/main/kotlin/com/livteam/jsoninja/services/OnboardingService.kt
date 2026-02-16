@@ -1,6 +1,7 @@
 package com.livteam.jsoninja.services
 
 import com.intellij.ide.util.PropertiesComponent
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.components.Service
@@ -22,6 +23,7 @@ class OnboardingService(private val project: Project) {
     private var tutorialDialog: OnboardingTutorialDialog? = null
 
     fun maybeShowWelcomeDialogOnStartup() {
+        if (ApplicationManager.getApplication().isUnitTestMode) return
         if (project.isDisposed || isOnboardingSeen()) return
         if (!WELCOME_DIALOG_GUARD.compareAndSet(false, true)) return
 

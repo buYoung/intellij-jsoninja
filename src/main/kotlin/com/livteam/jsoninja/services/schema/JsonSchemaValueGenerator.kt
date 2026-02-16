@@ -97,19 +97,22 @@ class JsonSchemaValueGenerator(private val project: Project) {
 
         optionalPropertyNamesToGenerate.forEach { optionalPropertyName ->
             val propertyConstraint = constraint.propertyConstraints.getValue(optionalPropertyName)
-            generatedObjectNode.set<JsonNode>(
-                optionalPropertyName,
+            val optionalPropertyValue = runCatching {
                 generateValue(propertyConstraint, schemaPropertyGenerationMode)
-            )
+            }.getOrNull() ?: return@forEach
+            generatedObjectNode.set<JsonNode>(optionalPropertyName, optionalPropertyValue)
             generatedPropertyNames.add(optionalPropertyName)
         }
 
         constraint.patternPropertyConstraints.forEach { (patternExpression, patternConstraint) ->
             val generatedPropertyName = generatePropertyNameFromPattern(patternExpression)
-            if (!generatedObjectNode.has(generatedPropertyName)) {
+            if (generatedPropertyName != null && !generatedObjectNode.has(generatedPropertyName)) {
+                val patternPropertyValue = runCatching {
+                    generateValue(patternConstraint, schemaPropertyGenerationMode)
+                }.getOrNull() ?: return@forEach
                 generatedObjectNode.set<JsonNode>(
                     generatedPropertyName,
-                    generateValue(patternConstraint, schemaPropertyGenerationMode)
+                    patternPropertyValue
                 )
                 generatedPropertyNames.add(generatedPropertyName)
             }
@@ -651,12 +654,24 @@ class JsonSchemaValueGenerator(private val project: Project) {
         }
     }
 
-    private fun generatePropertyNameFromPattern(patternExpression: String): String {
-        return when {
-            patternExpression.contains("[0-9]") -> "123"
-            patternExpression.contains("[A-Za-z]") || patternExpression.contains("[a-zA-Z]") -> "propertyName"
-            patternExpression.contains("[a-zA-Z0-9_-]") -> "property_name_1"
-            else -> "property"
+    private fun generatePropertyNameFromPattern(patternExpression: String): String? {
+        val candidateNames = buildList {
+            if (patternExpression.contains("^_")) add("_extension")
+            if (patternExpression.contains("[0-9]")) add("123")
+            if (patternExpression.contains("[A-Za-z]") || patternExpression.contains("[a-zA-Z]")) add("propertyName")
+            if (patternExpression.contains("[a-zA-Z0-9_-]")) add("property_name_1")
+            add("_property")
+            add("property")
+            add(faker.regexify("[A-Za-z0-9_]{8}"))
+        }.distinct()
+
+        val patternRegex = runCatching { Regex(patternExpression) }.getOrNull()
+        if (patternRegex == null) {
+            return candidateNames.firstOrNull()
+        }
+
+        return candidateNames.firstOrNull { candidateName ->
+            patternRegex.matches(candidateName)
         }
     }
 

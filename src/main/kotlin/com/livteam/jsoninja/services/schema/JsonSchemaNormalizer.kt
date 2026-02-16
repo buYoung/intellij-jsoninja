@@ -162,10 +162,13 @@ class JsonSchemaNormalizer(private val project: Project) {
         try {
             return when {
                 referenceValue.startsWith("#") -> {
-                    resolveFragmentReference(
-                        rootNode = currentDocumentContext.rootNode,
-                        anchorNodes = currentDocumentContext.anchorNodes,
-                        fragmentValue = referenceValue
+                    resolveReferenceFragmentInDocumentContext(
+                        referenceFragment = referenceValue,
+                        currentDocumentContext = currentDocumentContext,
+                        loadedDocumentContextByPath = loadedDocumentContextByPath,
+                        fragmentValue = referenceValue,
+                        loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
+                        resolutionStack = resolutionStack
                     )
                 }
 
@@ -179,10 +182,13 @@ class JsonSchemaNormalizer(private val project: Project) {
                             referenceUri = referenceTarget,
                             loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri
                         )
-                        resolveFragmentReference(
-                            rootNode = referencedDocumentContext.rootNode,
-                            anchorNodes = referencedDocumentContext.anchorNodes,
-                            fragmentValue = fragmentValue
+                        resolveReferenceFragmentInDocumentContext(
+                            referenceFragment = referenceValue,
+                            currentDocumentContext = referencedDocumentContext,
+                            loadedDocumentContextByPath = loadedDocumentContextByPath,
+                            fragmentValue = fragmentValue,
+                            loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
+                            resolutionStack = resolutionStack
                         )
                     } else if (currentDocumentContext.baseUri != null) {
                         val resolvedRemoteUri = resolveRelativeRemoteReference(
@@ -193,10 +199,13 @@ class JsonSchemaNormalizer(private val project: Project) {
                             referenceUri = resolvedRemoteUri,
                             loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri
                         )
-                        resolveFragmentReference(
-                            rootNode = referencedDocumentContext.rootNode,
-                            anchorNodes = referencedDocumentContext.anchorNodes,
-                            fragmentValue = fragmentValue
+                        resolveReferenceFragmentInDocumentContext(
+                            referenceFragment = referenceValue,
+                            currentDocumentContext = referencedDocumentContext,
+                            loadedDocumentContextByPath = loadedDocumentContextByPath,
+                            fragmentValue = fragmentValue,
+                            loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
+                            resolutionStack = resolutionStack
                         )
                     } else {
                         val referencedDocumentContext = loadReferencedDocumentContext(
@@ -204,10 +213,13 @@ class JsonSchemaNormalizer(private val project: Project) {
                             currentDocumentContext = currentDocumentContext,
                             loadedDocumentContextByPath = loadedDocumentContextByPath
                         )
-                        resolveFragmentReference(
-                            rootNode = referencedDocumentContext.rootNode,
-                            anchorNodes = referencedDocumentContext.anchorNodes,
-                            fragmentValue = fragmentValue
+                        resolveReferenceFragmentInDocumentContext(
+                            referenceFragment = referenceValue,
+                            currentDocumentContext = referencedDocumentContext,
+                            loadedDocumentContextByPath = loadedDocumentContextByPath,
+                            fragmentValue = fragmentValue,
+                            loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
+                            resolutionStack = resolutionStack
                         )
                     }
                 }
@@ -215,6 +227,107 @@ class JsonSchemaNormalizer(private val project: Project) {
         } finally {
             resolutionStack.remove(referenceKey)
         }
+    }
+
+    private fun resolveReferenceFragmentInDocumentContext(
+        referenceFragment: String,
+        currentDocumentContext: SchemaDocumentContext,
+        loadedDocumentContextByPath: MutableMap<Path, SchemaDocumentContext>,
+        fragmentValue: String,
+        loadedRemoteDocumentContextByUri: MutableMap<String, SchemaDocumentContext>,
+        resolutionStack: MutableSet<String>
+    ): JsonNode {
+        val resolvedFragmentNode = resolveFragmentReferenceWithFallback(
+            currentDocumentContext = currentDocumentContext,
+            fragmentValue = fragmentValue,
+            loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri
+        )
+        return resolveReferences(
+            schemaNode = resolvedFragmentNode,
+            currentDocumentContext = currentDocumentContext,
+            loadedDocumentContextByPath = loadedDocumentContextByPath,
+            loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri,
+            resolutionStack = resolutionStack
+        )
+    }
+
+    private fun resolveFragmentReferenceWithFallback(
+        currentDocumentContext: SchemaDocumentContext,
+        fragmentValue: String,
+        loadedRemoteDocumentContextByUri: MutableMap<String, SchemaDocumentContext>
+    ): JsonNode {
+        return try {
+            resolveFragmentReference(
+                rootNode = currentDocumentContext.rootNode,
+                anchorNodes = currentDocumentContext.anchorNodes,
+                fragmentValue = fragmentValue
+            )
+        } catch (generationException: JsonSchemaGenerationException) {
+            val baseUri = currentDocumentContext.baseUri
+            if (baseUri == null || !isInvalidJsonPointerReference(generationException)) {
+                throw generationException
+            }
+
+            val remoteReferenceFallbackUris = buildRemoteReferenceFallbackUris(baseUri)
+            remoteReferenceFallbackUris.forEach { remoteReferenceFallbackUri ->
+                try {
+                    val referencedDocumentContext = loadReferencedRemoteDocumentContext(
+                        referenceUri = remoteReferenceFallbackUri,
+                        loadedRemoteDocumentContextByUri = loadedRemoteDocumentContextByUri
+                    )
+                    return resolveFragmentReference(
+                        rootNode = referencedDocumentContext.rootNode,
+                        anchorNodes = referencedDocumentContext.anchorNodes,
+                        fragmentValue = fragmentValue
+                    )
+                } catch (_: JsonSchemaGenerationException) {
+                    // Try next fallback URI.
+                }
+            }
+
+            JsonNodeFactory.instance.objectNode()
+        }
+    }
+
+    private fun buildRemoteReferenceFallbackUris(referenceUri: String): List<String> {
+        val referenceUriValue = runCatching { URI(referenceUri) }.getOrNull() ?: return emptyList()
+        val scheme = referenceUriValue.scheme ?: return emptyList()
+        val host = referenceUriValue.host?.lowercase() ?: return emptyList()
+        val path = referenceUriValue.path ?: return emptyList()
+        if (!host.contains("schemastore.org")) {
+            return emptyList()
+        }
+
+        val candidatePaths = mutableListOf(path)
+        if (!path.endsWith(".json")) {
+            candidatePaths.add("$path.json")
+        }
+
+        val candidateHosts = mutableListOf(host)
+        if (host == "json.schemastore.org") {
+            candidateHosts.add("www.schemastore.org")
+        } else if (host == "www.schemastore.org") {
+            candidateHosts.add("json.schemastore.org")
+        }
+
+        return buildList {
+            candidateHosts.forEach { candidateHost ->
+                candidatePaths.forEach { candidatePath ->
+                    val candidateUri = URI(
+                        scheme,
+                        referenceUriValue.userInfo,
+                        candidateHost,
+                        referenceUriValue.port,
+                        candidatePath,
+                        referenceUriValue.query,
+                        null
+                    ).toString()
+                    if (candidateUri != referenceUri) {
+                        add(candidateUri)
+                    }
+                }
+            }
+        }.distinct()
     }
 
     private fun loadReferencedDocumentContext(
@@ -314,6 +427,10 @@ class JsonSchemaNormalizer(private val project: Project) {
         }
     }
 
+    private fun isInvalidJsonPointerReference(generationException: JsonSchemaGenerationException): Boolean {
+        return generationException.message?.startsWith("Invalid JSON pointer reference:") == true
+    }
+
     private fun isHttpUrl(target: String): Boolean {
         return target.startsWith("http://") || target.startsWith("https://")
     }
@@ -369,7 +486,7 @@ class JsonSchemaNormalizer(private val project: Project) {
                 .replace("~1", "/")
                 .replace("~0", "~")
             currentNode = when {
-                currentNode.isObject -> currentNode.path(unescapedToken)
+                currentNode.isObject -> resolveObjectToken(currentNode, unescapedToken)
                 currentNode.isArray -> {
                     val arrayIndex = unescapedToken.toIntOrNull() ?: -1
                     currentNode.path(arrayIndex)
@@ -386,6 +503,23 @@ class JsonSchemaNormalizer(private val project: Project) {
             }
         }
         return currentNode
+    }
+
+    private fun resolveObjectToken(objectNode: JsonNode, token: String): JsonNode {
+        val directNode = objectNode.path(token)
+        if (!directNode.isMissingNode) {
+            return directNode
+        }
+
+        val fallbackToken = when (token) {
+            "definitions" -> "\$defs"
+            "\$defs" -> "definitions"
+            "id" -> "\$id"
+            "\$id" -> "id"
+            else -> null
+        } ?: return JsonNodeFactory.instance.missingNode()
+
+        return objectNode.path(fallbackToken)
     }
 
     private fun collectAnchorNodes(schemaNode: JsonNode): Map<String, JsonNode> {
