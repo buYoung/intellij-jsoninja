@@ -1,13 +1,16 @@
 package com.livteam.jsoninja.ui.dialog.generateJson
 
 import com.intellij.json.JsonFileType
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.invokeLater
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.ui.EditorTextField
@@ -19,23 +22,37 @@ import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.layout.selected
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
 import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonRootType
-import java.io.IOException
-import javax.swing.JComponent
-import javax.swing.JButton
-import javax.swing.JPanel
+import io.burt.jmespath.jackson.JacksonRuntime
 import java.awt.BorderLayout
+import java.awt.event.ItemEvent
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import javax.swing.DefaultComboBoxModel
+import javax.swing.JButton
+import javax.swing.JComponent
+import javax.swing.JPanel
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
+import javax.swing.text.JTextComponent
 
 class GenerateJsonDialogView(
     private val project: Project?,
     private val onLayoutChanged: () -> Unit
 ) {
+    private val LOG = logger<GenerateJsonDialogView>()
+    private val objectMapper = service<JsonObjectMapperService>().objectMapper
+    private val jmesPathRuntime = JacksonRuntime()
+
+    @Volatile
+    private var isDisposed = false
+
     private lateinit var rootTypeObject: JBRadioButton
     private lateinit var rootTypeArray: JBRadioButton
     private lateinit var objectPropertyCountField: JBTextField
@@ -45,13 +62,16 @@ class GenerateJsonDialogView(
     private lateinit var randomJson5Checkbox: JBCheckBox
 
     private lateinit var schemaEditor: EditorTextField
-    private lateinit var schemaUrlField: JBTextField
+    private lateinit var schemaUrlComboBox: ComboBox<SchemaUrlComboBoxItem>
     private lateinit var loadSchemaFromUrlButton: JButton
     private lateinit var schemaOutputCountField: JBTextField
     private lateinit var schemaJson5Checkbox: JBCheckBox
     private lateinit var tabbedPane: JBTabbedPane
 
     private val initialConfig = JsonGenerationConfig()
+    private var schemaStoreCatalogItems: List<SchemaStoreCatalogItem> = emptyList()
+    private var schemaStoreCatalogState = SchemaStoreCatalogState.LOADING
+    private var isUpdatingSchemaUrlComboBoxModel = false
 
     val component: JComponent by lazy { createComponent() }
 
@@ -100,6 +120,7 @@ class GenerateJsonDialogView(
     }
 
     fun dispose() {
+        isDisposed = true
         (schemaEditor as? Disposable)?.let { disposableEditor ->
             com.intellij.openapi.util.Disposer.dispose(disposableEditor)
         }
@@ -195,14 +216,15 @@ class GenerateJsonDialogView(
 
     private fun createSchemaPanel(): JComponent {
         val schemaPanel = JPanel(BorderLayout())
+        schemaUrlComboBox = createSchemaUrlComboBox()
+
         val optionsPanel = panel {
             group(LocalizationBundle.message("dialog.generate.json.schema.group.input")) {
                 row(LocalizationBundle.message("dialog.generate.json.schema.url.label")) {
-                    schemaUrlField = textField()
+                    cell(schemaUrlComboBox)
                         .align(AlignX.FILL)
                         .resizableColumn()
                         .comment(LocalizationBundle.message("dialog.generate.json.schema.url.comment"))
-                        .component
                     loadSchemaFromUrlButton = button(LocalizationBundle.message("dialog.generate.json.schema.url.load.button")) {
                         loadSchemaFromUrl()
                     }.component
@@ -227,7 +249,194 @@ class GenerateJsonDialogView(
         schemaEditor = createSchemaEditor()
         schemaPanel.add(optionsPanel, BorderLayout.NORTH)
         schemaPanel.add(schemaEditor, BorderLayout.CENTER)
+        loadSchemaStoreCatalog()
         return schemaPanel
+    }
+
+    private fun createSchemaUrlComboBox(): ComboBox<SchemaUrlComboBoxItem> {
+        val comboBox = ComboBox<SchemaUrlComboBoxItem>()
+        comboBox.isEditable = true
+        attachSchemaUrlEditorDocumentListener(comboBox)
+        comboBox.addItemListener { itemEvent ->
+            if (itemEvent.stateChange != ItemEvent.SELECTED || isUpdatingSchemaUrlComboBoxModel) {
+                return@addItemListener
+            }
+
+            val selectedItem = itemEvent.item as? SchemaUrlComboBoxItem.CatalogEntry ?: return@addItemListener
+            setSchemaUrlEditorText(selectedItem.schemaStoreCatalogItem.url)
+        }
+        updateSchemaUrlComboBoxModel(
+            listOf(
+                SchemaUrlComboBoxItem.StatusEntry(
+                    LocalizationBundle.message("dialog.generate.json.schema.store.loading")
+                )
+            ),
+            editorText = ""
+        )
+
+        return comboBox
+    }
+
+    private fun attachSchemaUrlEditorDocumentListener(comboBox: ComboBox<SchemaUrlComboBoxItem>) {
+        val editorComponent = comboBox.editor.editorComponent as? JTextComponent ?: return
+        editorComponent.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(documentEvent: DocumentEvent?) = filterSchemaStoreCatalogItemsByInput()
+            override fun removeUpdate(documentEvent: DocumentEvent?) = filterSchemaStoreCatalogItemsByInput()
+            override fun changedUpdate(documentEvent: DocumentEvent?) = filterSchemaStoreCatalogItemsByInput()
+        })
+    }
+
+    private fun loadSchemaStoreCatalog() {
+        schemaStoreCatalogState = SchemaStoreCatalogState.LOADING
+        updateSchemaUrlComboBoxModel(
+            listOf(
+                SchemaUrlComboBoxItem.StatusEntry(
+                    LocalizationBundle.message("dialog.generate.json.schema.store.loading")
+                )
+            ),
+            editorText = getSchemaUrlEditorText()
+        )
+
+        ApplicationManager.getApplication().executeOnPooledThread {
+            if (isDisposed) return@executeOnPooledThread
+            try {
+                val schemaStoreCatalogText = fetchSchemaText(SCHEMA_STORE_CATALOG_URL)
+                val parsedSchemaStoreCatalogItems = parseSchemaStoreCatalog(schemaStoreCatalogText)
+                if (parsedSchemaStoreCatalogItems.isEmpty()) {
+                    throw IOException("SchemaStore catalog has no valid entries.")
+                }
+
+                invokeLater(ModalityState.any()) {
+                    if (isDisposed) return@invokeLater
+                    schemaStoreCatalogItems = parsedSchemaStoreCatalogItems
+                    schemaStoreCatalogState = SchemaStoreCatalogState.READY
+                    filterSchemaStoreCatalogItemsByInput()
+                }
+            } catch (exception: Exception) {
+                LOG.warn("Failed to load SchemaStore catalog.", exception)
+                invokeLater(ModalityState.any()) {
+                    if (isDisposed) return@invokeLater
+                    schemaStoreCatalogItems = emptyList()
+                    schemaStoreCatalogState = SchemaStoreCatalogState.FAILED
+                    updateSchemaUrlComboBoxModel(
+                        listOf(
+                            SchemaUrlComboBoxItem.StatusEntry(
+                                LocalizationBundle.message("dialog.generate.json.schema.store.unavailable")
+                            )
+                        ),
+                        editorText = getSchemaUrlEditorText()
+                    )
+                }
+            }
+        }
+    }
+
+    private fun parseSchemaStoreCatalog(schemaStoreCatalogText: String): List<SchemaStoreCatalogItem> {
+        val schemaStoreCatalogNode = objectMapper.readTree(schemaStoreCatalogText)
+        val schemaNameExpression = jmesPathRuntime.compile("schemas[].name")
+        val schemaUrlExpression = jmesPathRuntime.compile("schemas[].url")
+        val schemaNameNodes = schemaNameExpression.search(schemaStoreCatalogNode)
+        val schemaUrlNodes = schemaUrlExpression.search(schemaStoreCatalogNode)
+
+        if (!schemaNameNodes.isArray || !schemaUrlNodes.isArray) {
+            return emptyList()
+        }
+
+        val schemaStoreCatalogItemsByUrl = linkedMapOf<String, SchemaStoreCatalogItem>()
+        val schemaCount = minOf(schemaNameNodes.size(), schemaUrlNodes.size())
+        for (index in 0 until schemaCount) {
+            val schemaName = schemaNameNodes.path(index).asText("").trim()
+            val schemaUrl = schemaUrlNodes.path(index).asText("").trim()
+            if (schemaName.isBlank() || schemaUrl.isBlank()) {
+                continue
+            }
+
+            if (!schemaStoreCatalogItemsByUrl.containsKey(schemaUrl)) {
+                schemaStoreCatalogItemsByUrl[schemaUrl] = SchemaStoreCatalogItem(
+                    name = schemaName,
+                    url = schemaUrl
+                )
+            }
+        }
+
+        return schemaStoreCatalogItemsByUrl.values.toList()
+    }
+
+    private fun filterSchemaStoreCatalogItemsByInput() {
+        if (!::schemaUrlComboBox.isInitialized || isUpdatingSchemaUrlComboBoxModel || isDisposed) {
+            return
+        }
+
+        if (schemaStoreCatalogState != SchemaStoreCatalogState.READY) {
+            return
+        }
+
+        val editorText = getSchemaUrlEditorText()
+        val normalizedFilterKeyword = editorText.trim().lowercase()
+        val filteredSchemaStoreCatalogItems = if (normalizedFilterKeyword.isBlank()) {
+            schemaStoreCatalogItems
+        } else {
+            schemaStoreCatalogItems.filter { schemaStoreCatalogItem ->
+                schemaStoreCatalogItem.name.lowercase().contains(normalizedFilterKeyword) ||
+                    schemaStoreCatalogItem.url.lowercase().contains(normalizedFilterKeyword)
+            }
+        }
+
+        if (filteredSchemaStoreCatalogItems.isEmpty()) {
+            updateSchemaUrlComboBoxModel(
+                listOf(
+                    SchemaUrlComboBoxItem.StatusEntry(
+                        LocalizationBundle.message("dialog.generate.json.schema.store.no.match")
+                    )
+                ),
+                editorText = editorText
+            )
+            return
+        }
+
+        updateSchemaUrlComboBoxModel(
+            filteredSchemaStoreCatalogItems.map { schemaStoreCatalogItem ->
+                SchemaUrlComboBoxItem.CatalogEntry(schemaStoreCatalogItem)
+            },
+            editorText = editorText
+        )
+    }
+
+    private fun updateSchemaUrlComboBoxModel(
+        schemaUrlComboBoxItems: List<SchemaUrlComboBoxItem>,
+        editorText: String
+    ) {
+        if (!::schemaUrlComboBox.isInitialized || isDisposed) {
+            return
+        }
+
+        isUpdatingSchemaUrlComboBoxModel = true
+        try {
+            schemaUrlComboBox.model = DefaultComboBoxModel(schemaUrlComboBoxItems.toTypedArray())
+            schemaUrlComboBox.selectedItem = null
+            setSchemaUrlEditorText(editorText)
+        } finally {
+            isUpdatingSchemaUrlComboBoxModel = false
+        }
+    }
+
+    private fun getSchemaUrlEditorText(): String {
+        val editorComponent = schemaUrlComboBox.editor.editorComponent as? JTextComponent ?: return ""
+        return editorComponent.text
+    }
+
+    private fun setSchemaUrlEditorText(schemaUrlText: String) {
+        val editorComponent = schemaUrlComboBox.editor.editorComponent as? JTextComponent ?: return
+        editorComponent.text = schemaUrlText
+    }
+
+    private fun getSchemaUrlInputText(): String {
+        val selectedItem = schemaUrlComboBox.selectedItem
+        if (selectedItem is SchemaUrlComboBoxItem.CatalogEntry) {
+            return selectedItem.schemaStoreCatalogItem.url
+        }
+
+        return getSchemaUrlEditorText().trim()
     }
 
     private fun createSchemaEditor(): EditorTextField {
@@ -255,7 +464,7 @@ class GenerateJsonDialogView(
     }
 
     private fun loadSchemaFromUrl() {
-        val schemaUrl = schemaUrlField.text.trim()
+        val schemaUrl = getSchemaUrlInputText()
         if (schemaUrl.isBlank()) {
             showSchemaUrlError(LocalizationBundle.message("dialog.generate.json.schema.url.empty"))
             return
@@ -269,6 +478,7 @@ class GenerateJsonDialogView(
         loadSchemaFromUrlButton.isEnabled = false
 
         ApplicationManager.getApplication().executeOnPooledThread {
+            if (isDisposed) return@executeOnPooledThread
             try {
                 val fetchedSchemaText = fetchSchemaText(schemaUrl)
                 if (fetchedSchemaText.trim().isEmpty()) {
@@ -276,16 +486,19 @@ class GenerateJsonDialogView(
                 }
 
                 invokeLater(ModalityState.any()) {
+                    if (isDisposed) return@invokeLater
                     setSchemaEditorText(fetchedSchemaText)
                 }
             } catch (exception: Exception) {
                 val message = exception.message
                     ?: LocalizationBundle.message("dialog.generate.json.schema.url.fetch.failed")
                 invokeLater(ModalityState.any()) {
+                    if (isDisposed) return@invokeLater
                     showSchemaUrlError(message)
                 }
             } finally {
                 invokeLater(ModalityState.any()) {
+                    if (isDisposed) return@invokeLater
                     loadSchemaFromUrlButton.isEnabled = true
                 }
             }
@@ -376,5 +589,30 @@ class GenerateJsonDialogView(
         }
 
         return null
+    }
+
+    private data class SchemaStoreCatalogItem(
+        val name: String,
+        val url: String
+    )
+
+    private enum class SchemaStoreCatalogState {
+        LOADING,
+        READY,
+        FAILED
+    }
+
+    private sealed class SchemaUrlComboBoxItem(open val displayText: String) {
+        class CatalogEntry(val schemaStoreCatalogItem: SchemaStoreCatalogItem) : SchemaUrlComboBoxItem(
+            schemaStoreCatalogItem.name
+        )
+
+        class StatusEntry(override val displayText: String) : SchemaUrlComboBoxItem(displayText)
+
+        override fun toString(): String = displayText
+    }
+
+    companion object {
+        private const val SCHEMA_STORE_CATALOG_URL = "https://www.schemastore.org/api/json/catalog.json"
     }
 }
