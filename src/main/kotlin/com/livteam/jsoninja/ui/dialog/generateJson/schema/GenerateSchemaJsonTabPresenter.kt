@@ -57,6 +57,11 @@ class GenerateSchemaJsonTabPresenter(
             )
         }
 
+        if (view.hasPendingSchemaStoreSelectionLoad()) {
+            val warningMessage = LocalizationBundle.message("validation.error.schema.store.load.required")
+            return ValidationInfo(warningMessage, view.getSchemaUrlInputComponent())
+        }
+
         val schemaText = view.getSchemaText().trim()
         if (schemaText.isBlank()) {
             return ValidationInfo(
@@ -382,6 +387,7 @@ class GenerateSchemaJsonTabPresenter(
                 invokeLater(ModalityState.any()) {
                     if (isDisposed) return@invokeLater
                     setSchemaEditorText(fetchedSchemaText)
+                    view.markSchemaStoreSelectionLoaded()
                 }
             } catch (exception: Exception) {
                 val message = exception.message

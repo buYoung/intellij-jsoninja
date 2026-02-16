@@ -60,6 +60,7 @@ class GenerateSchemaJsonTabView(
     private lateinit var schemaJson5Checkbox: JBCheckBox
     private var schemaUrlSuggestionPopup: JBPopup? = null
     private var selectedSchemaStoreCatalogItem: SchemaStoreCatalogItem? = null
+    private var hasPendingSchemaStoreSelectionLoad = false
     private var schemaUrlSuggestionItems: List<SchemaUrlComboBoxItem> = emptyList()
     private var isUpdatingSchemaUrlEditorText = false
     private var isDisposed = false
@@ -84,6 +85,8 @@ class GenerateSchemaJsonTabView(
     fun getSchemaOutputCountText(): String = schemaOutputCountField.text
 
     fun getSchemaOutputCountField(): JComponent = schemaOutputCountField
+
+    fun getSchemaUrlInputComponent(): JComponent = schemaUrlSearchField
 
     fun getSchemaPropertyGenerationMode(): SchemaPropertyGenerationMode {
         return when {
@@ -123,6 +126,14 @@ class GenerateSchemaJsonTabView(
         return editorText
     }
 
+    fun hasPendingSchemaStoreSelectionLoad(): Boolean = hasPendingSchemaStoreSelectionLoad
+
+    fun markSchemaStoreSelectionLoaded() {
+        if (selectedSchemaStoreCatalogItem != null) {
+            hasPendingSchemaStoreSelectionLoad = false
+        }
+    }
+
     fun setSchemaEditorText(schemaText: String) {
         schemaEditor.text = schemaText
     }
@@ -142,12 +153,20 @@ class GenerateSchemaJsonTabView(
         this.schemaUrlSuggestionItems = schemaUrlSuggestionItems
         refreshSchemaUrlSuggestionList(schemaUrlSuggestionItems)
 
+        val selectedCatalogItem = selectedSchemaStoreCatalogItem
+        if (selectedCatalogItem != null && !containsCatalogEntryByUrl(selectedCatalogItem.url)) {
+            clearSelectedSchemaStoreCatalogItem()
+        }
+
         val editorComponent = schemaUrlSearchField.textEditor
         if (editorComponent.text != editorText) {
             setSchemaUrlEditorText(editorText)
-            val selectedCatalogItem = selectedSchemaStoreCatalogItem
-            if (selectedCatalogItem != null && editorText.isNotBlank() && editorText != selectedCatalogItem.name) {
-                selectedSchemaStoreCatalogItem = null
+            val activeSelectedCatalogItem = selectedSchemaStoreCatalogItem
+            if (activeSelectedCatalogItem != null &&
+                editorText.isNotBlank() &&
+                editorText != activeSelectedCatalogItem.name
+            ) {
+                clearSelectedSchemaStoreCatalogItem()
             }
         }
 
@@ -342,7 +361,7 @@ class GenerateSchemaJsonTabView(
         val editorText = getSchemaUrlEditorText().trim()
         val selectedCatalogItem = selectedSchemaStoreCatalogItem
         if (selectedCatalogItem != null && editorText.isNotBlank() && editorText != selectedCatalogItem.name) {
-            selectedSchemaStoreCatalogItem = null
+            clearSelectedSchemaStoreCatalogItem()
         }
 
         onSchemaUrlInputChangedCallback?.invoke()
@@ -442,9 +461,22 @@ class GenerateSchemaJsonTabView(
         }
 
         selectedSchemaStoreCatalogItem = schemaUrlSuggestionItem.schemaStoreCatalogItem
+        hasPendingSchemaStoreSelectionLoad = true
         setSchemaUrlEditorText(schemaUrlSuggestionItem.schemaStoreCatalogItem.name)
         hideSchemaUrlSuggestionPopup()
         return true
+    }
+
+    private fun clearSelectedSchemaStoreCatalogItem() {
+        selectedSchemaStoreCatalogItem = null
+        hasPendingSchemaStoreSelectionLoad = false
+    }
+
+    private fun containsCatalogEntryByUrl(schemaUrl: String): Boolean {
+        return schemaUrlSuggestionItems.any { schemaUrlSuggestionItem ->
+            schemaUrlSuggestionItem is SchemaUrlComboBoxItem.CatalogEntry &&
+                schemaUrlSuggestionItem.schemaStoreCatalogItem.url == schemaUrl
+        }
     }
 
     private fun selectFirstSelectableSuggestion() {
