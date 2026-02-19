@@ -7,7 +7,13 @@ import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFileFactory
 import com.intellij.util.LocalTimeCounter
+import com.livteam.jsoninja.services.PlaceholderMapping
 import com.livteam.jsoninja.services.TemplatePlaceholderSupport
+
+data class TemplatePathResult(
+    val path: String,
+    val isInsidePlaceholder: Boolean
+)
 
 object JsonPathHelper {
 
@@ -84,15 +90,22 @@ object JsonPathHelper {
         offset: Int,
         project: Project,
         isJmes: Boolean
-    ): String? {
+    ): TemplatePathResult? {
         val result = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(documentText)
         if (!result.isSuccessful || result.mappings.isEmpty()) return null
 
         val mapping = result.mappings.find { offset in it.originalStartIndex until it.originalEndIndex }
-            ?: return null
+        val isInsidePlaceholder = mapping != null
 
-        val sentinelIndex = result.replacedText.indexOf(mapping.sentinelToken)
-        if (sentinelIndex == -1) return null
+        val targetOffset = if (mapping != null) {
+            val sentinelIndex = result.replacedText.indexOf(mapping.sentinelToken)
+            if (sentinelIndex == -1) return null
+            sentinelIndex
+        } else {
+            mapOriginalOffsetToReplaced(offset, result.mappings) ?: return null
+        }
+
+        if (targetOffset < 0 || targetOffset >= result.replacedText.length) return null
 
         val psiFile = PsiFileFactory.getInstance(project).createFileFromText(
             "template_tooltip.json",
@@ -102,8 +115,21 @@ object JsonPathHelper {
             false
         )
 
-        val element = psiFile.findElementAt(sentinelIndex) ?: return null
-        return buildPath(element, isJmes)
+        val element = psiFile.findElementAt(targetOffset) ?: return null
+        val path = buildPath(element, isJmes) ?: return null
+        return TemplatePathResult(path, isInsidePlaceholder)
+    }
+
+    private fun mapOriginalOffsetToReplaced(offset: Int, mappings: List<PlaceholderMapping>): Int? {
+        var adjustedOffset = offset
+        for (mapping in mappings.sortedBy { it.originalStartIndex }) {
+            if (offset < mapping.originalStartIndex) break
+            if (offset in mapping.originalStartIndex until mapping.originalEndIndex) return null
+            val originalLength = mapping.originalEndIndex - mapping.originalStartIndex
+            val replacementLength = mapping.sentinelToken.length + 2 // +2 for quotes
+            adjustedOffset += (replacementLength - originalLength)
+        }
+        return adjustedOffset
     }
 
     private fun needsQuotes(name: String): Boolean {

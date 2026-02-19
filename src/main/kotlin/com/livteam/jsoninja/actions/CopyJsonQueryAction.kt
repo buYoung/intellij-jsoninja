@@ -26,7 +26,7 @@ class CopyJsonQueryAction : AnAction() {
             offset = offset,
             project = project,
             isJmes = isJmes
-        ) ?: run {
+        )?.path ?: run {
             val element = psiFile.findElementAt(offset) ?: return
             when (type) {
                 JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)

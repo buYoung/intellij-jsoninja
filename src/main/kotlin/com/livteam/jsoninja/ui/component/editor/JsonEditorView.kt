@@ -53,7 +53,7 @@ class JsonEditorView(
 
     private fun setupMouseListener() {
         EditorFactory.getInstance().eventMulticaster.addEditorMouseMotionListener(
-            JsonEditorTooltipListener(project, this),
+            JsonEditorTooltipListener(project, this, this),
             this
         )
     }
