@@ -5,8 +5,8 @@ import java.util.UUID
 data class PlaceholderMapping(
     val originalPlaceholder: String,
     val sentinelToken: String,
-    val originalStartIndex: Int = -1,
-    val originalEndIndex: Int = -1
+    val originalStartIndex: Int,
+    val originalEndIndex: Int
 )
 
 data class ReplacementResult(
@@ -19,11 +19,6 @@ data class ReplacementResult(
 object TemplatePlaceholderSupport {
     private const val PLACEHOLDER_OPEN = "{{"
     private const val PLACEHOLDER_CLOSE = "}}"
-
-    fun hasValuePlaceholders(input: String): Boolean {
-        val replacementResult = extractAndReplaceValuePlaceholders(input)
-        return replacementResult.isSuccessful && replacementResult.mappings.isNotEmpty()
-    }
 
     fun extractAndReplaceValuePlaceholders(input: String): ReplacementResult {
         if (input.isEmpty()) {
