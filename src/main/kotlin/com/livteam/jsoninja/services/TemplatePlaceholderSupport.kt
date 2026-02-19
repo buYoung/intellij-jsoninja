@@ -4,7 +4,9 @@ import java.util.UUID
 
 data class PlaceholderMapping(
     val originalPlaceholder: String,
-    val sentinelToken: String
+    val sentinelToken: String,
+    val originalStartIndex: Int = -1,
+    val originalEndIndex: Int = -1
 )
 
 data class ReplacementResult(
@@ -105,7 +107,9 @@ object TemplatePlaceholderSupport {
                     placeholderMappings.add(
                         PlaceholderMapping(
                             originalPlaceholder = placeholderText,
-                            sentinelToken = sentinelToken
+                            sentinelToken = sentinelToken,
+                            originalStartIndex = currentIndex,
+                            originalEndIndex = placeholderEndIndex + PLACEHOLDER_CLOSE.length
                         )
                     )
                     replacedBuilder.append('"')

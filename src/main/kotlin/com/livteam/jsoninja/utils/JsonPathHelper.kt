@@ -1,8 +1,13 @@
 package com.livteam.jsoninja.utils
 
+import com.intellij.json.JsonFileType
 import com.intellij.json.psi.*
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFileFactory
+import com.intellij.util.LocalTimeCounter
+import com.livteam.jsoninja.services.TemplatePlaceholderSupport
 
 object JsonPathHelper {
 
@@ -72,6 +77,33 @@ object JsonPathHelper {
         } else {
             parts.add(".$name")
         }
+    }
+
+    fun getPathFromTemplateText(
+        documentText: String,
+        offset: Int,
+        project: Project,
+        isJmes: Boolean
+    ): String? {
+        val result = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(documentText)
+        if (!result.isSuccessful || result.mappings.isEmpty()) return null
+
+        val mapping = result.mappings.find { offset in it.originalStartIndex until it.originalEndIndex }
+            ?: return null
+
+        val sentinelIndex = result.replacedText.indexOf(mapping.sentinelToken)
+        if (sentinelIndex == -1) return null
+
+        val psiFile = PsiFileFactory.getInstance(project).createFileFromText(
+            "template_tooltip.json",
+            JsonFileType.INSTANCE,
+            result.replacedText,
+            LocalTimeCounter.currentTime(),
+            false
+        )
+
+        val element = psiFile.findElementAt(sentinelIndex) ?: return null
+        return buildPath(element, isJmes)
     }
 
     private fun needsQuotes(name: String): Boolean {
