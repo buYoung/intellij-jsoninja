@@ -26,6 +26,7 @@
         <diff.DiffExtension implementation="com.livteam.jsoninja.diff.JsonDiffExtension"/>
 
         <copyPastePreProcessor implementation="com.livteam.jsoninja.extensions.JsoninjaPastePreProcessor"/>
+        <highlightErrorFilter implementation="com.livteam.jsoninja.extensions.JsoninjaTemplateHighlightErrorFilter"/>
 
         <postStartupActivity implementation="com.livteam.jsoninja.listeners.JsoninjaOnboardingStartupActivity"/>
     </extensions>
