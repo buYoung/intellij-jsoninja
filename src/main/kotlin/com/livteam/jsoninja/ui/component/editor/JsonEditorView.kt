@@ -30,6 +30,7 @@ import com.intellij.util.ui.UIUtil
 import java.awt.Cursor
 import java.awt.FlowLayout
 import java.awt.Font
+import javax.swing.JLayeredPane
 import javax.swing.JPanel
 
 /**
@@ -145,24 +146,52 @@ class JsonEditorView(
         isFoldingOutlineShown = true
     }
 
+    private lateinit var floatingTogglePanel: JPanel
+
     private fun initializeUI() {
         layout = BorderLayout()
         background = EditorColorsManager.getInstance().globalScheme.defaultBackground
-        add(editor, BorderLayout.CENTER)
-        add(createBottomTogglePanel(), BorderLayout.SOUTH)
+
+        floatingTogglePanel = createFloatingTogglePanel()
+
+        val layeredPane = object : JLayeredPane() {
+            override fun doLayout() {
+                super.doLayout()
+                editor.setBounds(0, 0, width, height)
+
+                val fabSize = floatingTogglePanel.preferredSize
+                val paddingRight = JBUI.scale(24)
+                val paddingBottom = JBUI.scale(12)
+                floatingTogglePanel.setBounds(
+                    width - fabSize.width - paddingRight,
+                    height - fabSize.height - paddingBottom,
+                    fabSize.width,
+                    fabSize.height
+                )
+            }
+
+            override fun getPreferredSize(): java.awt.Dimension {
+                return editor.preferredSize
+            }
+        }
+
+        layeredPane.setLayer(editor, JLayeredPane.DEFAULT_LAYER)
+        layeredPane.add(editor)
+        layeredPane.setLayer(floatingTogglePanel, JLayeredPane.PALETTE_LAYER)
+        layeredPane.add(floatingTogglePanel)
+
+        add(layeredPane, BorderLayout.CENTER)
     }
 
-    private fun createBottomTogglePanel(): JPanel {
+    private fun createFloatingTogglePanel(): JPanel {
         val editorBackground = EditorColorsManager.getInstance().globalScheme.defaultBackground
-
-        val wrapper = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT, 0, 0))
-        wrapper.border = JBUI.Borders.empty(6, 8, 6, 8)
-        wrapper.background = editorBackground
-        wrapper.isOpaque = true
+        val scheme = EditorColorsManager.getInstance().globalScheme
+        val dividerColor = scheme.getColor(com.intellij.openapi.editor.colors.EditorColors.LINE_NUMBERS_COLOR)
+            ?: UIUtil.getBoundsColor()
 
         val togglePanel = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.CENTER, 4, 2))
         togglePanel.border = JBUI.Borders.compound(
-            RoundedLineBorder(UIUtil.getBoundsColor(), 10),
+            RoundedLineBorder(dividerColor, 10),
             JBUI.Borders.empty(4, 8)
         )
         togglePanel.background = editorBackground
@@ -182,7 +211,7 @@ class JsonEditorView(
 
         val separator = JBLabel("|").apply {
             font = font.deriveFont(Font.PLAIN, 10f)
-            foreground = UIUtil.getBoundsColor()
+            foreground = dividerColor
             border = JBUI.Borders.empty(0, 4)
         }
 
@@ -190,8 +219,7 @@ class JsonEditorView(
         togglePanel.add(separator)
         togglePanel.add(treeLabel)
 
-        wrapper.add(togglePanel)
-        return wrapper
+        return togglePanel
     }
 
     fun setText(text: String) = presenter.setText(text)
