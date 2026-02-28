@@ -22,6 +22,14 @@ import com.livteam.jsoninja.actions.CopyJsonQueryAction
 import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 import com.livteam.jsoninja.ui.onboarding.OnboardingTutorialTargetIds
 import java.awt.BorderLayout
+import com.intellij.ui.RoundedLineBorder
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBPanel
+import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
+import java.awt.Cursor
+import java.awt.FlowLayout
+import java.awt.Font
 import javax.swing.JPanel
 
 /**
@@ -139,7 +147,51 @@ class JsonEditorView(
 
     private fun initializeUI() {
         layout = BorderLayout()
+        background = EditorColorsManager.getInstance().globalScheme.defaultBackground
         add(editor, BorderLayout.CENTER)
+        add(createBottomTogglePanel(), BorderLayout.SOUTH)
+    }
+
+    private fun createBottomTogglePanel(): JPanel {
+        val editorBackground = EditorColorsManager.getInstance().globalScheme.defaultBackground
+
+        val wrapper = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT, 0, 0))
+        wrapper.border = JBUI.Borders.empty(6, 8, 6, 8)
+        wrapper.background = editorBackground
+        wrapper.isOpaque = true
+
+        val togglePanel = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.CENTER, 4, 2))
+        togglePanel.border = JBUI.Borders.compound(
+            RoundedLineBorder(UIUtil.getBoundsColor(), 10),
+            JBUI.Borders.empty(4, 8)
+        )
+        togglePanel.background = editorBackground
+        togglePanel.isOpaque = true
+
+        val textLabel = JBLabel("TEXT").apply {
+            font = font.deriveFont(Font.BOLD, 11f)
+            foreground = UIUtil.getLabelForeground()
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
+
+        val treeLabel = JBLabel("TREE").apply {
+            font = font.deriveFont(Font.PLAIN, 11f)
+            foreground = UIUtil.getContextHelpForeground()
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
+
+        val separator = JBLabel("|").apply {
+            font = font.deriveFont(Font.PLAIN, 10f)
+            foreground = UIUtil.getBoundsColor()
+            border = JBUI.Borders.empty(0, 4)
+        }
+
+        togglePanel.add(textLabel)
+        togglePanel.add(separator)
+        togglePanel.add(treeLabel)
+
+        wrapper.add(togglePanel)
+        return wrapper
     }
 
     fun setText(text: String) = presenter.setText(text)
