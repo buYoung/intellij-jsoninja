@@ -1,11 +1,13 @@
 package com.livteam.jsoninja.ui.component.editor
 
+import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 
+import com.livteam.jsoninja.services.TemplatePlaceholderSupport
 import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 
 class JsonEditorPresenter(
@@ -23,6 +25,16 @@ class JsonEditorPresenter(
                 if (isSettingText) {
                     return
                 }
+
+                val normalizedContent = TemplatePlaceholderSupport.normalizePlaceholderLayout(content)
+                if (normalizedContent != content) {
+                    schedulePlaceholderNormalization(
+                        normalizedContent = normalizedContent,
+                        expectedModificationStamp = event.document.modificationStamp
+                    )
+                    return
+                }
+
                 onContentChangeCallback?.invoke(content)
             }
         }
@@ -55,5 +67,20 @@ class JsonEditorPresenter(
 
     fun setOnContentChangeCallback(callback: (String) -> Unit) {
         onContentChangeCallback = callback
+    }
+
+    private fun schedulePlaceholderNormalization(
+        normalizedContent: String,
+        expectedModificationStamp: Long
+    ) {
+        invokeLater {
+            if (project.isDisposed) return@invokeLater
+
+            val document = view.editor.document
+            if (document.modificationStamp != expectedModificationStamp) return@invokeLater
+
+            setText(normalizedContent)
+            onContentChangeCallback?.invoke(normalizedContent)
+        }
     }
 }

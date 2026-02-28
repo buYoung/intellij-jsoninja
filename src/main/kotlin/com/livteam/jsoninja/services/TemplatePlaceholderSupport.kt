@@ -20,6 +20,77 @@ object TemplatePlaceholderSupport {
     private const val PLACEHOLDER_OPEN = "{{"
     private const val PLACEHOLDER_CLOSE = "}}"
 
+    fun normalizePlaceholderLayout(input: String): String {
+        if (input.isEmpty() ||
+            !input.contains(PLACEHOLDER_OPEN) ||
+            !input.contains(PLACEHOLDER_CLOSE)
+        ) {
+            return input
+        }
+
+        val normalizedBuilder = StringBuilder(input.length)
+        var currentIndex = 0
+        var hasPlaceholderLayoutChanged = false
+
+        while (currentIndex < input.length) {
+            val currentCharacter = input[currentIndex]
+
+            if (currentCharacter == '"' || currentCharacter == '\'') {
+                val stringEndIndex = findStringEndIndex(input, currentIndex, currentCharacter)
+                if (stringEndIndex == -1) {
+                    normalizedBuilder.append(input.substring(currentIndex))
+                    break
+                }
+
+                normalizedBuilder.append(input.substring(currentIndex, stringEndIndex + 1))
+                currentIndex = stringEndIndex + 1
+                continue
+            }
+
+            if (startsWithLineComment(input, currentIndex)) {
+                val lineCommentEndIndex = findLineCommentEndIndex(input, currentIndex)
+                normalizedBuilder.append(input.substring(currentIndex, lineCommentEndIndex))
+                currentIndex = lineCommentEndIndex
+                continue
+            }
+
+            if (startsWithBlockComment(input, currentIndex)) {
+                val blockCommentEndIndex = findBlockCommentEndIndex(input, currentIndex)
+                if (blockCommentEndIndex == -1) {
+                    normalizedBuilder.append(input.substring(currentIndex))
+                    break
+                }
+
+                normalizedBuilder.append(input.substring(currentIndex, blockCommentEndIndex + 2))
+                currentIndex = blockCommentEndIndex + 2
+                continue
+            }
+
+            if (startsWithPlaceholderOpen(input, currentIndex)) {
+                val placeholderEndIndex = findPlaceholderEndIndex(input, currentIndex + PLACEHOLDER_OPEN.length)
+                if (placeholderEndIndex == -1) {
+                    normalizedBuilder.append(input.substring(currentIndex))
+                    break
+                }
+
+                val placeholderText = input.substring(currentIndex, placeholderEndIndex + PLACEHOLDER_CLOSE.length)
+                val normalizedPlaceholderText = normalizePlaceholderText(placeholderText)
+                if (normalizedPlaceholderText != placeholderText) {
+                    hasPlaceholderLayoutChanged = true
+                }
+
+                normalizedBuilder.append(normalizedPlaceholderText)
+                currentIndex = placeholderEndIndex + PLACEHOLDER_CLOSE.length
+                continue
+            }
+
+            normalizedBuilder.append(currentCharacter)
+            currentIndex++
+        }
+
+        return if (hasPlaceholderLayoutChanged) normalizedBuilder.toString() else input
+    }
+
     fun extractAndReplaceValuePlaceholders(input: String): ReplacementResult {
         if (input.isEmpty()) {
             return ReplacementResult(
@@ -151,6 +222,18 @@ object TemplatePlaceholderSupport {
     private fun createSentinelPrefix(): String {
         val uniqueIdentifier = UUID.randomUUID().toString().replace("-", "")
         return "__JSONINJA_PLACEHOLDER_${uniqueIdentifier}_"
+    }
+
+    private fun normalizePlaceholderText(placeholderText: String): String {
+        if (!placeholderText.startsWith(PLACEHOLDER_OPEN) || !placeholderText.endsWith(PLACEHOLDER_CLOSE)) {
+            return placeholderText
+        }
+
+        val innerText = placeholderText.substring(
+            PLACEHOLDER_OPEN.length,
+            placeholderText.length - PLACEHOLDER_CLOSE.length
+        )
+        return PLACEHOLDER_OPEN + innerText.trim() + PLACEHOLDER_CLOSE
     }
 
     private fun startsWithPlaceholderOpen(input: String, index: Int): Boolean {
