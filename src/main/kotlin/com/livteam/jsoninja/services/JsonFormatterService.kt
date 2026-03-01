@@ -129,8 +129,16 @@ class JsonFormatterService(private val project: Project) {
 
         if (isEmptyJson) return json
 
+        val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(json)
+        if (!replacementResult.isSuccessful) {
+            LOG.debug("Invalid placeholder syntax detected, returning original: $json")
+            return json
+        }
+
+        val jsonForParsing = replacementResult.replacedText
+
         // Check if JSON is valid before attempting to format
-        if (!isValidJson(json)) {
+        if (!isValidJsonText(jsonForParsing)) {
             LOG.debug("Invalid JSON detected, returning original: $json")
             return json
         }
@@ -155,10 +163,9 @@ class JsonFormatterService(private val project: Project) {
 
             // 매퍼 설정
             val mapper = getConfiguredMapper(usesSorting)
-            val jsonNode = mapper.readTree(json)
+            val jsonNode = mapper.readTree(jsonForParsing)
 
-
-            when (formatState) {
+            val formattedJson = when (formatState) {
                 JsonFormatState.PRETTIFY,
                 JsonFormatState.PRETTIFY_COMPACT -> {
                     val prettyPrinter = createConfiguredPrettyPrinter(formatState)
@@ -172,6 +179,23 @@ class JsonFormatterService(private val project: Project) {
 
                 JsonFormatState.UGLIFY -> {
                     mapper.writeValueAsString(jsonNode)
+                }
+            }
+
+            if (replacementResult.mappings.isEmpty()) {
+                formattedJson
+            } else {
+                val restoredJson = TemplatePlaceholderSupport.restorePlaceholders(
+                    formatted = formattedJson,
+                    mappings = replacementResult.mappings
+                )
+                if (replacementResult.sentinelPrefix.isNotEmpty() &&
+                    restoredJson.contains(replacementResult.sentinelPrefix)
+                ) {
+                    LOG.warn("Placeholder restoration failed after formatting, returning original JSON")
+                    json
+                } else {
+                    restoredJson
                 }
             }
         } catch (e: Exception) {
@@ -192,9 +216,19 @@ class JsonFormatterService(private val project: Project) {
         val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
         if (isEmptyJson) return false
 
+        val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(json)
+        return if (!replacementResult.isSuccessful) {
+            LOG.debug("유효하지 않은 placeholder syntax")
+            false
+        } else {
+            isValidJsonText(replacementResult.replacedText)
+        }
+    }
+
+    private fun isValidJsonText(jsonText: String): Boolean {
         return try {
             // Use JsonParser to validate the entire input string including trailing tokens
-            defaultMapper.factory.createParser(json).use { parser ->
+            defaultMapper.factory.createParser(jsonText).use { parser ->
                 // Parse the JSON value completely
                 parser.nextToken()
                 parser.skipChildren()
