@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.livteam.jsoninja</id>
     <name>JSONinja</name>
-    <version>1.8.0</version>
+    <version>1.9.0</version>
     <vendor email="leebu18@gmail.com">BuYoung</vendor>
 
     <depends>com.intellij.modules.lang</depends>
@@ -26,8 +26,10 @@
         <diff.DiffExtension implementation="com.livteam.jsoninja.diff.JsonDiffExtension"/>
 
         <copyPastePreProcessor implementation="com.livteam.jsoninja.extensions.JsoninjaPastePreProcessor"/>
-        <daemon.highlightInfoFilter implementation="com.livteam.jsoninja.extensions.JsoninjaTemplateHighlightErrorFilter"/>
-        <gotoDeclarationHandler implementation="com.livteam.jsoninja.extensions.JsoninjaTemplateGotoDeclarationHandler" order="first"/>
+        <daemon.highlightInfoFilter
+                implementation="com.livteam.jsoninja.extensions.JsoninjaTemplateHighlightErrorFilter"/>
+        <gotoDeclarationHandler implementation="com.livteam.jsoninja.extensions.JsoninjaTemplateGotoDeclarationHandler"
+                                order="first"/>
 
         <postStartupActivity implementation="com.livteam.jsoninja.listeners.JsoninjaOnboardingStartupActivity"/>
     </extensions>

@@ -6,6 +6,14 @@
 
 ### Added
 
+- **JSON Tree View**: Added a new graphical Tree View interface to easily navigate, visualize, and interact with JSON structures.
+    - **Integrated Templates**: JSON Templates are now fully supported within the Tree View for seamless data exploration and manipulation.
+- **JSON Template Format**: Added native support for processing and generating JSON data using template formats.
+
+## [1.8.0] - 2026-02-16
+
+### Added
+
 - JSON Schema Data Generation: Added support for generating sample JSON data based on JSON Schema (2020-12 draft).
     - Paste or write a JSON Schema directly in the editor, or load one from a URL.
     - SchemaStore catalog integration: search and select from well-known schemas with autocomplete suggestions.
@@ -287,7 +295,9 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.5.3...v1.6.0
