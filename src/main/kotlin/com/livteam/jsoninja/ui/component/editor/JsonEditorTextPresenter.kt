@@ -6,12 +6,10 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-
-class JsonEditorTextPresenter(
 import com.livteam.jsoninja.services.TemplatePlaceholderSupport
 import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 
-class JsonEditorPresenter(
+class JsonEditorTextPresenter(
     private val project: Project,
     private val view: JsonEditorTextView
 ) {
@@ -21,6 +19,7 @@ class JsonEditorPresenter(
     fun setupContentChangeListener() {
         val contentChangeListener = object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
+                val content = view.getText()
                 if (isSettingText) {
                     return
                 }
