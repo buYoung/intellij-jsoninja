@@ -5,25 +5,23 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-
 import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 
-class JsonEditorPresenter(
+class JsonEditorTextPresenter(
     private val project: Project,
-    private val view: JsonEditorView,
+    private val view: JsonEditorTextView,
     private val model: JsonQueryUiState
 ) {
     private var onContentChangeCallback: ((String) -> Unit)? = null
-    var isSettingText = false
+    private var isSettingText = false
 
     fun setupContentChangeListener() {
         val contentChangeListener = object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
-                val content = view.getText()
                 if (isSettingText) {
                     return
                 }
-                onContentChangeCallback?.invoke(content)
+                onContentChangeCallback?.invoke(view.getText())
             }
         }
 
@@ -38,11 +36,15 @@ class JsonEditorPresenter(
         isSettingText = true
         try {
             WriteCommandAction.runWriteCommandAction(project) {
-                view.editor.text = text
+                view.setText(text)
             }
         } finally {
             isSettingText = false
         }
+    }
+
+    fun getText(): String {
+        return view.getText()
     }
 
     fun setOriginalJson(json: String) {
