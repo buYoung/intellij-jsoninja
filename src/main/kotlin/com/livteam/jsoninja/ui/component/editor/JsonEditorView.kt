@@ -6,7 +6,6 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
-import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 import com.intellij.ui.RoundedLineBorder
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
@@ -27,9 +26,8 @@ import javax.swing.JPanel
  */
 class JsonEditorView(
     private val project: Project,
-    private val model: JsonQueryUiState,
-    private val fileExtension: String? = null,
-    private val documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
+    fileExtension: String? = null,
+    documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
 ) : JPanel(), Disposable {
 
     private enum class EditorDisplayMode {
@@ -56,7 +54,7 @@ class JsonEditorView(
     private var currentDisplayMode = EditorDisplayMode.TEXT
 
     init {
-        presenter = JsonEditorTextPresenter(project, jsonEditorTextView, model)
+        presenter = JsonEditorTextPresenter(project, jsonEditorTextView)
 
         initializeUI()
         presenter.setupContentChangeListener()

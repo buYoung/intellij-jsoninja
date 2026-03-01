@@ -26,7 +26,7 @@ class JsonTabContextFactory(
         onTabContentChangedListener: ((String) -> Unit)?
     ): TabUiState {
         val model = JsonQueryUiState()
-        val editor = createEditor(model, fileExtension, onTabContentChangedListener)
+        val editor = createEditor(fileExtension, onTabContentChangedListener)
 
         if (content.isNotEmpty()) {
             editor.setText(content)
@@ -59,11 +59,10 @@ class JsonTabContextFactory(
     }
 
     private fun createEditor(
-        model: JsonQueryUiState,
         fileExtension: String? = null,
         onTabContentChangedListener: ((String) -> Unit)?
     ): JsonEditorView {
-        return JsonEditorView(project, model, fileExtension).apply {
+        return JsonEditorView(project, fileExtension).apply {
             setOnContentChangeCallback { newContent ->
                 onTabContentChangedListener?.invoke(newContent)
             }

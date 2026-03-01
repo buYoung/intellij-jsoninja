@@ -3,15 +3,15 @@ package com.livteam.jsoninja.ui.component.editor
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.EditorFontType
+import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import javax.swing.JPanel
-import javax.swing.JScrollPane
 import javax.swing.JTree
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.DefaultTreeCellRenderer
-import javax.swing.tree.TreeNode
 
 class JsonEditorTreeView : JPanel(), Disposable {
     companion object {
@@ -26,7 +26,7 @@ class JsonEditorTreeView : JPanel(), Disposable {
 
     private val editorScheme = EditorColorsManager.getInstance().globalScheme
     private val treeFont = editorScheme.getFont(EditorFontType.PLAIN)
-    private val treeView = JTree(DefaultTreeModel(DefaultMutableTreeNode(TREE_ROOT_LABEL))).apply {
+    private val treeView = Tree(DefaultTreeModel(DefaultMutableTreeNode(TREE_ROOT_LABEL))).apply {
         isRootVisible = false
         showsRootHandles = true
         isEditable = false
@@ -36,7 +36,7 @@ class JsonEditorTreeView : JPanel(), Disposable {
         cellRenderer = JsonTreeBranchRenderer()
     }
 
-    private val treeScrollPane = JScrollPane(treeView).apply {
+    private val treeScrollPane = JBScrollPane(treeView).apply {
         border = JBUI.Borders.empty()
         background = editorScheme.defaultBackground
         viewport.background = editorScheme.defaultBackground
@@ -128,7 +128,7 @@ class JsonEditorTreeView : JPanel(), Disposable {
     }
 
     private fun isLastSibling(node: DefaultMutableTreeNode): Boolean {
-        val parentNode = node.parent as? TreeNode ?: return true
+        val parentNode = node.parent ?: return true
         return parentNode.getChildAt(parentNode.childCount - 1) == node
     }
 }
