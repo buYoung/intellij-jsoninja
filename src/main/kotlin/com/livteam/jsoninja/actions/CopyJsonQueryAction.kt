@@ -16,14 +16,22 @@ class CopyJsonQueryAction : AnAction() {
         val project = e.project ?: return
         val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return
         val offset = editor.caretModel.offset
-        val element = psiFile.findElementAt(offset) ?: return
 
         val settings = JsoninjaSettingsState.getInstance(project)
         val type = JsonQueryType.fromString(settings.jsonQueryType)
+        val isJmes = type == JsonQueryType.JMESPATH
 
-        val path = when (type) {
-            JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
-            JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
+        val path = JsonPathHelper.getPathFromTemplateText(
+            documentText = editor.document.text,
+            offset = offset,
+            project = project,
+            isJmes = isJmes
+        )?.path ?: run {
+            val element = psiFile.findElementAt(offset) ?: return
+            when (type) {
+                JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
+                JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
+            }
         }
 
         if (path != null) {

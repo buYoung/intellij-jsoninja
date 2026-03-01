@@ -37,6 +37,7 @@ class SimpleJsonDocumentCreator : JsonDocumentCreator {
 
 object JsonDocumentFactory {
     val JSONINJA_EDITOR_KEY = Key.create<Boolean>("JSONINJA_EDITOR_KEY")
+    val JSONINJA_PSI_FILE_KEY = Key.create<Boolean>("JSONINJA_PSI_FILE_KEY")
 
     /**
      * PsiFile 기반 JSON Document 생성
@@ -68,6 +69,7 @@ object JsonDocumentFactory {
                 false
             )
         }
+        psiFile.putUserData(JSONINJA_PSI_FILE_KEY, true)
 
         documentCreator.customizePsiFile(psiFile)
 
