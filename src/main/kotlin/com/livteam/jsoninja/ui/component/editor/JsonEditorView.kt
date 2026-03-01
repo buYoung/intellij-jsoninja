@@ -1,27 +1,24 @@
 package com.livteam.jsoninja.ui.component.editor
 
-import com.intellij.ide.highlighter.HighlighterFactory
-import com.intellij.json.JsonFileType
-import com.intellij.json.JsonLanguage
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.DefaultActionGroup
-import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.editor.EditorFactory
-import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
-import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
-import com.intellij.ui.PopupHandler
-import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.actions.CopyJsonQueryAction
-import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
-import com.livteam.jsoninja.ui.onboarding.OnboardingTutorialTargetIds
+import com.intellij.ui.RoundedLineBorder
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBPanel
+import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
+import java.awt.CardLayout
+import java.awt.Cursor
+import java.awt.FlowLayout
+import java.awt.Font
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
+import javax.swing.JLayeredPane
 import javax.swing.JPanel
 
 /**
@@ -29,22 +26,35 @@ import javax.swing.JPanel
  */
 class JsonEditorView(
     private val project: Project,
-    private val model: JsonQueryUiState,
-    private val fileExtension: String? = null,
-    private val documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
+    fileExtension: String? = null,
+    documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
 ) : JPanel(), Disposable {
 
-    companion object {
-        private const val EMPTY_TEXT = ""
-        private var PLACEHOLDER_TEXT = LocalizationBundle.message("enterJsonHere")
+    private enum class EditorDisplayMode {
+        TEXT,
+        TREE
     }
 
+    companion object {
+        private const val TEXT_CARD = "TEXT_CARD"
+        private const val TREE_CARD = "TREE_CARD"
+    }
+
+    val presenter: JsonEditorTextPresenter
     val editor: EditorTextField
-    val presenter: JsonEditorPresenter
+        get() = jsonEditorTextView.editor
+
+    private lateinit var floatingTogglePanel: JPanel
+    private val contentContainer = JPanel(CardLayout())
+    private val jsonEditorTextView = JsonEditorTextView(project, fileExtension, documentCreator)
+    private val jsonEditorTreeView = JsonEditorTreeView()
+    private lateinit var textModeLabel: JBLabel
+    private lateinit var treeModeLabel: JBLabel
+    private val treePresenter = JsonEditorTreePresenter(jsonEditorTreeView)
+    private var currentDisplayMode = EditorDisplayMode.TEXT
 
     init {
-        editor = createJsonEditor()
-        presenter = JsonEditorPresenter(project, this, model)
+        presenter = JsonEditorTextPresenter(project, jsonEditorTextView)
 
         initializeUI()
         presenter.setupContentChangeListener()
@@ -58,98 +68,130 @@ class JsonEditorView(
         )
     }
 
-    private fun createJsonEditor(): EditorTextField {
-        val document = documentCreator.createDocument(EMPTY_TEXT, project, fileExtension)
-        val extensionToUse = fileExtension ?: "json5"
-        var fileType = FileTypeManager.getInstance().getFileTypeByExtension(extensionToUse)
-
-        if (fileType is UnknownFileType) {
-            fileType = JsonLanguage.INSTANCE.associatedFileType ?: JsonFileType.INSTANCE
-        }
-
-        return EditorTextField(document, project, fileType, false, false).also { editorField ->
-            configureEditor(editorField, fileType)
-        }
-    }
-
-    private fun configureEditor(editorField: EditorTextField, fileType: com.intellij.openapi.fileTypes.FileType) {
-        editorField.addSettingsProvider { editor ->
-            editor.contentComponent.name = OnboardingTutorialTargetIds.JSON_EDITOR
-            editor.settings.applyEditorSettings()
-            applyEditorAppearance(editor, fileType)
-            applyEditorScrollbars(editor)
-            installEditorContextMenu(editor)
-        }
-        editorField.setPlaceholder(PLACEHOLDER_TEXT)
-        editorField.putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
-    }
-
-    private fun applyEditorAppearance(
-        editor: EditorEx,
-        fileType: com.intellij.openapi.fileTypes.FileType
-    ) {
-        val globalScheme = EditorColorsManager.getInstance().globalScheme
-        editor.colorsScheme = globalScheme
-        editor.backgroundColor = globalScheme.defaultBackground
-        editor.highlighter = HighlighterFactory.createHighlighter(project, fileType)
-        editor.isEmbeddedIntoDialogWrapper = true
-    }
-
-    private fun applyEditorScrollbars(editor: EditorEx) {
-        editor.setHorizontalScrollbarVisible(true)
-        editor.setVerticalScrollbarVisible(true)
-    }
-
-    private fun installEditorContextMenu(editor: EditorEx) {
-        val actionManager = ActionManager.getInstance()
-        val group = DefaultActionGroup()
-
-        val copyAction = actionManager.getAction(IdeActions.ACTION_COPY)
-        if (copyAction != null) group.add(copyAction)
-
-        val pasteAction = actionManager.getAction(IdeActions.ACTION_PASTE)
-        if (pasteAction != null) group.add(pasteAction)
-
-        val copyJsonQueryAction = CopyJsonQueryAction()
-        copyJsonQueryAction.templatePresentation.text = LocalizationBundle.message("action.copy.json.query")
-        copyJsonQueryAction.templatePresentation.description =
-            LocalizationBundle.message("action.copy.json.query.description")
-
-        if (group.childrenCount > 0) group.addSeparator()
-        group.add(copyJsonQueryAction)
-
-        if (group.childrenCount > 0) {
-            PopupHandler.installPopupMenu(
-                editor.contentComponent,
-                group,
-                "com.livteam.jsoninja.action.group.EditorPopup"
-            )
-        }
-    }
-
-    private fun EditorSettings.applyEditorSettings() {
-        isLineNumbersShown = true
-        isWhitespacesShown = true
-        isCaretRowShown = true
-        isRightMarginShown = true
-        isUseSoftWraps = true
-        isIndentGuidesShown = true
-        isFoldingOutlineShown = true
-    }
-
     private fun initializeUI() {
         layout = BorderLayout()
-        add(editor, BorderLayout.CENTER)
+        val backgroundColor = EditorColorsManager.getInstance().globalScheme.defaultBackground
+        background = backgroundColor
+
+        contentContainer.background = backgroundColor
+        contentContainer.add(jsonEditorTextView, TEXT_CARD)
+        contentContainer.add(jsonEditorTreeView, TREE_CARD)
+
+        floatingTogglePanel = createFloatingTogglePanel()
+        updateToggleLabelStyles()
+
+        val layeredPane = object : JLayeredPane() {
+            override fun doLayout() {
+                super.doLayout()
+                contentContainer.setBounds(0, 0, width, height)
+
+                val floatingPanelSize = floatingTogglePanel.preferredSize
+                val paddingRight = JBUI.scale(24)
+                val paddingBottom = JBUI.scale(12)
+                floatingTogglePanel.setBounds(
+                    width - floatingPanelSize.width - paddingRight,
+                    height - floatingPanelSize.height - paddingBottom,
+                    floatingPanelSize.width,
+                    floatingPanelSize.height
+                )
+            }
+
+            override fun getPreferredSize(): java.awt.Dimension {
+                return contentContainer.preferredSize
+            }
+        }
+
+        layeredPane.setLayer(contentContainer, JLayeredPane.DEFAULT_LAYER)
+        layeredPane.add(contentContainer)
+        layeredPane.setLayer(floatingTogglePanel, JLayeredPane.PALETTE_LAYER)
+        layeredPane.add(floatingTogglePanel)
+
+        add(layeredPane, BorderLayout.CENTER)
+    }
+
+    private fun createFloatingTogglePanel(): JPanel {
+        val editorBackground = EditorColorsManager.getInstance().globalScheme.defaultBackground
+        val scheme = EditorColorsManager.getInstance().globalScheme
+        val dividerColor = scheme.getColor(com.intellij.openapi.editor.colors.EditorColors.LINE_NUMBERS_COLOR)
+            ?: UIUtil.getBoundsColor()
+
+        val togglePanel = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.CENTER, 4, 2))
+        togglePanel.border = JBUI.Borders.compound(
+            RoundedLineBorder(dividerColor, 10),
+            JBUI.Borders.empty(4, 8)
+        )
+        togglePanel.background = editorBackground
+        togglePanel.isOpaque = true
+
+        val textLabel = JBLabel("TEXT").apply {
+            font = font.deriveFont(Font.BOLD, 11f)
+            foreground = UIUtil.getLabelForeground()
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
+        textModeLabel = textLabel
+
+        val treeLabel = JBLabel("TREE").apply {
+            font = font.deriveFont(Font.PLAIN, 11f)
+            foreground = UIUtil.getContextHelpForeground()
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
+        treeModeLabel = treeLabel
+
+        val separator = JBLabel("|").apply {
+            font = font.deriveFont(Font.PLAIN, 10f)
+            foreground = dividerColor
+            border = JBUI.Borders.empty(0, 4)
+        }
+
+        togglePanel.add(textLabel)
+        togglePanel.add(separator)
+        togglePanel.add(treeLabel)
+
+        textLabel.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(event: MouseEvent?) {
+                switchToTextMode()
+            }
+        })
+
+        treeLabel.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(event: MouseEvent?) {
+                switchToTreeMode()
+            }
+        })
+
+        return togglePanel
+    }
+
+    private fun switchToTextMode() {
+        currentDisplayMode = EditorDisplayMode.TEXT
+        (contentContainer.layout as CardLayout).show(contentContainer, TEXT_CARD)
+        updateToggleLabelStyles()
+    }
+
+    private fun switchToTreeMode() {
+        treePresenter.refreshTreeFromJson(getText())
+        currentDisplayMode = EditorDisplayMode.TREE
+        (contentContainer.layout as CardLayout).show(contentContainer, TREE_CARD)
+        updateToggleLabelStyles()
+    }
+
+    private fun updateToggleLabelStyles() {
+        val isTextMode = currentDisplayMode == EditorDisplayMode.TEXT
+        textModeLabel.font = textModeLabel.font.deriveFont(if (isTextMode) Font.BOLD else Font.PLAIN, 11f)
+        treeModeLabel.font = treeModeLabel.font.deriveFont(if (isTextMode) Font.PLAIN else Font.BOLD, 11f)
+        textModeLabel.foreground = if (isTextMode) UIUtil.getLabelForeground() else UIUtil.getContextHelpForeground()
+        treeModeLabel.foreground = if (isTextMode) UIUtil.getContextHelpForeground() else UIUtil.getLabelForeground()
     }
 
     fun setText(text: String) = presenter.setText(text)
 
-    fun getText(): String = editor.text
+    fun getText(): String = presenter.getText()
 
     fun setOnContentChangeCallback(callback: (String) -> Unit) = presenter.setOnContentChangeCallback(callback)
 
     override fun dispose() {
-        (editor as? Disposable)?.let { Disposer.dispose(it) }
+        Disposer.dispose(jsonEditorTextView)
+        Disposer.dispose(jsonEditorTreeView)
         removeAll()
     }
 }
