@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-03-02
+
 ### Added
 
 - **JSON Tree View**: Added a new graphical Tree View interface to easily navigate, visualize, and interact with JSON structures.
