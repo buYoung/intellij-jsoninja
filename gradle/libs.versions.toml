@@ -5,6 +5,7 @@ jackson-databind = "2.21.0"
 jackson-module-kotlin = "2.21.0"
 json-path = "2.10.0"
 jmespath-jackson = "0.6.0"
+jackson-jq = "1.6.0"
 datafaker = "2.5.3"
 json-schema-validator = "1.5.7"
 
@@ -21,6 +22,7 @@ jacksonDatabind = {  group = "com.fasterxml.jackson.core", name = "jackson-datab
 jacksonModuleKotlin = { group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version.ref = "jackson-module-kotlin" }
 jsonPath = { group = "com.jayway.jsonpath", name = "json-path", version.ref = "json-path" }
 jmespathJackson = { group = "io.burt", name = "jmespath-jackson", version.ref = "jmespath-jackson" }
+jacksonJq = { group = "net.thisptr", name = "jackson-jq", version.ref = "jackson-jq" }
 dataFaker = { group = "net.datafaker", name = "datafaker", version.ref = "datafaker" }
 jsonSchemaValidator = { group = "com.networknt", name = "json-schema-validator", version.ref = "json-schema-validator" }
 
