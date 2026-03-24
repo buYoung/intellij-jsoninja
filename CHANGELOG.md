@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Editor JSON Formatting**: Added JSON formatting actions to the editor context menu.
+    - Prettify: Format and indent JSON for readability.
+    - Minify: Compress JSON by removing whitespace.
+    - Escape: Escape special characters in JSON strings.
+    - Unescape: Restore escaped characters in JSON strings.
+- **Jackson JQ Support**: Added Jackson JQ as a new query method in JSON Query, alongside JsonPath and JMESPath.
+
+### Changed
+
+- **JSON Query Improvements**: Improved settings change listener, refined multilingual translations, and refactored variable naming for clarity.
+
 ## [1.9.0] - 2026-03-02
 
 ### Added
