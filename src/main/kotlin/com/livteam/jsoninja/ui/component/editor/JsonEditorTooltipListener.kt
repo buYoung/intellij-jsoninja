@@ -61,13 +61,13 @@ class JsonEditorTooltipListener(
             val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(e.editor.document) ?: return@compute null
             val element = psiFile.findElementAt(offset)
             val queryType = JsonQueryType.fromString(settings.jsonQueryType)
-            val isJmes = queryType == JsonQueryType.JMESPATH || queryType == JsonQueryType.JACKSON_JQ
+            val useDotNotation = queryType == JsonQueryType.JMESPATH || queryType == JsonQueryType.JACKSON_JQ
 
             val templateResult = JsonPathHelper.getPathFromTemplateText(
                 documentText = e.editor.document.text,
                 offset = offset,
                 project = project,
-                isJmes = isJmes
+                isJmes = useDotNotation
             )
 
             val resolvedPath = templateResult?.path ?: if (element != null) {

@@ -16,9 +16,10 @@ import net.thisptr.jackson.jq.BuiltinFunctionLoader
 import net.thisptr.jackson.jq.JsonQuery
 import net.thisptr.jackson.jq.Scope
 import net.thisptr.jackson.jq.Versions
+import com.fasterxml.jackson.databind.JsonNode
 
 /**
- * 다양한 쿼리 언어(Jayway JsonPath, JMESPath)를 사용하여 JSON 데이터를 쿼리하는 서비스입니다.
+ * 다양한 쿼리 언어(Jayway JsonPath, JMESPath, jq)를 사용하여 JSON 데이터를 쿼리하는 서비스입니다.
  */
 @Service(Service.Level.PROJECT)
 class JsonQueryService(private val project: Project) {
@@ -101,7 +102,7 @@ class JsonQueryService(private val project: Project) {
     private fun queryJq(jsonString: String, expression: String): String? {
         val inputNode = objectMapper.readTree(jsonString)
         val query = JsonQuery.compile(expression, Versions.JQ_1_6)
-        val results = mutableListOf<com.fasterxml.jackson.databind.JsonNode>()
+        val results = mutableListOf<JsonNode>()
 
         query.apply(jqScope, inputNode) { result ->
             results.add(result)
