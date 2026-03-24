@@ -112,5 +112,19 @@
             <reference ref="com.livteam.jsoninja.action.CopyJsonQueryAction"/>
         </group>
 
+        <!-- JSONinja Editor Context Menu Actions -->
+        <group id="com.livteam.jsoninja.action.group.EditorContextMenu" popup="true">
+            <action id="com.livteam.jsoninja.action.editor.EditorPrettifyJsonAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorPrettifyJsonAction"/>
+            <action id="com.livteam.jsoninja.action.editor.EditorUglifyJsonAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorUglifyJsonAction"/>
+            <separator/>
+            <action id="com.livteam.jsoninja.action.editor.EditorEscapeJsonAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorEscapeJsonAction"/>
+            <action id="com.livteam.jsoninja.action.editor.EditorUnescapeJsonAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorUnescapeJsonAction"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </group>
+
     </actions>
 </idea-plugin>
