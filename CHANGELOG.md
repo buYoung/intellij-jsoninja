@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-03-24
+
 ### Added
 
 - **Editor JSON Formatting**: Added JSON formatting actions to the editor context menu.
@@ -310,7 +312,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.6.1...v1.7.0
