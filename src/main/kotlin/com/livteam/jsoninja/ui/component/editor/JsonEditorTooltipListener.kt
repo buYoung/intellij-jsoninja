@@ -61,7 +61,7 @@ class JsonEditorTooltipListener(
             val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(e.editor.document) ?: return@compute null
             val element = psiFile.findElementAt(offset)
             val queryType = JsonQueryType.fromString(settings.jsonQueryType)
-            val isJmes = queryType == JsonQueryType.JMESPATH
+            val isJmes = queryType == JsonQueryType.JMESPATH || queryType == JsonQueryType.JACKSON_JQ
 
             val templateResult = JsonPathHelper.getPathFromTemplateText(
                 documentText = e.editor.document.text,
@@ -74,6 +74,7 @@ class JsonEditorTooltipListener(
                 when (queryType) {
                     JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
                     JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
+                    JsonQueryType.JACKSON_JQ -> JsonPathHelper.getJqPath(element)
                 }
             } else null
 
@@ -82,6 +83,7 @@ class JsonEditorTooltipListener(
             val label = when (queryType) {
                 JsonQueryType.JMESPATH -> "JMESPath"
                 JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
+                JsonQueryType.JACKSON_JQ -> "jq"
             }
 
             TooltipResult(

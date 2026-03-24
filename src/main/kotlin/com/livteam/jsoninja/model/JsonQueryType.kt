@@ -2,7 +2,8 @@ package com.livteam.jsoninja.model
 
 enum class JsonQueryType {
     JAYWAY_JSONPATH,
-    JMESPATH;
+    JMESPATH,
+    JACKSON_JQ;
 
     companion object {
         fun fromString(value: String): JsonQueryType {

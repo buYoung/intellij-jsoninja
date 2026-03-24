@@ -19,7 +19,7 @@ class CopyJsonQueryAction : AnAction() {
 
         val settings = JsoninjaSettingsState.getInstance(project)
         val type = JsonQueryType.fromString(settings.jsonQueryType)
-        val isJmes = type == JsonQueryType.JMESPATH
+        val isJmes = type == JsonQueryType.JMESPATH || type == JsonQueryType.JACKSON_JQ
 
         val path = JsonPathHelper.getPathFromTemplateText(
             documentText = editor.document.text,
@@ -31,6 +31,7 @@ class CopyJsonQueryAction : AnAction() {
             when (type) {
                 JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
                 JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
+                JsonQueryType.JACKSON_JQ -> JsonPathHelper.getJqPath(element)
             }
         }
 

@@ -27,6 +27,11 @@ object JsonPathHelper {
         return buildPath(element, isJmes = true)
     }
 
+    fun getJqPath(element: PsiElement): String? {
+        val jmesPath = buildPath(element, isJmes = true) ?: return null
+        return if (jmesPath == "@") "." else ".$jmesPath"
+    }
+
     private fun buildPath(element: PsiElement, isJmes: Boolean): String? {
         var current: PsiElement? = element
         

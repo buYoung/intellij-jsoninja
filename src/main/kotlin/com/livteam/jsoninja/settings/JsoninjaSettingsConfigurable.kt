@@ -75,6 +75,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             return when (type) {
                 JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
                 JsonQueryType.JMESPATH -> "JMESPath"
+                JsonQueryType.JACKSON_JQ -> "jq (jackson-jq)"
             }
         }
 
@@ -271,6 +272,8 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         settings.jsonQueryType = selectedJsonQueryTypeWrapper?.type?.name ?: settings.jsonQueryType
         settings.largeFileThresholdMB = largeFileThresholdSpinner?.value as? Int ?: settings.largeFileThresholdMB
         settings.showLargeFileWarning = showLargeFileWarningCheckBox?.isSelected ?: settings.showLargeFileWarning
+
+        project.messageBus.syncPublisher(JsoninjaSettingsListener.TOPIC).onSettingsChanged(settings)
     }
 
     override fun reset() {

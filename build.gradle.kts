@@ -46,8 +46,9 @@ dependencies {
     implementation(libs.dataFaker)
     implementation(libs.jsonSchemaValidator)
 
+    implementation(libs.jacksonJq)
+
     testImplementation(libs.junit)
-    testImplementation(libs.jacksonJq)
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
