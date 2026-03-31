@@ -4,22 +4,42 @@ mod query;
 mod types;
 mod utils;
 
+#[cfg(test)]
+mod tests;
+
+#[cfg(target_arch = "wasm32")]
 use std::alloc::{alloc as allocate_memory, dealloc as deallocate_memory};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use types::WasmResult;
 
 #[no_mangle]
 pub extern "C" fn alloc(size: i32) -> i32 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return memory::allocate_host_buffer(size);
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
     let layout = match utils::create_allocation_layout(size) {
         Some(layout) => layout,
         None => return 0,
     };
 
     unsafe { allocate_memory(layout) as i32 }
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn dealloc(ptr: i32, size: i32) {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        memory::deallocate_host_buffer(ptr, size);
+        return;
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
     if ptr == 0 {
         return;
     }
@@ -31,6 +51,7 @@ pub extern "C" fn dealloc(ptr: i32, size: i32) {
 
     unsafe {
         deallocate_memory(ptr as *mut u8, layout);
+    }
     }
 }
 

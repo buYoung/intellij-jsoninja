@@ -1,0 +1,8 @@
+annotation|@Serializable
+type.kind|class
+type.name|UserResponse
+generic.param|T
+extends|BaseResponse
+extends|Identifiable
+field.type|String
+field.name|name

@@ -7,6 +7,34 @@ fun properties(key: String): String = providers.gradleProperty(key).get()
 
 val platformType = properties("platformType")
 val platformVersion = properties("platformVersion")
+val treeSitterWasmTarget = "wasm32-wasip1"
+val treeSitterWasmProjectDirectory = layout.projectDirectory.dir("tree-sitter-wasm")
+val treeSitterWasmBuildOutputFile = treeSitterWasmProjectDirectory.file(
+    "target/$treeSitterWasmTarget/release/tree_sitter_wasm.wasm"
+)
+val treeSitterWasmResourceDirectory = layout.projectDirectory.dir("src/main/resources/wasm/tree-sitter")
+val treeSitterWasmResourceFile = treeSitterWasmResourceDirectory.file("tree-sitter.wasm")
+val skipWasmBuild = providers.gradleProperty("skipWasmBuild").map(String::toBoolean).orElse(false)
+
+fun captureCommandOutput(
+    workingDirectory: File,
+    vararg arguments: String,
+): String {
+    val process = ProcessBuilder(*arguments)
+        .directory(workingDirectory)
+        .redirectErrorStream(true)
+        .start()
+    val outputText = process.inputStream.bufferedReader().use { it.readText() }.trim()
+    val exitCode = process.waitFor()
+
+    if (exitCode != 0) {
+        throw GradleException(
+            "Command `${arguments.joinToString(" ")}` failed with exit code $exitCode.\n$outputText"
+        )
+    }
+
+    return outputText
+}
 
 plugins {
     id("java") // Java support
@@ -73,6 +101,88 @@ dependencies {
         pluginVerifier()
         zipSigner()
         testFramework(TestFrameworkType.Platform)
+    }
+}
+
+val checkWasmPrerequisites by tasks.registering {
+    group = "wasm"
+    description = "Verify Rust and WASM build prerequisites"
+    notCompatibleWithConfigurationCache("Runs local toolchain discovery commands during task execution.")
+
+    doLast {
+        try {
+            captureCommandOutput(rootDir, "cargo", "--version")
+        } catch (exception: Exception) {
+            throw GradleException(
+                "cargo is required to build tree-sitter WASM. Install Rust with rustup first.",
+                exception,
+            )
+        }
+
+        val installedTargets = try {
+            captureCommandOutput(rootDir, "rustup", "target", "list", "--installed")
+        } catch (exception: Exception) {
+            throw GradleException(
+                "rustup is required to verify the $treeSitterWasmTarget target.",
+                exception,
+            )
+        }
+
+        if (installedTargets.lineSequence().none { it.trim() == treeSitterWasmTarget }) {
+            throw GradleException(
+                "Rust target $treeSitterWasmTarget is not installed. " +
+                    "Run `rustup target add $treeSitterWasmTarget` first."
+            )
+        }
+    }
+}
+
+val buildTreeSitterWasm by tasks.registering(Exec::class) {
+    group = "wasm"
+    description = "Build tree-sitter WASM module from Rust source"
+    notCompatibleWithConfigurationCache("Invokes a local Rust build and captures script-level task inputs.")
+    dependsOn(checkWasmPrerequisites)
+    onlyIf { !skipWasmBuild.get() }
+
+    workingDir = treeSitterWasmProjectDirectory.asFile
+    commandLine("cargo", "build", "--target", treeSitterWasmTarget, "--release")
+
+    inputs.files(fileTree(treeSitterWasmProjectDirectory.dir("src")))
+    inputs.files(
+        treeSitterWasmProjectDirectory.file("Cargo.toml"),
+        treeSitterWasmProjectDirectory.file("Cargo.lock"),
+        treeSitterWasmProjectDirectory.file("build.rs"),
+        treeSitterWasmProjectDirectory.file(".cargo/config.toml"),
+    )
+    outputs.file(treeSitterWasmBuildOutputFile)
+}
+
+val copyWasmToResources by tasks.registering(Copy::class) {
+    group = "wasm"
+    description = "Copy built tree-sitter WASM module to plugin resources"
+    notCompatibleWithConfigurationCache("Uses script-level file providers for generated WASM resources.")
+    dependsOn(buildTreeSitterWasm)
+    onlyIf { !skipWasmBuild.get() }
+
+    from(treeSitterWasmBuildOutputFile)
+    into(treeSitterWasmResourceDirectory)
+    rename { "tree-sitter.wasm" }
+
+    inputs.file(treeSitterWasmBuildOutputFile)
+    outputs.file(treeSitterWasmResourceFile)
+
+    doFirst {
+        if (!treeSitterWasmBuildOutputFile.asFile.exists()) {
+            throw GradleException(
+                "Expected WASM build output not found: ${treeSitterWasmBuildOutputFile.asFile.absolutePath}"
+            )
+        }
+    }
+}
+
+if (!skipWasmBuild.get()) {
+    tasks.named("processResources") {
+        dependsOn(copyWasmToResources)
     }
 }
 

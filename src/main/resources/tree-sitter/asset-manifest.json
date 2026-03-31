@@ -2,19 +2,23 @@
   "languages": [
     {
       "language": "JAVA",
-      "queryResourcePath": "tree-sitter/queries/java/type_definition.scm"
+      "parserResourcePath": "wasm/tree-sitter/tree-sitter.wasm",
+      "queryResourcePath": "tree-sitter/queries/java/type-declarations.scm"
     },
     {
       "language": "KOTLIN",
-      "queryResourcePath": "tree-sitter/queries/kotlin/type_definition.scm"
+      "parserResourcePath": "wasm/tree-sitter/tree-sitter.wasm",
+      "queryResourcePath": "tree-sitter/queries/kotlin/type-declarations.scm"
     },
     {
       "language": "TYPESCRIPT",
-      "queryResourcePath": "tree-sitter/queries/typescript/type_definition.scm"
+      "parserResourcePath": "wasm/tree-sitter/tree-sitter.wasm",
+      "queryResourcePath": "tree-sitter/queries/typescript/type-declarations.scm"
     },
     {
       "language": "GO",
-      "queryResourcePath": "tree-sitter/queries/go/type_definition.scm"
+      "parserResourcePath": "wasm/tree-sitter/tree-sitter.wasm",
+      "queryResourcePath": "tree-sitter/queries/go/type-declarations.scm"
     }
   ]
 }

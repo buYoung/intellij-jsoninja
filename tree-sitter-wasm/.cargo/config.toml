@@ -1,8 +1,6 @@
-[build]
-# Rust 1.84+ exposes the WASI Preview 1 target as `wasm32-wasip1`.
-target = "wasm32-wasip1"
-
 [env]
+# Keep the default host target for `cargo test`.
+# Build the WASM artifact with an explicit `--target wasm32-wasip1` flag.
 CC_wasm32_wasip1 = "/opt/homebrew/opt/llvm/bin/clang"
 AR_wasm32_wasip1 = "/opt/homebrew/opt/llvm/bin/llvm-ar"
 WASI_SYSROOT = "/opt/homebrew/opt/wasi-libc/share/wasi-sysroot"

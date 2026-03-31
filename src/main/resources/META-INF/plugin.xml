@@ -12,6 +12,7 @@
     <resource-bundle>messages.LocalizationBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="com.livteam.jsoninja.services.treesitter.TreeSitterWasmRuntime"/>
         <iconMapper mappingFile="JSONinjaIconMappings.json"/>
         <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja"
                     icon="com.livteam.jsoninja.icons.JsoninjaIcons.ToolWindowIcon"/>

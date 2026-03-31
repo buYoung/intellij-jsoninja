@@ -7,3 +7,5 @@ build
 instrumented*
 
 ai
+tree-sitter-wasm/target/
+src/main/resources/wasm/tree-sitter/tree-sitter.wasm
