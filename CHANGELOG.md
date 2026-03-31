@@ -4,6 +4,27 @@
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-03-26
+
+### Changed
+
+- Updated maximum supported IDE version to 263.*
+
+## [1.10.0] - 2026-03-24
+
+### Added
+
+- **Editor JSON Formatting**: Added JSON formatting actions to the editor context menu.
+    - Prettify: Format and indent JSON for readability.
+    - Minify: Compress JSON by removing whitespace.
+    - Escape: Escape special characters in JSON strings.
+    - Unescape: Restore escaped characters in JSON strings.
+- **Jackson JQ Support**: Added Jackson JQ as a new query method in JSON Query, alongside JsonPath and JMESPath.
+
+### Changed
+
+- **JSON Query Improvements**: Improved settings change listener, refined multilingual translations, and refactored variable naming for clarity.
+
 ## [1.9.0] - 2026-03-02
 
 ### Added
@@ -297,7 +318,9 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.1...HEAD
+[1.10.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.0...v1.10.1
+[1.10.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.6.1...v1.7.0

@@ -12,9 +12,14 @@ import com.jayway.jsonpath.spi.mapper.JacksonMappingProvider
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import io.burt.jmespath.jackson.JacksonRuntime
+import net.thisptr.jackson.jq.BuiltinFunctionLoader
+import net.thisptr.jackson.jq.JsonQuery
+import net.thisptr.jackson.jq.Scope
+import net.thisptr.jackson.jq.Versions
+import com.fasterxml.jackson.databind.JsonNode
 
 /**
- * 다양한 쿼리 언어(Jayway JsonPath, JMESPath)를 사용하여 JSON 데이터를 쿼리하는 서비스입니다.
+ * 다양한 쿼리 언어(Jayway JsonPath, JMESPath, jq)를 사용하여 JSON 데이터를 쿼리하는 서비스입니다.
  */
 @Service(Service.Level.PROJECT)
 class JsonQueryService(private val project: Project) {
@@ -31,6 +36,11 @@ class JsonQueryService(private val project: Project) {
     // JMESPath 런타임
     private val jmesPathRuntime = JacksonRuntime()
 
+    // Jackson-jq Scope (built-in functions loaded once)
+    private val jqScope: Scope = Scope.newEmptyScope().also {
+        BuiltinFunctionLoader.getInstance().loadFunctions(Versions.JQ_1_6, it)
+    }
+
     /**
      * 설정된 쿼리 언어를 사용하여 주어진 JSON 문자열에 쿼리를 적용합니다.
      *
@@ -46,6 +56,7 @@ class JsonQueryService(private val project: Project) {
             when (type) {
                 JsonQueryType.JAYWAY_JSONPATH -> queryJsonPath(jsonString, expression)
                 JsonQueryType.JMESPATH -> queryJmesPath(jsonString, expression)
+                JsonQueryType.JACKSON_JQ -> queryJq(jsonString, expression)
             }
         } catch (e: Exception) {
             LOG.warn("쿼리 실행 중 오류 발생 ($type): $expression", e)
@@ -88,6 +99,29 @@ class JsonQueryService(private val project: Project) {
         return objectMapper.writeValueAsString(result)
     }
 
+    private fun queryJq(jsonString: String, expression: String): String? {
+        val inputNode = objectMapper.readTree(jsonString)
+        val query = JsonQuery.compile(expression, Versions.JQ_1_6)
+        val results = mutableListOf<JsonNode>()
+
+        query.apply(jqScope, inputNode) { result ->
+            results.add(result)
+        }
+
+        if (results.isEmpty()) {
+            LOG.warn("jq 쿼리 결과가 없습니다: $expression")
+            return null
+        }
+
+        return if (results.size == 1) {
+            objectMapper.writeValueAsString(results.single())
+        } else {
+            val arrayNode = objectMapper.createArrayNode()
+            results.forEach { arrayNode.add(it) }
+            objectMapper.writeValueAsString(arrayNode)
+        }
+    }
+
     /**
      * 설정된 쿼리 언어에 대해 표현식이 유효한지 검증합니다.
      *
@@ -106,6 +140,10 @@ class JsonQueryService(private val project: Project) {
                 }
                 JsonQueryType.JMESPATH -> {
                     jmesPathRuntime.compile(expression)
+                    true
+                }
+                JsonQueryType.JACKSON_JQ -> {
+                    JsonQuery.compile(expression, Versions.JQ_1_6)
                     true
                 }
             }

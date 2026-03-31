@@ -54,6 +54,7 @@ class JsonTabContextFactory(
         return TabUiState(
             panel = tabContentPanel,
             editor = editor,
+            queryPresenter = jsonQueryPresenter,
             disposable = tabDisposable
         )
     }

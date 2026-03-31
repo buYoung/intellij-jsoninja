@@ -6,8 +6,11 @@ import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonQueryService
+import com.livteam.jsoninja.settings.JsoninjaSettingsListener
+import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
@@ -31,8 +34,23 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
     private var onSearchCallback: ((String, String) -> Unit)? = null
     private var onBeforeSearchCallback: (() -> Unit)? = null
 
+    private val messageBusConnection = project.messageBus.connect()
+
     init {
         setupKeyListener()
+        refreshQueryType()
+        messageBusConnection.subscribe(JsoninjaSettingsListener.TOPIC, object : JsoninjaSettingsListener {
+            override fun onSettingsChanged(settings: JsoninjaSettingsState) {
+                if (isDisposed) return
+                refreshQueryType()
+            }
+        })
+    }
+
+    fun refreshQueryType() {
+        val settings = JsoninjaSettingsState.getInstance(project)
+        val queryType = JsonQueryType.fromString(settings.jsonQueryType)
+        view.updatePlaceholder(queryType)
     }
 
     /**
@@ -181,5 +199,6 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
 
     override fun dispose() {
         isDisposed = true
+        messageBusConnection.disconnect()
     }
 }
