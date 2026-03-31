@@ -1,61 +1,71 @@
 # AGENTS.md
 
 ## 1. Overview
-This repository implements JSONinja, a JetBrains IDE plugin for editing, formatting, querying, diffing, loading, and generating JSON/JSON5 inside the IDE. The codebase is organized around IntelliJ extension points, project-scoped services, shared JSON infrastructure, and presenter-led Swing UI flows.
+This repository implements JSONinja, a JetBrains IDE plugin for editing, formatting, querying, diffing, loading, generating, and converting JSON/JSON5 inside the IDE. The main codebase centers on IntelliJ extension points, project-scoped services, presenter-led Swing flows, and bundled tree-sitter/WASM assets used by the type-conversion features.
 
 ## 2. Folder Structure
 - `src/main/kotlin/com/livteam/jsoninja`: primary plugin implementation.
-    - `actions`: IntelliJ `AnAction` entry points that resolve context and delegate to presenters or services.
-    - `diff`: JSON-aware diff extension logic, request keys, debouncing, and re-entrancy guards.
-    - `extensions`, `listeners`: IDE hooks for paste handling, goto declaration, highlight filtering, activation, and onboarding startup.
-    - `icons`, `model`: icon-pack accessors plus enums/state carriers for format mode, diff display, query type, and icon selection.
-    - `services`: project/app services for formatting, querying, shared mapper setup, onboarding, helper state, placeholder support, and JSON generation.
-        - `schema`: JSON Schema normalization, validation, constraint parsing, and value generation.
-    - `settings`: persistent `@State` settings and `Configurable` UI for plugin preferences.
-    - `ui`: Swing UI composition for the tool window, tabs, editors, dialogs, onboarding, and diff helpers.
-        - `component`: `main`, `tab`, `editor`, `jsonQuery`, and `model` packages that wire presenters/views and tab-scoped state.
-        - `dialog`: large-file warning plus `generateJson` and `loadJson` flows with dedicated presenter/view/model subpackages.
-        - `diff`, `onboarding`, `toolWindow`: diff request helpers, onboarding dialog/tooltip flows, and tool-window bootstrap.
-    - `utils`: shared JSON path plus file/editor helper utilities.
-    - `dev`, `events`: currently light-weight package roots reserved for future expansion.
-- `src/main/resources`: plugin descriptor, localized message bundles, icons, and onboarding media.
+    - `actions`: IntelliJ `AnAction` entry points, with `actions/editor` for selection-aware editor transforms.
+    - `diff`: JSON diff extension logic, request keys, debounce handling, and self-update guards.
+    - `extensions`, `listeners`: IDE hooks for paste formatting, goto declaration, highlight filtering, activation, and onboarding startup.
+    - `icons`, `model`: icon-pack accessors plus enums and data models for format state, diff mode, query engine, and type conversion.
+    - `services`: shared formatter, query, helper, resource, onboarding, and probe services.
+        - `schema`: JSON Schema normalization, validation, constraint parsing, and data generation.
+        - `treesitter`: bundled WASM runtime, parser handles, memory bridge, and query result decoding.
+        - `typeConversion`: tree-sitter asset registry, declaration analyzers, and type-to-JSON generation.
+    - `settings`: persistent `@State` storage, settings UI, and message-bus listener wiring.
+    - `ui`: Swing tool window, editors, tabs, dialogs, diff helpers, and onboarding flows.
+        - `component`: `main`, `tab`, `editor`, `jsonQuery`, `convertType`, and tab-scoped UI models.
+        - `dialog`: large-file warning plus `generateJson`, `loadJson`, and `convertType` presenter/view flows.
+        - `diff`, `onboarding`, `toolWindow`: diff request helpers, tutorial UI, and tool-window bootstrap.
+    - `utils`: shared JSON path, conversion, and editor helpers.
+    - `dev`, `events`: light-weight package roots reserved for narrower features and future expansion.
+- `src/main/resources`: plugin descriptors, localization bundles, icon packs, onboarding media, and bundled query/WASM assets.
     - `META-INF/plugin.xml`: extension points, listeners, actions, tool window, and settings registration.
-    - `messages`: default and translated `LocalizationBundle*.properties` files; add new UI strings here.
-    - `icons`, `images/onboarding`: packaged assets grouped by theme and icon pack.
-- `src/test/kotlin/com/livteam/jsoninja`: focused action/service/schema tests; mirror production packages when tests are added.
-- `docs`: contributor documentation such as `DEVELOPMENT_GUIDE.md` and `PROJECT_STRUCTURE.md`; keep implementation changes aligned when relevant.
+    - `messages`: default and Korean `LocalizationBundle*.properties` files; add new user-facing strings here.
+    - `tree-sitter`: asset manifest plus query files for supported type-conversion languages.
+    - `wasm`: bundled probe modules and the packaged `tree-sitter.wasm` runtime.
+- `src/test/kotlin/com/livteam/jsoninja`: focused action, formatter, query, schema, diff, and tree-sitter tests.
+- `docs`: contributor documentation such as `DEVELOPMENT_GUIDE.md` and `PROJECT_STRUCTURE.md`; keep them aligned when behavior changes.
+- `pro`: premium-module scaffold with its own Gradle build file and `plugin-pro.xml` registrations.
+- `tree-sitter-wasm`: Rust helper crate that builds the tree-sitter WASM binary copied into plugin resources.
 - `prd`, `todos`, `ai`: product notes, backlog material, and design/source assets that support plugin work but are not runtime code.
-- `.github/workflows`, `.run`, `qodana.yml`: CI, IDE run configurations, and static-analysis configuration.
-- `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, `gradle/libs.versions.toml`, `gradle/`: root Gradle and IntelliJ Platform build configuration.
+- `.github/workflows`, `.run`, `qodana.yml`, `gradle/`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/libs.versions.toml`: CI, IDE run configurations, and Gradle/IntelliJ Platform build setup.
 
 ## 3. Core Behaviors & Patterns
-- **Thin Action Entry Points**: `AnAction` classes usually resolve `Project`, panel, or editor context and then delegate to presenters or services rather than embedding JSON logic in the action itself.
-- **Presenter-Wired Tab Flows**: Tool-window startup flows through `JsoninjaToolWindowFactory` to `JsoninjaPanelPresenter`, then into `JsonTabsPresenter` and `JsonTabContextFactory`, where editor and query components communicate through registered callbacks instead of direct cross-component references.
-- **Shared JSON Infrastructure**: `JsonObjectMapperService` provides the shared Jackson configuration used by formatter, query, diff, and schema code. Formatter/editor flows also preserve template placeholders through `TemplatePlaceholderSupport` instead of stripping them during normalization.
-- **Guarded Recovery**: Actions, presenters, and services exit early for missing `Project`, invalid editor state, blank JSON, disposed UI, invalid URL input, or unsupported viewers. Failures generally degrade to original text, `null`, `false`, validation messages, or localized dialogs so the plugin remains usable after malformed input.
-- **Threading Boundaries**: Background work goes through `executeOnPooledThread`, UI updates return through `invokeLater(ModalityState.any())`, and document mutations use `WriteCommandAction.runWriteCommandAction` or `runWriteAction`.
-- **Diff Loop Prevention**: Diff requests carry user-data markers, and `JsonDiffExtension` keeps document-scoped `DocumentState` in a `WeakHashMap`, combines debounce alarms with self-update guards, and respects large-file warning thresholds before auto-formatting diff editors.
-- **Runtime-Selectable Querying**: Query execution switches between Jayway JsonPath and JMESPath from persisted settings, and tab-level search writes results back into the editor using the active formatting state instead of maintaining a separate result buffer.
-- **Schema Generation Pipeline**: Schema flows normalize input, resolve `$ref`/`$dynamicRef`/anchors, validate constraints, and surface `JsonSchemaGenerationException` details such as JSON pointers back to localized UI errors.
+- **Thin Action Entry Points**: `AnAction` classes usually resolve `Project`, panel, or editor context and then hand work to presenters or services. Selection-aware editor actions centralize validation and `WriteCommandAction` updates in shared base classes instead of duplicating document mutation logic.
+- **Presenter-Wired Tab Flows**: Tool-window startup runs from `JsoninjaToolWindowFactory` into `JsoninjaPanelPresenter`, `JsonTabsPresenter`, and `JsonTabContextFactory`. Editors and query controls are wired through `setOn...Callback` and `setOn...Listener` hooks so tab state flows through parent presenters rather than through direct cross-component references.
+- **Shared JSON Infrastructure**: `JsonObjectMapperService` supplies the shared Jackson configuration reused by formatter, query, schema, and asset-loading code. `JsonFormatterService` layers sorting, compact-array formatting, and placeholder preservation on top of that shared mapper instead of letting callers build their own parser configuration.
+- **Runtime-Selectable Querying**: Query execution switches between Jayway JsonPath, JMESPath, and Jackson jq based on persisted settings. `JsonQueryPresenter` keeps the original JSON as its source of truth, validates expressions before running them in the background, and writes formatted results back into the active editor instead of keeping a separate result buffer.
+- **Schema Generation Pipeline**: Schema-backed generation first performs lightweight text validation on the UI side, then normalizes references, resolves local and remote `$ref`/`$dynamicRef`, folds sibling schema constraints into `allOf`, validates compiled schemas, and surfaces `JsonSchemaGenerationException` with JSON pointers for localized error dialogs.
+- **Tree-sitter Type Conversion Pipeline**: JSON-to-type and type-to-JSON dialogs delegate language analysis to `typeConversion` services backed by bundled tree-sitter query assets and the packaged WASM runtime. The flow separates asset lookup, declaration analysis, preview generation, and final editor insertion so new languages can extend the pipeline without reshaping the UI layer.
+- **Guarded Recovery**: Actions, presenters, and services exit early for missing `Project`, blank JSON, invalid expressions, disposed UI, unsupported viewers, or invalid URLs. Most failures degrade to the original text, `null`, or localized validation/dialog feedback so the plugin remains usable after malformed input.
+- **Threading and Disposal Boundaries**: Background work goes through `executeOnPooledThread`, UI updates return through `invokeLater(ModalityState.any())`, and document mutations use `WriteCommandAction.runWriteCommandAction` or `runWriteAction`. Tool-window, tab, editor, and presenter lifetimes are tied together with `Disposer.register`.
+- **Diff Loop Prevention and Large-File Guardrails**: Diff requests carry user-data markers, and `JsonDiffExtension` keeps per-document state in a `WeakHashMap`, uses `CHANGE_GUARD_KEY` plus an `AtomicBoolean` to avoid re-entrant self-updates, debounces edits with `Alarm`, skips tiny whitespace-only edits, and respects large-file warnings before auto-formatting diff editors.
 
 ## 4. Conventions
-- **Naming & Packages**: Packages stay under `com.livteam.jsoninja.*`. Types use `PascalCase`, functions/properties use `lowerCamelCase`, booleans prefer `is`/`has`, and numeric settings include units when meaningful, such as `largeFileThresholdMB`.
-- **Role Suffixes**: Keep class names explicit about their layer: `*Action`, `*Service`, `*Presenter`, `*View`, `*Dialog`, `*Factory`, `*State`, and `*Configurable` are established patterns throughout the codebase.
-- **Callback & Method Shapes**: External UI hooks are usually named `setOn...Callback` or `setOn...Listener`; setup/build helpers use `setup*`, `create*`, and `get*`, while work methods use verb-led names such as `performSearch`, `formatJson`, and `generateFromSchema`.
-- **State Modeling**: Persisted selections are stored as enum names inside `JsoninjaSettingsState`, and runtime code converts them back through dedicated enums rather than scattering raw string checks. Small transport objects stay as focused `data class` types.
-- **Dialog/Presenter Composition**: `DialogWrapper` shells stay thin and delegate component creation, validation, disposal, and per-mode behavior to presenter/view pairs or tab presenters.
-- **Disposal & Document Ownership**: Tab, editor, and query components register cleanup with `Disposer.register`; document listeners are removed on disposal, and temporary per-document flags travel through nearby `userData` keys instead of broad shared mutable state.
-- **Localization & Registration**: New user-facing strings belong in `LocalizationBundle*.properties` with dotted namespaces like `dialog.generate.json.*` or `settings.*`. Plugin registrations belong in `META-INF/plugin.xml` or `pro/src/main/resources/META-INF/plugin-pro.xml`, not in hardcoded UI text.
-- **Comments & Logging**: Comments are short and selective, often explaining IntelliJ threading, formatting, or lifecycle nuance. Logging uses `logger<T>()`, `thisLogger()`, or `Logger.getInstance(...)` with `debug` for diagnostics, `warn` for recoverable problems, and `error` for hard failures.
+- **Naming & Packages**: Packages stay under `com.livteam.jsoninja.*`. Types use `PascalCase`, functions and properties use `lowerCamelCase`, booleans prefer `is` or `has`, and numeric settings keep explicit units where meaningful, such as `largeFileThresholdMB`.
+- **Role Suffixes**: Class names stay explicit about their layer: `*Action`, `*Service`, `*Presenter`, `*View`, `*Dialog`, `*Factory`, `*State`, and `*Configurable` are the dominant suffixes across actions, UI flows, and settings.
+- **Callback & Method Shapes**: Cross-component hooks are usually named `setOn...Callback` or `setOn...Listener`. Setup helpers use `setup*`, `create*`, and `get*`, while execution methods stay verb-led, such as `performSearch`, `formatJson`, `generateFromSchema`, and `generateJsonFromTypeDeclaration`.
+- **State Modeling**: Persisted selections are stored as enum names or simple primitives inside `JsoninjaSettingsState`, and runtime code converts them back through dedicated enums or wrappers instead of scattering raw string checks. Small transport objects stay as focused `data class` types near the flow that owns them.
+- **Dialog and Presenter Composition**: `DialogWrapper` shells stay thin and delegate center-panel creation, validation, insert/apply behavior, and disposal to presenter/view pairs. When adding a dialog, keep shell logic minimal and push behavior into the presenter unless the IntelliJ API requires it in the wrapper.
+- **Disposal and Document Ownership**: Tabs, editors, presenters, and listeners register cleanup with `Disposer.register`. Temporary document flags stay in nearby `userData` keys, and document edits always go through IntelliJ write APIs instead of ad hoc mutation.
+- **Localization and Registration**: New user-facing strings belong in `LocalizationBundle*.properties` using dotted namespaces such as `dialog.generate.json.*`, `dialog.load.json.api.*`, `settings.*`, or `validation.error.*`. Plugin registrations belong in `META-INF/plugin.xml` or `pro/src/main/resources/META-INF/plugin-pro.xml`, not in hardcoded UI assembly code.
+- **Bundled Resource Layout**: Tree-sitter assets are registered through `tree-sitter/asset-manifest.json`, language-specific queries live under `tree-sitter/queries/<language>/`, and bundled WASM binaries live under `wasm/`. Keep new asset-loading code aligned with `BundledResourceService` and the registry services instead of opening resources directly from scattered call sites.
+- **Comments and Logging**: Comments are short and selective, usually reserved for IntelliJ threading, lifecycle, or formatting nuance. Logging uses `logger<T>()`, `thisLogger()`, or `Logger.getInstance(...)` with `debug` for diagnostics, `warn` for recoverable failures, and `error` for hard failures.
 
 ## 5. Working Agreements
-- Respond in Korean, keep technical terms in English, and do not modify fenced code blocks when translating or documenting.
+- Respond in Korean, keep identifiers and technical terms in their original form when needed, and never modify fenced code blocks when translating or documenting.
 - Create tests, lint changes, or formatting-only updates only when explicitly requested.
-- Build context from related usages, registrations, and existing flows before editing.
-- Prefer the simplest change that satisfies the request; avoid unnecessary abstraction.
+- Build context from related actions, presenters, services, message bundles, and plugin registrations before editing.
+- Prefer the simplest change that fits the existing presenter/service/resource wiring; avoid unnecessary abstraction.
 - Ask for clarification instead of guessing when requirements are ambiguous or behavior changes would be risky.
-- Keep edits minimal, preserve public APIs and behavior, and colocate new code near related features.
+- Keep edits minimal, preserve public APIs and existing plugin behavior, and colocate new code near the feature that owns it.
+- When code changes need verification, prefer `./gradlew compileKotlin` as the baseline type-safety check.
 - Introduce external dependencies only when necessary, and explain why if you add one.
+
+## 6. User Custom
+- linear 이슈 작업할때 label[Front-end, Back-end] 상관없이 작업한다. (kotlin, java project는 FE,BE 구분하지않음)
 
 ## When Extending
 - Register new actions/components in `plugin.xml` and align icons/messages.
