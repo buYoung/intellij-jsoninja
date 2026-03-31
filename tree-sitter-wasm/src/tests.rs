@@ -1,5 +1,5 @@
 use crate::memory;
-use crate::types::WasmErrorCode;
+use crate::error::WasmErrorCode;
 use crate::{
     dealloc, get_last_error, get_supported_languages, parse, parser_create, parser_destroy,
     query_execute, tree_destroy,

@@ -1,58 +1,29 @@
+mod error;
+mod handle_store;
+mod language;
 mod memory;
 mod parser;
 mod query;
-mod types;
+mod query_result;
+mod runtime_state;
 mod utils;
 
 #[cfg(test)]
 mod tests;
 
-#[cfg(target_arch = "wasm32")]
-use std::alloc::{alloc as allocate_memory, dealloc as deallocate_memory};
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use types::WasmResult;
+
+use error::{WasmErrorCode, WasmResult};
+use runtime_state::{clear_last_error_message, set_last_error_message};
 
 #[no_mangle]
 pub extern "C" fn alloc(size: i32) -> i32 {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        return memory::allocate_host_buffer(size);
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-    let layout = match utils::create_allocation_layout(size) {
-        Some(layout) => layout,
-        None => return 0,
-    };
-
-    unsafe { allocate_memory(layout) as i32 }
-    }
+    memory::allocate_buffer(size)
 }
 
 #[no_mangle]
 pub extern "C" fn dealloc(ptr: i32, size: i32) {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        memory::deallocate_host_buffer(ptr, size);
-        return;
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-    if ptr == 0 {
-        return;
-    }
-
-    let layout = match utils::create_allocation_layout(size) {
-        Some(layout) => layout,
-        None => return,
-    };
-
-    unsafe {
-        deallocate_memory(ptr as *mut u8, layout);
-    }
-    }
+    memory::deallocate_buffer(ptr, size)
 }
 
 #[no_mangle]
@@ -99,7 +70,7 @@ pub extern "C" fn tree_destroy(handle: i32) {
 
 #[no_mangle]
 pub extern "C" fn get_supported_languages() -> i64 {
-    execute_i64(|| memory::write_utf8_string(&parser::supported_languages_json()))
+    execute_i64(|| memory::write_utf8_string(&language::supported_languages_json()))
 }
 
 #[no_mangle]
@@ -111,44 +82,44 @@ pub extern "C" fn get_last_error() -> i64 {
 }
 
 fn execute_i32(operation: impl FnOnce() -> WasmResult<i32>) -> i32 {
-    memory::clear_last_error_message();
+    clear_last_error_message();
     match catch_unwind(AssertUnwindSafe(operation)) {
         Ok(Ok(result_value)) => result_value,
         Ok(Err(runtime_error)) => {
-            memory::set_last_error_message(runtime_error.message);
+            set_last_error_message(runtime_error.message);
             -1
         }
         Err(_) => {
-            memory::set_last_error_message("Unhandled panic in tree-sitter WASM module.");
+            set_last_error_message("Unhandled panic in tree-sitter WASM module.");
             -1
         }
     }
 }
 
 fn execute_i64(operation: impl FnOnce() -> WasmResult<i64>) -> i64 {
-    memory::clear_last_error_message();
+    clear_last_error_message();
     match catch_unwind(AssertUnwindSafe(operation)) {
         Ok(Ok(result_value)) => result_value,
         Ok(Err(runtime_error)) => {
-            memory::set_last_error_message(runtime_error.message);
+            set_last_error_message(runtime_error.message);
             memory::pack_error_code(runtime_error.code)
         }
         Err(_) => {
-            memory::set_last_error_message("Unhandled panic in tree-sitter WASM module.");
-            memory::pack_error_code(types::WasmErrorCode::InternalError)
+            set_last_error_message("Unhandled panic in tree-sitter WASM module.");
+            memory::pack_error_code(WasmErrorCode::InternalError)
         }
     }
 }
 
 fn execute_void(operation: impl FnOnce() -> WasmResult<()>) {
-    memory::clear_last_error_message();
+    clear_last_error_message();
     match catch_unwind(AssertUnwindSafe(operation)) {
         Ok(Ok(())) => {}
         Ok(Err(runtime_error)) => {
-            memory::set_last_error_message(runtime_error.message);
+            set_last_error_message(runtime_error.message);
         }
         Err(_) => {
-            memory::set_last_error_message("Unhandled panic in tree-sitter WASM module.");
+            set_last_error_message("Unhandled panic in tree-sitter WASM module.");
         }
     }
 }
