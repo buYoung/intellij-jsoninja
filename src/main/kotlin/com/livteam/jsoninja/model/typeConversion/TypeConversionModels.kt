@@ -20,6 +20,8 @@ enum class TypeDeclarationKind {
 
 enum class TypePrimitiveKind {
     STRING,
+    INTEGER,
+    DECIMAL,
     NUMBER,
     BOOLEAN,
 }
@@ -48,6 +50,7 @@ data class TypeField(
     val name: String,
     val typeReference: TypeReference,
     val isOptional: Boolean = false,
+    val sourceName: String = name,
 )
 
 sealed interface TypeReference {

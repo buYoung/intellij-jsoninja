@@ -3,6 +3,7 @@ package com.livteam.jsoninja.ui.component.main
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.livteam.jsoninja.actions.AddTabAction
+import com.livteam.jsoninja.actions.ConvertJsonToTypeAction
 import com.livteam.jsoninja.actions.EscapeJsonAction
 import com.livteam.jsoninja.actions.GenerateRandomJsonAction
 import com.livteam.jsoninja.actions.LoadJsonFromApiAction
@@ -51,6 +52,7 @@ object JsoninjaToolbarFactory {
             add(ShowJsonDiffAction())
             add(LoadJsonFromApiAction())
             add(RunWasmProbeAction())
+            add(ConvertJsonToTypeAction())
         }
 
         val actionToolbar = ActionManager.getInstance()

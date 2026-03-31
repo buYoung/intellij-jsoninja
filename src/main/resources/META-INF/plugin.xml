@@ -91,6 +91,13 @@
                 <keyboard-shortcut first-keystroke="meta shift J" keymap="Mac OS X" replace-all="true"/>
                 <keyboard-shortcut first-keystroke="meta shift J" keymap="Mac OS X 10.5+" replace-all="true"/>
             </action>
+            <action id="com.livteam.jsoninja.action.ConvertJsonToTypeAction"
+                    class="com.livteam.jsoninja.actions.ConvertJsonToTypeAction"
+                    icon="/icons/random_json.svg">
+                <keyboard-shortcut first-keystroke="ctrl shift T" keymap="$default"/>
+                <keyboard-shortcut first-keystroke="meta shift T" keymap="Mac OS X" replace-all="true"/>
+                <keyboard-shortcut first-keystroke="meta shift T" keymap="Mac OS X 10.5+" replace-all="true"/>
+            </action>
             <action id="com.livteam.jsoninja.action.RunWasmProbeAction"
                     class="com.livteam.jsoninja.actions.RunWasmProbeAction"
                     icon="AllIcons.Actions.Execute"/>

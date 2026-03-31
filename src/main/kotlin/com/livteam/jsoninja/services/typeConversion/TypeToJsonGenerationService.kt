@@ -224,6 +224,22 @@ class TypeToJsonGenerationService(private val project: Project) {
                 }
             )
 
+            TypePrimitiveKind.INTEGER -> objectMapper.nodeFactory.numberNode(
+                if (usesRealisticSampleData) {
+                    createSampleNumberValue(fieldName)
+                } else {
+                    0
+                }
+            )
+
+            TypePrimitiveKind.DECIMAL -> objectMapper.nodeFactory.numberNode(
+                if (usesRealisticSampleData) {
+                    createSampleNumberValue(fieldName).toDouble()
+                } else {
+                    0.0
+                }
+            )
+
             TypePrimitiveKind.NUMBER -> objectMapper.nodeFactory.numberNode(
                 if (usesRealisticSampleData) {
                     createSampleNumberValue(fieldName)
