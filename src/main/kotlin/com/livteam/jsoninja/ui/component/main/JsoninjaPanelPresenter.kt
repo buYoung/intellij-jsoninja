@@ -33,6 +33,8 @@ class JsoninjaPanelPresenter(
 
     fun getTabsPresenter(): JsonTabsPresenter = tabsPresenter
 
+    fun getProject(): Project = project
+
     fun addNewTab(content: String = "", fileExtension: String? = null) {
         tabsPresenter.addNewTabFromPlusTab(content, fileExtension)
     }

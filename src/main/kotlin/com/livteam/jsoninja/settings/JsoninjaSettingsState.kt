@@ -10,6 +10,8 @@ import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.model.JsonIconPack
+import com.livteam.jsoninja.model.SupportedLanguage
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 
 @Service(Service.Level.PROJECT)
 @State(name = "JsoninjaSettingsState", storages = [Storage("jsoninja.xml")])
@@ -22,6 +24,13 @@ data class JsoninjaSettingsState(
     var diffDisplayMode: String = JsonDiffDisplayMode.WINDOW.name, // Diff display mode preference
     var diffSortKeys: Boolean = false, // Diff auto sort keys
     var jsonQueryType: String = JsonQueryType.JAYWAY_JSONPATH.name, // Query type preference
+    var convertTypeLastLanguage: String = SupportedLanguage.KOTLIN.name,
+    var typeToJsonLastLanguage: String = SupportedLanguage.KOTLIN.name,
+    var typeToJsonFieldsMode: String = SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL.name,
+    var typeToJsonIncludesNullableFieldWithNullValue: Boolean = true,
+    var typeToJsonUsesRealisticSampleData: Boolean = true,
+    var typeToJsonOutputCount: Int = 1,
+    var typeToJsonFormatState: String = JsonFormatState.PRETTIFY.name,
     var largeFileThresholdMB: Int = 2, // Threshold in MB for large file warning
     var showLargeFileWarning: Boolean = true // Whether to show warning for large files
 ) : PersistentStateComponent<JsoninjaSettingsState> {
@@ -39,6 +48,13 @@ data class JsoninjaSettingsState(
         this.diffDisplayMode = state.diffDisplayMode
         this.diffSortKeys = state.diffSortKeys
         this.jsonQueryType = state.jsonQueryType
+        this.convertTypeLastLanguage = state.convertTypeLastLanguage
+        this.typeToJsonLastLanguage = state.typeToJsonLastLanguage
+        this.typeToJsonFieldsMode = state.typeToJsonFieldsMode
+        this.typeToJsonIncludesNullableFieldWithNullValue = state.typeToJsonIncludesNullableFieldWithNullValue
+        this.typeToJsonUsesRealisticSampleData = state.typeToJsonUsesRealisticSampleData
+        this.typeToJsonOutputCount = state.typeToJsonOutputCount
+        this.typeToJsonFormatState = state.typeToJsonFormatState
         this.largeFileThresholdMB = state.largeFileThresholdMB
         this.showLargeFileWarning = state.showLargeFileWarning
     }

@@ -84,6 +84,13 @@
             <action id="com.livteam.jsoninja.action.GenerateRandomJsonAction"
                     class="com.livteam.jsoninja.actions.GenerateRandomJsonAction"
                     icon="/icons/random_json.svg"/>
+            <action id="com.livteam.jsoninja.action.ConvertTypeToJsonAction"
+                    class="com.livteam.jsoninja.actions.ConvertTypeToJsonAction"
+                    icon="/icons/random_json.svg">
+                <keyboard-shortcut first-keystroke="ctrl shift J" keymap="$default"/>
+                <keyboard-shortcut first-keystroke="meta shift J" keymap="Mac OS X" replace-all="true"/>
+                <keyboard-shortcut first-keystroke="meta shift J" keymap="Mac OS X 10.5+" replace-all="true"/>
+            </action>
             <action id="com.livteam.jsoninja.action.RunWasmProbeAction"
                     class="com.livteam.jsoninja.actions.RunWasmProbeAction"
                     icon="AllIcons.Actions.Execute"/>

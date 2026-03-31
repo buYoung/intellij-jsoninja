@@ -1,0 +1,20 @@
+{
+  "languages": [
+    {
+      "language": "JAVA",
+      "queryResourcePath": "tree-sitter/queries/java/type_definition.scm"
+    },
+    {
+      "language": "KOTLIN",
+      "queryResourcePath": "tree-sitter/queries/kotlin/type_definition.scm"
+    },
+    {
+      "language": "TYPESCRIPT",
+      "queryResourcePath": "tree-sitter/queries/typescript/type_definition.scm"
+    },
+    {
+      "language": "GO",
+      "queryResourcePath": "tree-sitter/queries/go/type_definition.scm"
+    }
+  ]
+}
