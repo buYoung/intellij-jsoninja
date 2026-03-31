@@ -8,6 +8,7 @@ import com.livteam.jsoninja.actions.GenerateRandomJsonAction
 import com.livteam.jsoninja.actions.LoadJsonFromApiAction
 import com.livteam.jsoninja.actions.OpenJsonFileAction
 import com.livteam.jsoninja.actions.PrettifyJsonAction
+import com.livteam.jsoninja.actions.RunWasmProbeAction
 import com.livteam.jsoninja.actions.ShowJsonDiffAction
 import com.livteam.jsoninja.actions.UglifyJsonAction
 import com.livteam.jsoninja.actions.UnescapeJsonAction
@@ -49,6 +50,7 @@ object JsoninjaToolbarFactory {
             // JSON Diff 액션 추가
             add(ShowJsonDiffAction())
             add(LoadJsonFromApiAction())
+            add(RunWasmProbeAction())
         }
 
         val actionToolbar = ActionManager.getInstance()

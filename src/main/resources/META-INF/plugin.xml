@@ -84,6 +84,9 @@
             <action id="com.livteam.jsoninja.action.GenerateRandomJsonAction"
                     class="com.livteam.jsoninja.actions.GenerateRandomJsonAction"
                     icon="/icons/random_json.svg"/>
+            <action id="com.livteam.jsoninja.action.RunWasmProbeAction"
+                    class="com.livteam.jsoninja.actions.RunWasmProbeAction"
+                    icon="AllIcons.Actions.Execute"/>
             <action id="com.livteam.jsoninja.action.LoadJsonFromApiAction"
                     class="com.livteam.jsoninja.actions.LoadJsonFromApiAction"
                     icon="AllIcons.Actions.Download"/>

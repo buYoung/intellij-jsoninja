@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.jmespathJackson)
     implementation(libs.dataFaker)
     implementation(libs.jsonSchemaValidator)
+    implementation(libs.chicoryRuntime)
 
     testImplementation(libs.junit)
 

@@ -7,6 +7,7 @@ json-path = "2.10.0"
 jmespath-jackson = "0.6.0"
 datafaker = "2.5.3"
 json-schema-validator = "1.5.7"
+chicory = "1.5.1"
 
 # plugins
 changelog = "2.5.0"
@@ -23,6 +24,7 @@ jsonPath = { group = "com.jayway.jsonpath", name = "json-path", version.ref = "j
 jmespathJackson = { group = "io.burt", name = "jmespath-jackson", version.ref = "jmespath-jackson" }
 dataFaker = { group = "net.datafaker", name = "datafaker", version.ref = "datafaker" }
 jsonSchemaValidator = { group = "com.networknt", name = "json-schema-validator", version.ref = "json-schema-validator" }
+chicoryRuntime = { group = "com.dylibso.chicory", name = "runtime", version.ref = "chicory" }
 
 [plugins]
 changelog = { id = "org.jetbrains.changelog", version.ref = "changelog" }
