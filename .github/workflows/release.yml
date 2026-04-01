@@ -7,6 +7,9 @@ on:
   release:
     types: [prereleased, released]
 
+env:
+  ORG_GRADLE_PROJECT_skipWasmBuild: true
+
 jobs:
 
   # Prepare and publish the plugin to JetBrains Marketplace repository

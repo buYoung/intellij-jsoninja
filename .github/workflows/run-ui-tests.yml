@@ -13,6 +13,9 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
+env:
+  ORG_GRADLE_PROJECT_skipWasmBuild: true
+
 jobs:
 
   testUI:

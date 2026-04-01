@@ -20,6 +20,9 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'          # v1.0.0
       - 'v[0-9]+.[0-9]+.[0-9]+-*'        # v1.0.0-beta.1, v1.0.0-rc.1
 
+env:
+  ORG_GRADLE_PROJECT_skipWasmBuild: true
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

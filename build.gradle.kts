@@ -15,6 +15,34 @@ val treeSitterWasmBuildOutputFile = treeSitterWasmProjectDirectory.file(
 val treeSitterWasmResourceDirectory = layout.projectDirectory.dir("src/main/resources/wasm/tree-sitter")
 val treeSitterWasmResourceFile = treeSitterWasmResourceDirectory.file("tree-sitter.wasm")
 val skipWasmBuild = providers.gradleProperty("skipWasmBuild").map(String::toBoolean).orElse(false)
+val cargoExecutable = resolveRustToolExecutable(
+    toolName = "cargo",
+    configuredPath = providers.gradleProperty("cargoExecutable").orNull,
+)
+val rustupExecutable = resolveRustToolExecutable(
+    toolName = "rustup",
+    configuredPath = providers.gradleProperty("rustupExecutable").orNull,
+)
+
+fun resolveRustToolExecutable(
+    toolName: String,
+    configuredPath: String?,
+): String {
+    if (!configuredPath.isNullOrBlank()) {
+        return configuredPath
+    }
+
+    val operatingSystemName = System.getProperty("os.name")
+    val executableFileName =
+        if (operatingSystemName.startsWith("Windows", ignoreCase = true)) "$toolName.exe" else toolName
+    val cargoHomeExecutable = File(System.getProperty("user.home"), ".cargo/bin/$executableFileName")
+
+    return if (cargoHomeExecutable.isFile && cargoHomeExecutable.canExecute()) {
+        cargoHomeExecutable.absolutePath
+    } else {
+        toolName
+    }
+}
 
 fun captureCommandOutput(
     workingDirectory: File,
@@ -111,7 +139,7 @@ val checkWasmPrerequisites by tasks.registering {
 
     doLast {
         try {
-            captureCommandOutput(rootDir, "cargo", "--version")
+            captureCommandOutput(rootDir, cargoExecutable, "--version")
         } catch (exception: Exception) {
             throw GradleException(
                 "cargo is required to build tree-sitter WASM. Install Rust with rustup first.",
@@ -120,7 +148,7 @@ val checkWasmPrerequisites by tasks.registering {
         }
 
         val installedTargets = try {
-            captureCommandOutput(rootDir, "rustup", "target", "list", "--installed")
+            captureCommandOutput(rootDir, rustupExecutable, "target", "list", "--installed")
         } catch (exception: Exception) {
             throw GradleException(
                 "rustup is required to verify the $treeSitterWasmTarget target.",
@@ -145,7 +173,7 @@ val buildTreeSitterWasm by tasks.registering(Exec::class) {
     onlyIf { !skipWasmBuild.get() }
 
     workingDir = treeSitterWasmProjectDirectory.asFile
-    commandLine("cargo", "build", "--target", treeSitterWasmTarget, "--release")
+    commandLine(cargoExecutable, "build", "--target", treeSitterWasmTarget, "--release")
 
     inputs.files(fileTree(treeSitterWasmProjectDirectory.dir("src")))
     inputs.files(
