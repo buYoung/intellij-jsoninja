@@ -1,7 +1,7 @@
 use crate::error::{WasmErrorCode, WasmResult, WasmRuntimeError};
 use crate::language::SupportedLanguage;
 use crate::runtime_state::{runtime_state, ParserHandleState, TreeHandleState};
-use tree_sitter::Parser;
+use tree_sitter::{Parser, Tree};
 
 pub fn parser_create(language_id: i32) -> WasmResult<i32> {
     let language = SupportedLanguage::from_id(language_id).ok_or_else(|| {
@@ -11,22 +11,28 @@ pub fn parser_create(language_id: i32) -> WasmResult<i32> {
         )
     })?;
 
-    let runtime_language = language.to_tree_sitter_language()?;
-    let mut parser = Parser::new();
-    parser
-        .set_language(&runtime_language)
-        .map_err(|language_error| {
-            WasmRuntimeError::new(
-                WasmErrorCode::InvalidLanguage,
-                format!("Failed to set parser language: {language_error}"),
-            )
-        })?;
+    let parser = create_configured_parser(language)?;
 
     let mut parser_handles = runtime_state()
         .parser_handles()
         .lock()
         .expect("parser handles lock poisoned");
     Ok(parser_handles.insert(ParserHandleState { parser, language }))
+}
+
+pub fn parse_text(
+    language: SupportedLanguage,
+    source_code: &str,
+) -> WasmResult<Tree> {
+    let mut parser = create_configured_parser(language)?;
+    parser
+        .parse(source_code, None)
+        .ok_or_else(|| {
+            WasmRuntimeError::new(
+                WasmErrorCode::ParseFailed,
+                "tree-sitter parser returned no syntax tree.",
+            )
+        })
 }
 
 pub fn parser_destroy(handle: i32) -> WasmResult<()> {
@@ -100,4 +106,18 @@ pub fn tree_handle_state(handle: i32) -> WasmResult<TreeHandleState> {
             format!("Unknown tree handle: {handle}"),
         )
     })
+}
+
+fn create_configured_parser(language: SupportedLanguage) -> WasmResult<Parser> {
+    let runtime_language = language.to_tree_sitter_language()?;
+    let mut parser = Parser::new();
+    parser
+        .set_language(&runtime_language)
+        .map_err(|language_error| {
+            WasmRuntimeError::new(
+                WasmErrorCode::InvalidLanguage,
+                format!("Failed to set parser language: {language_error}"),
+            )
+        })?;
+    Ok(parser)
 }

@@ -5,8 +5,12 @@ use std::ptr;
 #[cfg(target_arch = "wasm32")]
 use std::slice;
 
+use serde::Serialize;
+
 use crate::error::{WasmErrorCode, WasmResult, WasmRuntimeError};
-use crate::runtime_state::{get_last_error_message, runtime_state};
+use crate::runtime_state::get_last_error_message;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::runtime_state::runtime_state;
 #[cfg(target_arch = "wasm32")]
 use crate::utils;
 
@@ -45,6 +49,16 @@ pub fn write_utf8_string(value: &str) -> WasmResult<i64> {
 
     let (pointer, length) = write_bytes(bytes)?;
     Ok(pack_ptr_len(pointer, length))
+}
+
+pub fn write_json<T: Serialize>(value: &T) -> WasmResult<i64> {
+    let json_text = serde_json::to_string(value).map_err(|serialization_error| {
+        WasmRuntimeError::new(
+            WasmErrorCode::InternalError,
+            format!("Failed to serialize JSON result: {serialization_error}"),
+        )
+    })?;
+    write_utf8_string(&json_text)
 }
 
 pub fn last_error_ptr_len() -> i64 {

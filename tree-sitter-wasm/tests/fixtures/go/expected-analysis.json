@@ -1,0 +1,159 @@
+{
+  "language": "go",
+  "declarations": [
+    {
+      "name": "UserResponse",
+      "kind": "struct",
+      "span": {
+        "start_row": 1,
+        "start_col": 13,
+        "end_row": 5,
+        "end_col": 9
+      },
+      "annotations": [],
+      "type_parameters": [
+        {
+          "name": "T",
+          "constraints": [
+            {
+              "kind": "primitive",
+              "primitive": "integer",
+              "span": {
+                "start_row": 1,
+                "start_col": 40,
+                "end_row": 1,
+                "end_col": 43
+              }
+            }
+          ],
+          "span": {
+            "start_row": 1,
+            "start_col": 26,
+            "end_row": 1,
+            "end_col": 55
+          }
+        }
+      ],
+      "super_types": [],
+      "fields": [
+        {
+          "name": "Name",
+          "source_name": "Name",
+          "optional": false,
+          "span": {
+            "start_row": 2,
+            "start_col": 12,
+            "end_row": 2,
+            "end_col": 37
+          },
+          "annotations": [
+            {
+              "name": "json",
+              "text": "json:\"name",
+              "span": {
+                "start_row": 2,
+                "start_col": 24,
+                "end_row": 2,
+                "end_col": 37
+              }
+            }
+          ],
+          "type": {
+            "kind": "primitive",
+            "primitive": "string",
+            "span": {
+              "start_row": 2,
+              "start_col": 17,
+              "end_row": 2,
+              "end_col": 23
+            }
+          }
+        },
+        {
+          "name": "Scores",
+          "source_name": "Scores",
+          "optional": false,
+          "span": {
+            "start_row": 3,
+            "start_col": 12,
+            "end_row": 3,
+            "end_col": 24
+          },
+          "annotations": [],
+          "type": {
+            "kind": "list",
+            "span": {
+              "start_row": 3,
+              "start_col": 19,
+              "end_row": 3,
+              "end_col": 24
+            },
+            "element_type": {
+              "kind": "primitive",
+              "primitive": "integer",
+              "span": {
+                "start_row": 3,
+                "start_col": 21,
+                "end_row": 3,
+                "end_col": 24
+              }
+            }
+          }
+        },
+        {
+          "name": "Meta",
+          "source_name": "Meta",
+          "optional": false,
+          "span": {
+            "start_row": 4,
+            "start_col": 12,
+            "end_row": 4,
+            "end_col": 35
+          },
+          "annotations": [],
+          "type": {
+            "kind": "map",
+            "span": {
+              "start_row": 4,
+              "start_col": 17,
+              "end_row": 4,
+              "end_col": 35
+            },
+            "key_type": {
+              "kind": "primitive",
+              "primitive": "string",
+              "span": {
+                "start_row": 4,
+                "start_col": 21,
+                "end_row": 4,
+                "end_col": 27
+              }
+            },
+            "value_type": {
+              "kind": "nullable",
+              "span": {
+                "start_row": 4,
+                "start_col": 28,
+                "end_row": 4,
+                "end_col": 35
+              },
+              "wrapped_type": {
+                "kind": "primitive",
+                "primitive": "string",
+                "span": {
+                  "start_row": 4,
+                  "start_col": 29,
+                  "end_row": 4,
+                  "end_col": 35
+                }
+              }
+            }
+          }
+        }
+      ],
+      "enum_values": [],
+      "aliased_type": null
+    }
+  ],
+  "diagnostics": []
+}

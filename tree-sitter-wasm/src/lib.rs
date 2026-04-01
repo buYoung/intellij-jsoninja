@@ -1,11 +1,16 @@
+mod analyzer;
+mod diagnostics;
 mod error;
 mod handle_store;
+mod ir;
 mod language;
 mod memory;
 mod parser;
 mod query;
 mod query_result;
 mod runtime_state;
+mod source;
+mod type_parser;
 mod utils;
 
 #[cfg(test)]
@@ -13,7 +18,7 @@ mod tests;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use error::{WasmErrorCode, WasmResult};
+use error::{WasmErrorCode, WasmResult, WasmRuntimeError};
 use runtime_state::{clear_last_error_message, set_last_error_message};
 
 #[no_mangle]
@@ -37,7 +42,7 @@ pub extern "C" fn parser_destroy(handle: i32) {
 }
 
 #[no_mangle]
-pub extern "C" fn parse(
+pub extern "C" fn tree_parse(
     parser_handle: i32,
     source_ptr: i32,
     source_len: i32,
@@ -49,6 +54,30 @@ pub extern "C" fn parse(
 }
 
 #[no_mangle]
+pub extern "C" fn parse(
+    parser_handle: i32,
+    source_ptr: i32,
+    source_len: i32,
+) -> i32 {
+    tree_parse(parser_handle, source_ptr, source_len)
+}
+
+#[no_mangle]
+pub extern "C" fn tree_query(
+    tree_handle: i32,
+    source_ptr: i32,
+    source_len: i32,
+    query_ptr: i32,
+    query_len: i32,
+) -> i64 {
+    execute_i64(|| {
+        let source_code = memory::read_utf8_string(source_ptr, source_len)?;
+        let query_source = memory::read_utf8_string(query_ptr, query_len)?;
+        query::tree_query(tree_handle, &source_code, &query_source)
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn query_execute(
     tree_handle: i32,
     query_ptr: i32,
@@ -56,10 +85,25 @@ pub extern "C" fn query_execute(
     source_ptr: i32,
     source_len: i32,
 ) -> i64 {
+    tree_query(tree_handle, source_ptr, source_len, query_ptr, query_len)
+}
+
+#[no_mangle]
+pub extern "C" fn analyze_source(
+    language_id: i32,
+    source_ptr: i32,
+    source_len: i32,
+) -> i64 {
     execute_i64(|| {
-        let query_source = memory::read_utf8_string(query_ptr, query_len)?;
         let source_code = memory::read_utf8_string(source_ptr, source_len)?;
-        query::query_execute(tree_handle, &query_source, &source_code)
+        let language = language::SupportedLanguage::from_id(language_id).ok_or_else(|| {
+            WasmRuntimeError::new(
+                WasmErrorCode::InvalidLanguage,
+                format!("Unsupported language id: {language_id}"),
+            )
+        })?;
+        let analysis_output = analyzer::analyze_source(language, &source_code)?;
+        memory::write_json(&analysis_output)
     })
 }
 
@@ -70,7 +114,7 @@ pub extern "C" fn tree_destroy(handle: i32) {
 
 #[no_mangle]
 pub extern "C" fn get_supported_languages() -> i64 {
-    execute_i64(|| memory::write_utf8_string(&language::supported_languages_json()))
+    execute_i64(|| memory::write_json(&language::supported_languages()))
 }
 
 #[no_mangle]
