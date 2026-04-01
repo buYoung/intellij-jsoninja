@@ -1,15 +1,17 @@
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Query, QueryCursor};
 
+use crate::diagnostics::Diagnostic;
 use crate::error::{WasmErrorCode, WasmResult, WasmRuntimeError};
 use crate::memory;
 use crate::parser;
 use crate::query_result::{QueryCaptureResult, QueryExecutionResult};
+use crate::source::span;
 
-pub fn query_execute(
+pub fn tree_query(
     tree_handle: i32,
-    query_source: &str,
     source_code: &str,
+    query_source: &str,
 ) -> WasmResult<i64> {
     let tree_handle_state = parser::tree_handle_state(tree_handle)?;
     let language = tree_handle_state.language.to_tree_sitter_language()?;
@@ -19,9 +21,10 @@ pub fn query_execute(
 
     let query_result = QueryExecutionResult {
         captures: capture_results,
-        error_message: None,
+        diagnostics: collect_syntax_diagnostics(tree_handle_state.tree.root_node()),
+        has_syntax_errors: tree_handle_state.tree.root_node().has_error(),
     };
-    memory::write_utf8_string(&query_result.to_json_string())
+    memory::write_json(&query_result)
 }
 
 fn compile_query(
@@ -69,8 +72,6 @@ fn build_capture_result(
     source_bytes: &[u8],
 ) -> QueryCaptureResult {
     let node = query_capture.node;
-    let start_position = node.start_position();
-    let end_position = node.end_position();
     let capture_name = query
         .capture_names()
         .get(query_capture.index as usize)
@@ -82,9 +83,35 @@ fn build_capture_result(
     QueryCaptureResult {
         name: capture_name,
         text: captured_text,
-        start_row: start_position.row as usize,
-        start_col: start_position.column as usize,
-        end_row: end_position.row as usize,
-        end_col: end_position.column as usize,
+        span: span(node),
     }
+}
+
+fn collect_syntax_diagnostics(root_node: tree_sitter::Node<'_>) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    let mut cursor = root_node.walk();
+    let mut nodes = vec![root_node];
+
+    while let Some(node) = nodes.pop() {
+        if node.is_error() {
+            diagnostics.push(Diagnostic::error(
+                "syntax.error",
+                format!("Syntax error near `{}`.", node.kind()),
+                Some(span(node)),
+                None,
+            ));
+        }
+        if node.is_missing() {
+            diagnostics.push(Diagnostic::error(
+                "syntax.missing",
+                format!("Missing syntax node `{}`.", node.kind()),
+                Some(span(node)),
+                None,
+            ));
+        }
+
+        nodes.extend(node.children(&mut cursor));
+    }
+
+    diagnostics
 }
