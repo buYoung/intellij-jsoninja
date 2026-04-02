@@ -1,6 +1,8 @@
 package com.livteam.jsoninja.utils
 
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.ui.popup.Balloon
@@ -32,6 +34,22 @@ object ConvertResultUtils {
     fun insertToNewTab(text: String, panel: JsoninjaPanelPresenter, fileExtension: String?) {
         panel.addNewTab(content = text, fileExtension = fileExtension)
         showBalloon(panel.getProject(), LocalizationBundle.message("notification.convert.inserted"), MessageType.INFO)
+    }
+
+    fun insertToEditor(
+        text: String,
+        project: Project,
+        editor: Editor,
+    ) {
+        WriteCommandAction.runWriteCommandAction(project) {
+            val selectionModel = editor.selectionModel
+            if (selectionModel.hasSelection()) {
+                editor.document.replaceString(selectionModel.selectionStart, selectionModel.selectionEnd, text)
+            } else {
+                editor.document.setText(text)
+            }
+        }
+        showBalloon(project, LocalizationBundle.message("notification.convert.inserted.editor"), MessageType.INFO)
     }
 
     private fun showBalloon(project: Project?, message: String, messageType: MessageType) {

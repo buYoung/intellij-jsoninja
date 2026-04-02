@@ -3,6 +3,15 @@
 .intellijPlatform
 .qodana
 build
+.kotlin
+out
+
+*.class
+*.jar
+*.log
+.env*
+.DS_Store
+.vscode/
 
 instrumented*
 

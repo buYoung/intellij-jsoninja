@@ -84,6 +84,10 @@
             <action id="com.livteam.jsoninja.action.GenerateRandomJsonAction"
                     class="com.livteam.jsoninja.actions.GenerateRandomJsonAction"
                     icon="/icons/random_json.svg"/>
+            <action id="com.livteam.jsoninja.action.ConvertJsonToTypeAction"
+                    class="com.livteam.jsoninja.actions.ConvertJsonToTypeAction"/>
+            <action id="com.livteam.jsoninja.action.ConvertTypeToJsonAction"
+                    class="com.livteam.jsoninja.actions.ConvertTypeToJsonAction"/>
             <action id="com.livteam.jsoninja.action.LoadJsonFromApiAction"
                     class="com.livteam.jsoninja.actions.LoadJsonFromApiAction"
                     icon="AllIcons.Actions.Download"/>
@@ -106,6 +110,15 @@
         <action id="com.livteam.jsoninja.action.CopyJsonQueryAction"
                 class="com.livteam.jsoninja.actions.CopyJsonQueryAction"
         >
+        </action>
+
+        <action id="com.livteam.jsoninja.action.TypeConversionAction"
+                class="com.livteam.jsoninja.actions.TypeConversionAction">
+            <keyboard-shortcut first-keystroke="ctrl shift J" keymap="$default"/>
+            <keyboard-shortcut first-keystroke="meta shift J" keymap="Mac OS X" replace-all="true"/>
+            <keyboard-shortcut first-keystroke="meta shift J" keymap="Mac OS X 10.5+" replace-all="true"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
 
         <group id="com.livteam.jsoninja.action.group.EditorPopup" popup="false">
