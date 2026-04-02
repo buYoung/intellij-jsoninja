@@ -10,7 +10,6 @@ import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.model.JsonIconPack
-import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 
 @Service(Service.Level.PROJECT)
@@ -24,12 +23,9 @@ data class JsoninjaSettingsState(
     var diffDisplayMode: String = JsonDiffDisplayMode.WINDOW.name, // Diff display mode preference
     var diffSortKeys: Boolean = false, // Diff auto sort keys
     var jsonQueryType: String = JsonQueryType.JAYWAY_JSONPATH.name, // Query type preference
-    var convertTypeLastLanguage: String = SupportedLanguage.KOTLIN.name,
-    var jsonToTypeLastLanguage: String = SupportedLanguage.KOTLIN.name,
     var jsonToTypeDefaultNaming: String = "AUTO",
     var jsonToTypeNullableByDefault: Boolean = true,
     var jsonToTypeAnnotationStyle: String = "NONE",
-    var typeToJsonLastLanguage: String = SupportedLanguage.KOTLIN.name,
     var typeToJsonFieldsMode: String = SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL.name,
     var typeToJsonIncludesNullableFieldWithNullValue: Boolean = true,
     var typeToJsonUsesRealisticSampleData: Boolean = true,
@@ -52,12 +48,9 @@ data class JsoninjaSettingsState(
         this.diffDisplayMode = state.diffDisplayMode
         this.diffSortKeys = state.diffSortKeys
         this.jsonQueryType = state.jsonQueryType
-        this.convertTypeLastLanguage = state.convertTypeLastLanguage
-        this.jsonToTypeLastLanguage = state.jsonToTypeLastLanguage
         this.jsonToTypeDefaultNaming = state.jsonToTypeDefaultNaming
         this.jsonToTypeNullableByDefault = state.jsonToTypeNullableByDefault
         this.jsonToTypeAnnotationStyle = state.jsonToTypeAnnotationStyle
-        this.typeToJsonLastLanguage = state.typeToJsonLastLanguage
         this.typeToJsonFieldsMode = state.typeToJsonFieldsMode
         this.typeToJsonIncludesNullableFieldWithNullValue = state.typeToJsonIncludesNullableFieldWithNullValue
         this.typeToJsonUsesRealisticSampleData = state.typeToJsonUsesRealisticSampleData
