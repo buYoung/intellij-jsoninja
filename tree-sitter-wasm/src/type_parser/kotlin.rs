@@ -100,7 +100,7 @@ fn parse_user_type(
     declaration_name: Option<&str>,
 ) -> crate::ir::TypeReference {
     let full_name = text_owned(node, source_bytes).replace(' ', "");
-    let simple_name = last_path_segment(&full_name);
+    let simple_name = last_path_segment(&strip_generic_type_arguments(&full_name));
     let type_arguments = named_children(node)
         .into_iter()
         .find(|child_node| child_node.kind() == "type_arguments")
@@ -139,6 +139,15 @@ fn parse_user_type(
             span(node),
         ),
     }
+}
+
+fn strip_generic_type_arguments(raw_text: &str) -> String {
+    raw_text
+        .split_once('<')
+        .map(|(base_name, _)| base_name)
+        .unwrap_or(raw_text)
+        .trim()
+        .to_string()
 }
 
 fn parse_named_or_primitive(
