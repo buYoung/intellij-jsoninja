@@ -55,7 +55,7 @@ fn parse_class_declaration(
         Vec::new()
     };
 
-    Declaration {
+    let declaration = Declaration {
         name: name.clone(),
         kind,
         span: span(node),
@@ -77,7 +77,9 @@ fn parse_class_declaration(
         ),
         enum_values,
         aliased_type: None,
-    }
+    };
+
+    normalize_container_alias(declaration)
 }
 
 fn parse_object_declaration(
@@ -90,7 +92,7 @@ fn parse_object_declaration(
         .map(|child_node| text_owned(child_node, source_bytes))
         .unwrap_or_default();
 
-    Declaration {
+    let declaration = Declaration {
         name: name.clone(),
         kind: DeclarationKind::Object,
         span: span(node),
@@ -112,7 +114,9 @@ fn parse_object_declaration(
         ),
         enum_values: Vec::new(),
         aliased_type: None,
-    }
+    };
+
+    normalize_container_alias(declaration)
 }
 
 fn parse_type_alias(
@@ -159,6 +163,32 @@ fn parse_type_alias(
                 Some(alias_name.as_str()),
             )
         }),
+    }
+}
+
+fn normalize_container_alias(declaration: Declaration) -> Declaration {
+    if !declaration.fields.is_empty() || declaration.super_types.len() != 1 {
+        return declaration;
+    }
+
+    let Some(aliased_type_reference) = declaration.super_types.first().cloned() else {
+        return declaration;
+    };
+
+    if !matches!(
+        aliased_type_reference,
+        crate::ir::TypeReference::List { .. } | crate::ir::TypeReference::Map { .. }
+    ) {
+        return declaration;
+    }
+
+    Declaration {
+        kind: DeclarationKind::TypeAlias,
+        super_types: Vec::new(),
+        fields: Vec::new(),
+        enum_values: Vec::new(),
+        aliased_type: Some(aliased_type_reference),
+        ..declaration
     }
 }
 

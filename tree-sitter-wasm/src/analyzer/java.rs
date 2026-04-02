@@ -144,7 +144,7 @@ fn parse_declaration_with_kind(
         )
     };
 
-    Declaration {
+    let declaration = Declaration {
         name: name.clone(),
         kind,
         span: span(node),
@@ -160,7 +160,9 @@ fn parse_declaration_with_kind(
         fields,
         enum_values: Vec::new(),
         aliased_type: None,
-    }
+    };
+
+    normalize_container_alias(declaration)
 }
 
 fn parse_type_parameters(
@@ -334,4 +336,30 @@ fn parse_super_types(
     }
 
     super_types
+}
+
+fn normalize_container_alias(declaration: Declaration) -> Declaration {
+    if !declaration.fields.is_empty() || declaration.super_types.len() != 1 {
+        return declaration;
+    }
+
+    let Some(aliased_type_reference) = declaration.super_types.first().cloned() else {
+        return declaration;
+    };
+
+    if !matches!(
+        aliased_type_reference,
+        crate::ir::TypeReference::List { .. } | crate::ir::TypeReference::Map { .. }
+    ) {
+        return declaration;
+    }
+
+    Declaration {
+        kind: DeclarationKind::TypeAlias,
+        super_types: Vec::new(),
+        fields: Vec::new(),
+        enum_values: Vec::new(),
+        aliased_type: Some(aliased_type_reference),
+        ..declaration
+    }
 }

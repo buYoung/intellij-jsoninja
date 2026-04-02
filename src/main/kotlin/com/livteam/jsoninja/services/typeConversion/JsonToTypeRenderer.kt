@@ -172,19 +172,35 @@ class JsonToTypeRenderer {
             }
         }
 
-        val fieldsText = declaration.fields.joinToString("\n\n") { field ->
+        val privateFieldBlocks = declaration.fields.joinToString("\n\n") { field ->
             val annotationText = renderJavaFieldAnnotation(field, options)
             val fieldType = renderJavaType(field.typeReference, options)
-            val capitalizedFieldName = field.name.replaceFirstChar(Char::titlecase)
             listOfNotNull(
                 annotationText,
                 "    private $fieldType ${field.name};",
+            ).joinToString("\n")
+        }
+
+        val publicMethodBlocks = declaration.fields.joinToString("\n\n") { field ->
+            val fieldType = renderJavaType(field.typeReference, options)
+            val capitalizedFieldName = field.name.replaceFirstChar(Char::titlecase)
+            listOf(
                 "    public $fieldType get$capitalizedFieldName() {\n        return ${field.name};\n    }",
                 "    public void set$capitalizedFieldName($fieldType ${field.name}) {\n        this.${field.name} = ${field.name};\n    }",
             ).joinToString("\n")
         }
 
-        return "public class ${declaration.name} {\n$fieldsText\n}"
+        val memberBlocks = listOfNotNull(
+            privateFieldBlocks.takeIf(String::isNotBlank),
+            publicMethodBlocks.takeIf(String::isNotBlank),
+        )
+
+        val bodyText = memberBlocks.joinToString("\n\n")
+        return if (bodyText.isBlank()) {
+            "public class ${declaration.name} {\n}"
+        } else {
+            "public class ${declaration.name} {\n$bodyText\n}"
+        }
     }
 
     private fun renderKotlinDeclaration(
