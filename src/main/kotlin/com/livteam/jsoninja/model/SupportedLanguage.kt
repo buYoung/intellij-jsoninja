@@ -16,14 +16,14 @@ enum class SupportedLanguage(
         fileExtension = "kt",
         wasmLanguageId = 1,
         defaultNamingConvention = NamingConvention.CAMEL_CASE,
-        defaultAnnotationStyle = JsonToTypeAnnotationStyle.JACKSON_JSON_PROPERTY,
+        defaultAnnotationStyle = JsonToTypeAnnotationStyle.NONE,
     ),
     JAVA(
         displayNameKey = "language.java",
         fileExtension = "java",
         wasmLanguageId = 0,
         defaultNamingConvention = NamingConvention.CAMEL_CASE,
-        defaultAnnotationStyle = JsonToTypeAnnotationStyle.JACKSON_JSON_PROPERTY,
+        defaultAnnotationStyle = JsonToTypeAnnotationStyle.NONE,
     ),
     TYPESCRIPT(
         displayNameKey = "language.typescript",

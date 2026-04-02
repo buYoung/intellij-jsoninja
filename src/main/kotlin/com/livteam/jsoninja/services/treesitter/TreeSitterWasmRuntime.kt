@@ -1,10 +1,14 @@
 package com.livteam.jsoninja.services.treesitter
 
 import com.dylibso.chicory.runtime.ExportFunction
-import com.dylibso.chicory.runtime.ImportValues
 import com.dylibso.chicory.runtime.Instance
 import com.dylibso.chicory.runtime.Memory
+import com.dylibso.chicory.runtime.Store
+import com.dylibso.chicory.wasi.WasiOptions
+import com.dylibso.chicory.wasi.WasiPreview1
 import com.dylibso.chicory.wasm.Parser
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicReference
 
 object TreeSitterWasmRuntime {
@@ -37,9 +41,17 @@ object TreeSitterWasmRuntime {
             "Bundled tree-sitter WASM module not found at $WASM_RESOURCE_PATH"
         }
         val wasmModule = moduleStream.use(Parser::parse)
-        val instance = Instance.builder(wasmModule)
-            .withImportValues(ImportValues.empty())
+        val wasiOptions = WasiOptions.builder()
+            .withStdin(ByteArrayInputStream(ByteArray(0)))
+            .withStdout(ByteArrayOutputStream())
+            .withStderr(ByteArrayOutputStream())
             .build()
+        val wasi = WasiPreview1.builder()
+            .withOptions(wasiOptions)
+            .build()
+        val instance = Store()
+            .addFunction(*wasi.toHostFunctions())
+            .instantiate("tree-sitter-wasm", wasmModule)
         val memory = checkNotNull(instance.memory()) {
             "tree-sitter WASM module does not expose linear memory"
         }
