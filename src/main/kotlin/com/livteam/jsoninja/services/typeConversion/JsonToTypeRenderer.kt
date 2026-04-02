@@ -15,7 +15,11 @@ class JsonToTypeRenderer {
         options: JsonToTypeConversionOptions,
         warningMessages: List<String> = emptyList(),
     ): String {
-        val importLines = collectImports(declarations, language, options)
+        val importLines = if (language == SupportedLanguage.JAVA) {
+            ""
+        } else {
+            collectImports(declarations, language, options)
+        }
         val declarationBlocks = declarations.joinToString("\n\n") { declaration ->
             renderDeclaration(declaration, language, options)
         }
