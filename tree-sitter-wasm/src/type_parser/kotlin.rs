@@ -68,11 +68,25 @@ pub(crate) fn parse(
             diagnostics,
             declaration_name,
         ),
-        "type_projection" => named_children(node)
-            .into_iter()
-            .find(|child_node| child_node.kind() == "type")
-            .map(|child_node| parse(child_node, source_bytes, type_parameter_names, diagnostics, declaration_name))
-            .unwrap_or_else(|| unknown_type(node, source_bytes)),
+        "type_projection" => {
+            let inner_type_node = first_named_child_of_kind(node, "type")
+                .or_else(|| {
+                    named_children(node)
+                        .into_iter()
+                        .find(|child_node| child_node.kind() != "variance_modifier")
+                });
+            inner_type_node
+                .map(|child_node| {
+                    parse(
+                        child_node,
+                        source_bytes,
+                        type_parameter_names,
+                        diagnostics,
+                        declaration_name,
+                    )
+                })
+                .unwrap_or_else(|| parse_text_fallback(&raw_text, type_parameter_names, span(node)))
+        }
         "function_type" => unknown_type_with_message(
             "kotlin.type.function",
             "Function types are not normalized in the current IR.".to_string(),

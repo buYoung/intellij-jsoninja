@@ -2,6 +2,7 @@ package com.livteam.jsoninja.ui.component.convertType
 
 import com.intellij.ide.highlighter.HighlighterFactory
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
@@ -65,13 +66,8 @@ class CodeInputPanel(
             (oldEditorField as? Disposable)?.let(Disposer::dispose)
         }
 
-        val document = JsonDocumentFactory.createJsonDocument(
-            value = text,
-            project = project,
-            documentCreator = SimpleJsonDocumentCreator(),
-            fileExtension = fileExtension,
-        )
         val fileType = resolveFileType(fileExtension)
+        val document = createDocument(text, fileExtension, fileType)
         editorField = EditorTextField(document, project, fileType, false, false).also { createdEditorField ->
             createdEditorField.setPlaceholder(placeholderText)
             createdEditorField.putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
@@ -107,6 +103,21 @@ class CodeInputPanel(
     private fun resolveFileType(fileExtension: String): FileType {
         val resolvedFileType = FileTypeManager.getInstance().getFileTypeByExtension(fileExtension)
         return if (resolvedFileType is UnknownFileType) PlainTextFileType.INSTANCE else resolvedFileType
+    }
+
+    private fun createDocument(
+        text: String,
+        fileExtension: String,
+        fileType: FileType,
+    ) = if (fileType is PlainTextFileType) {
+        EditorFactory.getInstance().createDocument(text)
+    } else {
+        JsonDocumentFactory.createJsonDocument(
+            value = text,
+            project = project,
+            documentCreator = SimpleJsonDocumentCreator(),
+            fileExtension = fileExtension,
+        )
     }
 
     override fun dispose() {
