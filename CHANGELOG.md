@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- **JSON Diff Display Modes**: You can now choose how to view JSON Diff results.
+  - **Open in Editor Tab**: Show the diff inside a regular editor tab alongside your other files.
+  - **Open in Window**: Show the diff in a separate floating window for side-by-side comparison with the main editor.
+  - Dedicated toolbar actions let you pick the mode that fits your workflow, and switching modes reuses the currently open diff instead of starting over.
+
+### Fixed
+
+- **Code Folding**: Code folding works again in JSONinja editors on IDE 2026.1, so you can collapse and expand JSON objects and arrays as before.
+- **JSON Diff View**: The existing JSON Diff view no longer disappears when you click the diff action icon again; reopening a diff now preserves its contents and state.
+
+
 ## [1.11.1] - 2026-04-08
 
 ### Fixed
