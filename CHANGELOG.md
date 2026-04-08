@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-04-08
+
 ### Added
 
 - **JSON Type Conversion**: Added a new feature to convert JSON data into type declarations for multiple programming languages.
@@ -328,7 +330,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.1...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.1...v1.11.0
 [1.10.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.8.0...v1.9.0
