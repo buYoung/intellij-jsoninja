@@ -2,10 +2,7 @@ package com.livteam.jsoninja.ui.diff
 
 import com.intellij.diff.chains.SimpleDiffRequestChain
 import com.intellij.diff.requests.SimpleDiffRequest
-import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.openapi.editor.Document
-import com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction
-import com.livteam.jsoninja.actions.SwitchDiffDisplayModeAction
 import com.livteam.jsoninja.services.JsonDiffService
 
 /**
@@ -17,16 +14,7 @@ class JsonDiffRequestChain(
     val rightDocument: Document,
     val sortKeys: Boolean = false
 ) : SimpleDiffRequestChain(createInitialRequest(diffService, leftDocument, rightDocument, sortKeys)) {
-    
-    init {
-        // Add context actions to the diff request
-        val contextActions = listOf(
-            SwitchDiffDisplayModeAction(),
-            SortJsonDiffKeysOnceAction()
-        )
-        putUserData(DiffUserDataKeys.CONTEXT_ACTIONS, contextActions)
-    }
-    
+
     companion object {
         private fun createInitialRequest(
             diffService: JsonDiffService,

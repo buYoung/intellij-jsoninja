@@ -101,10 +101,6 @@
                     class="com.livteam.jsoninja.actions.OpenSettingsAction"
                     icon="AllIcons.General.Settings"/>
         </group>
-
-        <action id="com.livteam.jsoninja.action.SwitchDiffDisplayModeAction"
-                class="com.livteam.jsoninja.actions.SwitchDiffDisplayModeAction"/>
-
         <action id="com.livteam.jsoninja.action.CopyJsonQueryAction"
                 class="com.livteam.jsoninja.actions.CopyJsonQueryAction"
         >

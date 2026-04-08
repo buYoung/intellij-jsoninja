@@ -17,7 +17,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction
-import com.livteam.jsoninja.actions.SwitchDiffDisplayModeAction
 import com.livteam.jsoninja.diff.JsonDiffKeys
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.model.JsonFormatState
@@ -47,31 +46,13 @@ class JsonDiffService(private val project: Project) {
     ) {
         val leftJson = currentJson ?: "{}"
         val diffContext = getOrCreateContext(leftJson, displayMode, defaultSortKeys)
+        val currentDisplayMode = getCurrentDisplayMode(diffContext)
 
-        if (diffContext.displayMode != displayMode) {
-            closeCurrentHost(diffContext)
+        if (currentDisplayMode != displayMode) {
+            closeOpenHosts(diffContext)
             diffContext.displayMode = displayMode
         }
 
-        openCurrentHost(diffContext)
-    }
-
-    fun switchDisplayMode(displayMode: JsonDiffDisplayMode) {
-        val diffContext = activeDiffContext ?: return
-
-        if (!hasOpenHost(diffContext)) {
-            diffContext.displayMode = displayMode
-            openCurrentHost(diffContext)
-            return
-        }
-
-        if (diffContext.displayMode == displayMode) {
-            openCurrentHost(diffContext)
-            return
-        }
-
-        closeCurrentHost(diffContext)
-        diffContext.displayMode = displayMode
         openCurrentHost(diffContext)
     }
 
@@ -135,7 +116,6 @@ class JsonDiffService(private val project: Project) {
         request.putUserData(
             DiffUserDataKeys.CONTEXT_ACTIONS,
             listOf(
-                SwitchDiffDisplayModeAction(),
                 SortJsonDiffKeysOnceAction()
             )
         )
@@ -167,6 +147,22 @@ class JsonDiffService(private val project: Project) {
         return isEditorTabOpen(diffContext) || isWindowOpen(diffContext)
     }
 
+    private fun getCurrentDisplayMode(diffContext: ActiveDiffContext): JsonDiffDisplayMode {
+        return getOpenDisplayMode(diffContext) ?: diffContext.displayMode
+    }
+
+    private fun getOpenDisplayMode(diffContext: ActiveDiffContext): JsonDiffDisplayMode? {
+        val isEditorTabOpen = isEditorTabOpen(diffContext)
+        val isWindowOpen = isWindowOpen(diffContext)
+
+        return when {
+            isEditorTabOpen && !isWindowOpen -> JsonDiffDisplayMode.EDITOR_TAB
+            isWindowOpen && !isEditorTabOpen -> JsonDiffDisplayMode.WINDOW
+            isEditorTabOpen && isWindowOpen -> diffContext.displayMode
+            else -> null
+        }
+    }
+
     private fun isEditorTabOpen(diffContext: ActiveDiffContext): Boolean {
         val diffFile = diffContext.editorTabFile ?: return false
         return FileEditorManager.getInstance(project).isFileOpen(diffFile)
@@ -183,14 +179,13 @@ class JsonDiffService(private val project: Project) {
         }
     }
 
-    private fun closeCurrentHost(diffContext: ActiveDiffContext) {
-        when (diffContext.displayMode) {
-            JsonDiffDisplayMode.EDITOR_TAB -> {
-                diffContext.editorTabFile?.let { FileEditorManager.getInstance(project).closeFile(it) }
-            }
-            JsonDiffDisplayMode.WINDOW -> {
-                diffContext.windowDialog?.close(DialogWrapper.CANCEL_EXIT_CODE)
-            }
+    private fun closeOpenHosts(diffContext: ActiveDiffContext) {
+        if (isEditorTabOpen(diffContext)) {
+            diffContext.editorTabFile?.let { FileEditorManager.getInstance(project).closeFile(it) }
+        }
+
+        if (isWindowOpen(diffContext)) {
+            diffContext.windowDialog?.close(DialogWrapper.CANCEL_EXIT_CODE)
         }
     }
 
