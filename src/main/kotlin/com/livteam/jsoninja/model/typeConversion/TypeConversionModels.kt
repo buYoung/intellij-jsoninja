@@ -1,21 +1,36 @@
 package com.livteam.jsoninja.model.typeConversion
 
-enum class TypeConversionLanguage(
-    val displayName: String,
-    val resourceDirectoryName: String,
-) {
-    JAVA(displayName = "Java", resourceDirectoryName = "java"),
-    KOTLIN(displayName = "Kotlin", resourceDirectoryName = "kotlin"),
-    TYPESCRIPT(displayName = "TypeScript", resourceDirectoryName = "typescript"),
-    GO(displayName = "Go", resourceDirectoryName = "go"),
-}
+sealed interface TypeReference {
+    data class Primitive(
+        val primitiveKind: TypePrimitiveKind,
+    ) : TypeReference
 
-enum class TypeDeclarationKind {
-    CLASS,
-    INTERFACE,
-    RECORD,
-    STRUCT,
-    ENUM,
+    data class Named(
+        val name: String,
+    ) : TypeReference
+
+    data class ListReference(
+        val elementType: TypeReference,
+    ) : TypeReference
+
+    data class MapReference(
+        val keyType: TypeReference,
+        val valueType: TypeReference,
+    ) : TypeReference
+
+    data class Nullable(
+        val wrappedType: TypeReference,
+    ) : TypeReference
+
+    data class InlineObject(
+        val fields: List<TypeField>,
+    ) : TypeReference
+
+    data class Union(
+        val members: List<TypeReference>,
+    ) : TypeReference
+
+    data object AnyValue : TypeReference
 }
 
 enum class TypePrimitiveKind {
@@ -26,25 +41,24 @@ enum class TypePrimitiveKind {
     BOOLEAN,
 }
 
-data class TypeAnalysisResult(
-    val language: TypeConversionLanguage,
-    val queryResourcePath: String,
-    val parserResourcePath: String?,
-    val rootTypeName: String,
-    val typeDeclarations: Map<String, TypeDeclaration>,
-) {
-    val rootType: TypeDeclaration
-        get() = typeDeclarations[rootTypeName]
-            ?: throw IllegalStateException("Root type not found: $rootTypeName")
-}
-
 data class TypeDeclaration(
     val name: String,
     val declarationKind: TypeDeclarationKind,
-    val fields: List<TypeField>,
+    val fields: List<TypeField> = emptyList(),
     val superTypeNames: List<String> = emptyList(),
     val enumValues: List<String> = emptyList(),
+    val aliasedTypeReference: TypeReference? = null,
 )
+
+enum class TypeDeclarationKind {
+    CLASS,
+    INTERFACE,
+    RECORD,
+    STRUCT,
+    ENUM,
+    TYPE_ALIAS,
+    OBJECT,
+}
 
 data class TypeField(
     val name: String,
@@ -53,17 +67,29 @@ data class TypeField(
     val sourceName: String = name,
 )
 
-sealed interface TypeReference {
-    data class Primitive(val primitiveKind: TypePrimitiveKind) : TypeReference
-    data class Named(val name: String) : TypeReference
-    data class ListReference(val elementType: TypeReference) : TypeReference
-    data class MapReference(
-        val keyType: TypeReference,
-        val valueType: TypeReference,
-    ) : TypeReference
+data class TypeConversionWarning(
+    val message: String,
+)
 
-    data class Nullable(val wrappedType: TypeReference) : TypeReference
-    data class InlineObject(val fields: List<TypeField>) : TypeReference
+data class TypeAnalysisResult(
+    val declarations: List<TypeDeclaration>,
+    val diagnostics: List<TypeAnalysisDiagnostic> = emptyList(),
+)
 
-    object AnyValue : TypeReference
+data class TypeAnalysisDiagnostic(
+    val code: String,
+    val severity: TypeAnalysisSeverity,
+    val message: String,
+    val declarationName: String? = null,
+)
+
+enum class TypeAnalysisSeverity {
+    ERROR,
+    WARNING,
 }
+
+data class JsonToTypeConversionResult(
+    val sourceCode: String,
+    val warnings: List<TypeConversionWarning> = emptyList(),
+    val declarations: List<TypeDeclaration> = emptyList(),
+)

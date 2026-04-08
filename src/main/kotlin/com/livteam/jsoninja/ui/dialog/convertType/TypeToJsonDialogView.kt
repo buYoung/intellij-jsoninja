@@ -1,14 +1,9 @@
 package com.livteam.jsoninja.ui.dialog.convertType
 
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.JBSplitter
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBCheckBox
-import com.intellij.ui.components.JBTextField
-import com.intellij.ui.dsl.builder.AlignX
-import com.intellij.ui.dsl.builder.panel
-import com.intellij.util.ui.JBUI
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBPanel
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.SupportedLanguage
@@ -18,195 +13,138 @@ import com.livteam.jsoninja.ui.component.convertType.LanguageSelectorComponent
 import com.livteam.jsoninja.ui.dialog.convertType.model.TypeToJsonDialogConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import java.awt.BorderLayout
+import java.awt.FlowLayout
 import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JPanel
+import javax.swing.JSpinner
+import javax.swing.JSplitPane
+import javax.swing.SpinnerNumberModel
+import com.intellij.ui.dsl.builder.panel
 
 class TypeToJsonDialogView(
-    private val project: Project,
-    initialConfig: TypeToJsonDialogConfig,
+    project: com.intellij.openapi.project.Project,
 ) {
-    private val languageSelectorComponent = LanguageSelectorComponent(project)
-    private val codeInputPanel = CodeInputPanel(
-        project = project,
-        initialLanguage = initialConfig.supportedLanguage,
-        initialPlaceholderText = LocalizationBundle.message("dialog.type.to.json.input.placeholder"),
-    )
-    private val codePreviewPanel = CodePreviewPanel(project)
+    private val languageSelector = LanguageSelectorComponent()
+    private val fieldsModeComboBox = ComboBox(SchemaPropertyGenerationMode.entries.toTypedArray())
+    private val nullableCheckBox = JBCheckBox(LocalizationBundle.message("dialog.type.to.json.nullable"))
+    private val realisticDataCheckBox = JBCheckBox(LocalizationBundle.message("dialog.type.to.json.faker"))
+    private val outputCountSpinner = JSpinner(SpinnerNumberModel(1, 1, 100, 1))
+    private val formatStateComboBox = ComboBox(arrayOf(
+        JsonFormatState.PRETTIFY,
+        JsonFormatState.PRETTIFY_COMPACT,
+        JsonFormatState.UGLIFY,
+    ))
+    private val inputPanel = CodeInputPanel(project)
+    private val previewPanel = CodePreviewPanel(project)
+    private val rootPanel = JBPanel<JBPanel<*>>(BorderLayout())
+    private var onStateChanged: (() -> Unit)? = null
 
-    private lateinit var propertyGenerationModeComboBox: ComboBox<SchemaPropertyGenerationMode>
-    private lateinit var includesNullableFieldCheckBox: JBCheckBox
-    private lateinit var usesRealisticSampleDataCheckBox: JBCheckBox
-    private lateinit var outputCountTextField: JBTextField
-    private lateinit var jsonFormatStateComboBox: ComboBox<JsonFormatState>
-
-    val component: JComponent by lazy { createComponent(initialConfig) }
+    val component: JComponent
+        get() = rootPanel
 
     init {
-        codeInputPanel.setText(initialConfig.typeDeclarationText)
+        val controlsPanel = panel {
+            row {
+                label(LocalizationBundle.message("dialog.type.to.json.language"))
+                cell(languageSelector)
+                label(LocalizationBundle.message("dialog.type.to.json.fields.mode")).gap(com.intellij.ui.dsl.builder.RightGap.SMALL)
+                cell(fieldsModeComboBox)
+                cell(nullableCheckBox)
+            }
+            row {
+                label(LocalizationBundle.message("dialog.type.to.json.output.count"))
+                cell(outputCountSpinner)
+                label(LocalizationBundle.message("dialog.type.to.json.format")).gap(com.intellij.ui.dsl.builder.RightGap.SMALL)
+                cell(formatStateComboBox)
+                cell(realisticDataCheckBox)
+            }
+        }.apply {
+            border = com.intellij.util.ui.JBUI.Borders.empty(4, 8)
+        }
+        val splitPane = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inputPanel, previewPanel).apply {
+            resizeWeight = 0.46
+        }
+        rootPanel.add(controlsPanel, BorderLayout.NORTH)
+        rootPanel.add(splitPane, BorderLayout.CENTER)
+
+        languageSelector.setOnLanguageChanged {
+            updateInputLanguage(it)
+            onStateChanged?.invoke()
+        }
+        fieldsModeComboBox.addActionListener { onStateChanged?.invoke() }
+        nullableCheckBox.addActionListener { onStateChanged?.invoke() }
+        realisticDataCheckBox.addActionListener { onStateChanged?.invoke() }
+        outputCountSpinner.addChangeListener { onStateChanged?.invoke() }
+        formatStateComboBox.addActionListener { onStateChanged?.invoke() }
+        inputPanel.setOnTextChanged { onStateChanged?.invoke() }
+        updateInputLanguage(SupportedLanguage.KOTLIN)
     }
 
-    fun setOnLanguageChanged(callback: (SupportedLanguage) -> Unit) {
-        languageSelectorComponent.setOnLanguageChanged(callback)
+    fun applyConfig(config: TypeToJsonDialogConfig) {
+        languageSelector.setSelectedLanguage(config.language)
+        fieldsModeComboBox.selectedItem = config.propertyGenerationMode
+        nullableCheckBox.isSelected = config.includesNullableFieldWithNullValue
+        realisticDataCheckBox.isSelected = config.usesRealisticSampleData
+        outputCountSpinner.value = config.outputCount
+        formatStateComboBox.selectedItem = config.formatState
+        updateInputLanguage(config.language)
     }
 
-    fun setOnTypeDeclarationChanged(callback: (String) -> Unit) {
-        codeInputPanel.setOnTextChanged(callback)
-    }
-
-    fun setOnOptionsChanged(callback: () -> Unit) {
-        propertyGenerationModeComboBox.addActionListener { callback() }
-        includesNullableFieldCheckBox.addActionListener { callback() }
-        usesRealisticSampleDataCheckBox.addActionListener { callback() }
-        jsonFormatStateComboBox.addActionListener { callback() }
-        outputCountTextField.document.addDocumentListener(SimpleSwingDocumentListener(callback))
-    }
-
-    fun getConfig(): TypeToJsonDialogConfig {
+    fun collectConfig(): TypeToJsonDialogConfig {
         return TypeToJsonDialogConfig(
-            supportedLanguage = languageSelectorComponent.getSelectedLanguage(),
-            typeDeclarationText = codeInputPanel.getText(),
-            propertyGenerationMode = propertyGenerationModeComboBox.selectedItem as? SchemaPropertyGenerationMode
+            language = languageSelector.getSelectedLanguage() ?: SupportedLanguage.KOTLIN,
+            propertyGenerationMode = fieldsModeComboBox.selectedItem as? SchemaPropertyGenerationMode
                 ?: SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL,
-            includesNullableFieldWithNullValue = includesNullableFieldCheckBox.isSelected,
-            usesRealisticSampleData = usesRealisticSampleDataCheckBox.isSelected,
-            outputCount = outputCountTextField.text.trim().toIntOrNull() ?: 1,
-            jsonFormatState = jsonFormatStateComboBox.selectedItem as? JsonFormatState ?: JsonFormatState.PRETTIFY,
+            includesNullableFieldWithNullValue = nullableCheckBox.isSelected,
+            usesRealisticSampleData = realisticDataCheckBox.isSelected,
+            outputCount = (outputCountSpinner.value as? Int ?: 1).coerceIn(1, 100),
+            formatState = formatStateComboBox.selectedItem as? JsonFormatState ?: JsonFormatState.PRETTIFY,
         )
     }
 
-    fun setSelectedLanguage(language: SupportedLanguage) {
-        languageSelectorComponent.setSelectedLanguage(language)
-        codeInputPanel.setLanguage(language)
+    fun setInputText(text: String) {
+        inputPanel.setText(text)
     }
 
-    fun setInputPlaceholder(text: String) {
-        codeInputPanel.setPlaceholder(text)
+    fun getInputText(): String = inputPanel.getText()
+
+    fun setOnStateChanged(callback: () -> Unit) {
+        onStateChanged = callback
     }
 
-    fun clearPreview() {
-        codePreviewPanel.clear()
+    fun setOnCopyRequested(callback: () -> Unit) {
+        previewPanel.setOnCopyRequested(callback)
     }
 
-    fun setPreviewLoading() {
-        codePreviewPanel.setLoading()
+    fun showEmptyPreview() {
+        previewPanel.setEmpty()
     }
 
-    fun setPreviewContent(text: String) {
-        codePreviewPanel.setContent(text)
+    fun showLoadingPreview() {
+        previewPanel.setLoading()
     }
 
-    fun setPreviewError(message: String) {
-        codePreviewPanel.setError(message)
+    fun showErrorPreview(message: String) {
+        previewPanel.setError(message)
     }
 
-    fun getPreviewContent(): String {
-        return codePreviewPanel.getContent()
+    fun showSuccessPreview(text: String) {
+        previewPanel.setSuccess(text, "json")
     }
 
-    fun getTypeDeclarationInputComponent(): JComponent {
-        return codeInputPanel.component
-    }
-
-    fun getOutputCountInputComponent(): JComponent {
-        return outputCountTextField
-    }
+    fun getValidationComponent(): JComponent = outputCountSpinner
 
     fun dispose() {
-        languageSelectorComponent.dispose()
-        codeInputPanel.dispose()
-        codePreviewPanel.dispose()
+        inputPanel.dispose()
+        previewPanel.dispose()
     }
 
-    private fun createComponent(initialConfig: TypeToJsonDialogConfig): JComponent {
-        languageSelectorComponent.component
-        codePreviewPanel.component
-        setSelectedLanguage(initialConfig.supportedLanguage)
-        setInputPlaceholder(LocalizationBundle.message("dialog.type.to.json.input.placeholder"))
-
-        propertyGenerationModeComboBox = ComboBox(SchemaPropertyGenerationMode.entries.toTypedArray()).apply {
-            renderer = SimpleListCellRenderer.create { label, value, _ ->
-                label.text = when (value) {
-                    SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL -> LocalizationBundle.message("dialog.type.to.json.fields.required.and.optional")
-                    SchemaPropertyGenerationMode.REQUIRED_ONLY -> LocalizationBundle.message("dialog.type.to.json.fields.required.only")
-                    SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED -> LocalizationBundle.message("dialog.type.to.json.fields.commented")
-                    null -> ""
-                }
-            }
-            selectedItem = initialConfig.propertyGenerationMode
+    private fun updateInputLanguage(language: SupportedLanguage) {
+        val placeholderText = when (language) {
+            SupportedLanguage.JAVA -> LocalizationBundle.message("dialog.type.to.json.input.placeholder.java")
+            SupportedLanguage.KOTLIN -> LocalizationBundle.message("dialog.type.to.json.input.placeholder.kotlin")
+            SupportedLanguage.TYPESCRIPT -> LocalizationBundle.message("dialog.type.to.json.input.placeholder.typescript")
+            SupportedLanguage.GO -> LocalizationBundle.message("dialog.type.to.json.input.placeholder.go")
         }
-
-        includesNullableFieldCheckBox = JBCheckBox(
-            LocalizationBundle.message("dialog.type.to.json.nullable"),
-            initialConfig.includesNullableFieldWithNullValue,
-        )
-        usesRealisticSampleDataCheckBox = JBCheckBox(
-            LocalizationBundle.message("dialog.type.to.json.faker"),
-            initialConfig.usesRealisticSampleData,
-        )
-        outputCountTextField = JBTextField(initialConfig.outputCount.toString())
-        jsonFormatStateComboBox = ComboBox(
-            arrayOf(
-                JsonFormatState.PRETTIFY,
-                JsonFormatState.PRETTIFY_COMPACT,
-                JsonFormatState.UGLIFY,
-            )
-        ).apply {
-            renderer = SimpleListCellRenderer.create { label, value, _ ->
-                label.text = when (value) {
-                    JsonFormatState.PRETTIFY -> LocalizationBundle.message("dialog.type.to.json.format.prettify")
-                    JsonFormatState.PRETTIFY_COMPACT -> LocalizationBundle.message("dialog.type.to.json.format.prettify.compact")
-                    JsonFormatState.UGLIFY -> LocalizationBundle.message("dialog.type.to.json.format.uglify")
-                    else -> ""
-                }
-            }
-            selectedItem = initialConfig.jsonFormatState
-        }
-
-        val optionsPanel = panel {
-            row(LocalizationBundle.message("dialog.type.to.json.language")) {
-                cell(languageSelectorComponent.component)
-            }
-            row(LocalizationBundle.message("dialog.type.to.json.fields.mode")) {
-                cell(propertyGenerationModeComboBox)
-            }
-            row {
-                cell(includesNullableFieldCheckBox)
-            }
-            row {
-                cell(usesRealisticSampleDataCheckBox)
-            }
-            row(LocalizationBundle.message("dialog.type.to.json.output.count")) {
-                cell(outputCountTextField)
-                    .align(AlignX.FILL)
-                    .resizableColumn()
-            }
-            row(LocalizationBundle.message("dialog.type.to.json.format")) {
-                cell(jsonFormatStateComboBox)
-            }
-        }
-
-        val inputSectionPanel = JPanel(BorderLayout()).apply {
-            add(JLabel(LocalizationBundle.message("dialog.type.to.json.input.title")), BorderLayout.NORTH)
-            add(codeInputPanel.component, BorderLayout.CENTER)
-            border = JBUI.Borders.empty(0, 0, 8, 0)
-        }
-
-        val previewSectionPanel = JPanel(BorderLayout()).apply {
-            add(codePreviewPanel.component, BorderLayout.CENTER)
-            border = JBUI.Borders.empty(8, 0, 0, 0)
-        }
-
-        val splitter = JBSplitter(true, 0.46f).apply {
-            firstComponent = inputSectionPanel
-            secondComponent = previewSectionPanel
-            minimumSize = JBUI.size(720, 420)
-        }
-
-        return JPanel(BorderLayout()).apply {
-            preferredSize = JBUI.size(760, 640)
-            add(optionsPanel, BorderLayout.NORTH)
-            add(splitter, BorderLayout.CENTER)
-        }
+        inputPanel.updateLanguage(language.fileExtension, placeholderText)
     }
 }

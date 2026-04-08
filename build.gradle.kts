@@ -102,6 +102,7 @@ dependencies {
     implementation(libs.dataFaker)
     implementation(libs.jsonSchemaValidator)
     implementation(libs.chicoryRuntime)
+    implementation(libs.chicoryWasi)
 
     implementation(libs.jacksonJq)
 

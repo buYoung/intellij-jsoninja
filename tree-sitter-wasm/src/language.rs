@@ -1,6 +1,7 @@
 use tree_sitter::Language;
 
 use crate::error::WasmResult;
+use crate::ir::LanguageDescriptor;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SupportedLanguage {
@@ -34,6 +35,15 @@ impl SupportedLanguage {
         }
     }
 
+    pub fn id(self) -> i32 {
+        match self {
+            Self::Java => 0,
+            Self::Kotlin => 1,
+            Self::TypeScript => 2,
+            Self::Go => 3,
+        }
+    }
+
     pub fn to_tree_sitter_language(self) -> WasmResult<Language> {
         #[cfg(feature = "language-grammars")]
         {
@@ -57,11 +67,12 @@ impl SupportedLanguage {
     }
 }
 
-pub fn supported_languages_json() -> String {
-    let languages = SupportedLanguage::all()
-        .iter()
-        .map(|language| format!("\"{}\"", language.as_json_name()))
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("[{languages}]")
+pub fn supported_languages() -> Vec<LanguageDescriptor> {
+    SupportedLanguage::all()
+        .into_iter()
+        .map(|language| LanguageDescriptor {
+            id: language.id(),
+            name: language.as_json_name(),
+        })
+        .collect()
 }

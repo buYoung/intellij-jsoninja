@@ -1,126 +1,127 @@
 package com.livteam.jsoninja.ui.component.convertType
 
+import com.intellij.ide.highlighter.HighlighterFactory
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.EditorSettings
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
+import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
-import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
 import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
 import java.awt.BorderLayout
-import javax.swing.JComponent
 import javax.swing.JPanel
 
 class CodeInputPanel(
-    private val project: Project?,
-    initialLanguage: SupportedLanguage = SupportedLanguage.KOTLIN,
-    initialPlaceholderText: String = "",
-) : Disposable {
-    private var selectedLanguage = initialLanguage
-    private var placeholderText = initialPlaceholderText
-    private var onTextChangedCallback: ((String) -> Unit)? = null
+    private val project: Project,
+) : JBPanel<CodeInputPanel>(BorderLayout()), Disposable {
+    private var editorField: EditorTextField? = null
+    private var currentFileExtension: String = "txt"
+    private var currentPlaceholderText: String = ""
+    private var onTextChanged: ((String) -> Unit)? = null
 
-    private lateinit var rootPanel: JPanel
-    private lateinit var editorTextField: EditorTextField
-
-    private val editorDocumentListener = object : DocumentListener {
-        override fun documentChanged(event: DocumentEvent) {
-            onTextChangedCallback?.invoke(editorTextField.text)
-        }
+    init {
+        border = JBUI.Borders.empty()
+        rebuildEditor(text = "", fileExtension = currentFileExtension, placeholderText = currentPlaceholderText)
     }
 
-    val component: JComponent by lazy { createComponent() }
-
-    fun setOnTextChanged(callback: (String) -> Unit) {
-        onTextChangedCallback = callback
-    }
-
-    fun getText(): String = editorTextField.text
-
-    fun setText(text: String) {
-        editorTextField.text = text
-    }
-
-    fun setPlaceholder(text: String) {
-        placeholderText = text
-        if (::editorTextField.isInitialized) {
-            editorTextField.setPlaceholder(text)
-        }
-    }
-
-    fun setLanguage(language: SupportedLanguage) {
-        selectedLanguage = language
-        if (!::rootPanel.isInitialized) {
+    fun updateLanguage(
+        fileExtension: String,
+        placeholderText: String,
+    ) {
+        if (currentFileExtension == fileExtension && currentPlaceholderText == placeholderText) {
             return
         }
+        rebuildEditor(getText(), fileExtension, placeholderText)
+    }
 
-        val currentText = editorTextField.text
-        replaceEditorTextField(currentText)
+    fun setText(text: String) {
+        editorField?.text = text
+    }
+
+    fun getText(): String = editorField?.text.orEmpty()
+
+    fun setOnTextChanged(callback: (String) -> Unit) {
+        onTextChanged = callback
+    }
+
+    private fun rebuildEditor(
+        text: String,
+        fileExtension: String,
+        placeholderText: String,
+    ) {
+        currentFileExtension = fileExtension
+        currentPlaceholderText = placeholderText
+        editorField?.let { oldEditorField ->
+            remove(oldEditorField)
+            (oldEditorField as? Disposable)?.let(Disposer::dispose)
+        }
+
+        val fileType = resolveFileType(fileExtension)
+        val document = createDocument(text, fileExtension, fileType)
+        editorField = EditorTextField(document, project, fileType, false, false).also { createdEditorField ->
+            createdEditorField.setPlaceholder(placeholderText)
+            createdEditorField.putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
+            createdEditorField.addSettingsProvider { editor ->
+                editor.settings.isLineNumbersShown = true
+                editor.settings.isWhitespacesShown = false
+                editor.settings.isUseSoftWraps = true
+                editor.settings.isRightMarginShown = false
+                editor.settings.isIndentGuidesShown = true
+                editor.settings.isFoldingOutlineShown = true
+                editor.settings.isCaretRowShown = true
+                editor.isEmbeddedIntoDialogWrapper = true
+                if (editor is EditorEx) {
+                    val scheme = EditorColorsManager.getInstance().globalScheme
+                    editor.colorsScheme = scheme
+                    editor.highlighter = HighlighterFactory.createHighlighter(project, fileType)
+                    editor.setHorizontalScrollbarVisible(true)
+                    editor.setVerticalScrollbarVisible(true)
+                }
+            }
+            createdEditorField.document.addDocumentListener(object : DocumentListener {
+                override fun documentChanged(event: DocumentEvent) {
+                    onTextChanged?.invoke(createdEditorField.text)
+                }
+            })
+        }
+
+        editorField?.let { add(it, BorderLayout.CENTER) }
+        revalidate()
+        repaint()
+    }
+
+    private fun resolveFileType(fileExtension: String): FileType {
+        val resolvedFileType = FileTypeManager.getInstance().getFileTypeByExtension(fileExtension)
+        return if (resolvedFileType is UnknownFileType) PlainTextFileType.INSTANCE else resolvedFileType
+    }
+
+    private fun createDocument(
+        text: String,
+        fileExtension: String,
+        fileType: FileType,
+    ) = if (fileType is PlainTextFileType) {
+        EditorFactory.getInstance().createDocument(text)
+    } else {
+        JsonDocumentFactory.createJsonDocument(
+            value = text,
+            project = project,
+            documentCreator = SimpleJsonDocumentCreator(),
+            fileExtension = fileExtension,
+        )
     }
 
     override fun dispose() {
-        if (::editorTextField.isInitialized) {
-            editorTextField.removeDocumentListener(editorDocumentListener)
-            (editorTextField as? Disposable)?.let { Disposer.dispose(it) }
-        }
-        if (::rootPanel.isInitialized) {
-            rootPanel.removeAll()
-        }
-    }
-
-    private fun createComponent(): JComponent {
-        rootPanel = JPanel(BorderLayout())
-        editorTextField = createEditorTextField("")
-        rootPanel.add(editorTextField, BorderLayout.CENTER)
-        return rootPanel
-    }
-
-    private fun replaceEditorTextField(text: String) {
-        editorTextField.removeDocumentListener(editorDocumentListener)
-        rootPanel.remove(editorTextField)
-        (editorTextField as? Disposable)?.let { Disposer.dispose(it) }
-
-        editorTextField = createEditorTextField(text)
-        rootPanel.add(editorTextField, BorderLayout.CENTER)
-        rootPanel.revalidate()
-        rootPanel.repaint()
-    }
-
-    private fun createEditorTextField(text: String): EditorTextField {
-        val document = JsonDocumentFactory.createJsonDocument(
-            text,
-            project,
-            SimpleJsonDocumentCreator(),
-            selectedLanguage.fileExtension,
-        )
-
-        val fileType = FileTypeManager.getInstance().getFileTypeByExtension(selectedLanguage.fileExtension)
-            .takeUnless { it is UnknownFileType }
-            ?: PlainTextFileType.INSTANCE
-
-        return EditorTextField(document, project, fileType, false, false).apply {
-            preferredSize = JBUI.size(620, 180)
-            setPlaceholder(placeholderText)
-            addSettingsProvider { editor ->
-                editor.settings.applyCodeInputSettings()
-                editor.isEmbeddedIntoDialogWrapper = true
-            }
-            addDocumentListener(editorDocumentListener)
-            putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
-        }
-    }
-
-    private fun EditorSettings.applyCodeInputSettings() {
-        isLineNumbersShown = true
-        isWhitespacesShown = true
-        isCaretRowShown = true
-        isUseSoftWraps = true
+        (editorField as? Disposable)?.let(Disposer::dispose)
+        editorField = null
     }
 }

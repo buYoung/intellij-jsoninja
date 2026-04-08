@@ -27,6 +27,7 @@ jacksonJq = { group = "net.thisptr", name = "jackson-jq", version.ref = "jackson
 dataFaker = { group = "net.datafaker", name = "datafaker", version.ref = "datafaker" }
 jsonSchemaValidator = { group = "com.networknt", name = "json-schema-validator", version.ref = "json-schema-validator" }
 chicoryRuntime = { group = "com.dylibso.chicory", name = "runtime", version.ref = "chicory" }
+chicoryWasi = { group = "com.dylibso.chicory", name = "wasi", version.ref = "chicory" }
 
 [plugins]
 changelog = { id = "org.jetbrains.changelog", version.ref = "changelog" }

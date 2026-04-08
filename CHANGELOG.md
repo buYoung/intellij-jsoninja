@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **JSON Type Conversion**: Added a new feature to convert JSON data into type declarations for multiple programming languages.
+    - Supports Kotlin, Java, and Go as target languages.
+    - Live preview panel shows the converted type declarations in real time.
+    - Configurable annotation styles and conversion options per language.
+    - Generates sample JSON data from type declarations for quick validation.
+    - Handles complex data structures including nested objects and arrays.
+    - Java import deduplication to avoid unnecessary import statements.
+
 ## [1.10.1] - 2026-03-26
 
 ### Changed

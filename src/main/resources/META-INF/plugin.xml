@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.livteam.jsoninja</id>
     <name>JSONinja</name>
-    <version>1.10.1</version>
+    <version>1.11.0</version>
     <vendor email="leebu18@gmail.com">BuYoung</vendor>
 
     <depends>com.intellij.modules.lang</depends>
@@ -12,7 +12,6 @@
     <resource-bundle>messages.LocalizationBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <applicationService serviceImplementation="com.livteam.jsoninja.services.treesitter.TreeSitterWasmRuntime"/>
         <iconMapper mappingFile="JSONinjaIconMappings.json"/>
         <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja"
                     icon="com.livteam.jsoninja.icons.JsoninjaIcons.ToolWindowIcon"/>
@@ -85,23 +84,8 @@
             <action id="com.livteam.jsoninja.action.GenerateRandomJsonAction"
                     class="com.livteam.jsoninja.actions.GenerateRandomJsonAction"
                     icon="/icons/random_json.svg"/>
-            <action id="com.livteam.jsoninja.action.ConvertTypeToJsonAction"
-                    class="com.livteam.jsoninja.actions.ConvertTypeToJsonAction"
-                    icon="/icons/random_json.svg">
-                <keyboard-shortcut first-keystroke="ctrl shift J" keymap="$default"/>
-                <keyboard-shortcut first-keystroke="meta shift J" keymap="Mac OS X" replace-all="true"/>
-                <keyboard-shortcut first-keystroke="meta shift J" keymap="Mac OS X 10.5+" replace-all="true"/>
-            </action>
-            <action id="com.livteam.jsoninja.action.ConvertJsonToTypeAction"
-                    class="com.livteam.jsoninja.actions.ConvertJsonToTypeAction"
-                    icon="/icons/random_json.svg">
-                <keyboard-shortcut first-keystroke="ctrl shift T" keymap="$default"/>
-                <keyboard-shortcut first-keystroke="meta shift T" keymap="Mac OS X" replace-all="true"/>
-                <keyboard-shortcut first-keystroke="meta shift T" keymap="Mac OS X 10.5+" replace-all="true"/>
-            </action>
-            <action id="com.livteam.jsoninja.action.RunWasmProbeAction"
-                    class="com.livteam.jsoninja.actions.RunWasmProbeAction"
-                    icon="AllIcons.Actions.Execute"/>
+            <action id="com.livteam.jsoninja.action.TypeConversionAction"
+                    class="com.livteam.jsoninja.actions.TypeConversionAction"/>
             <action id="com.livteam.jsoninja.action.LoadJsonFromApiAction"
                     class="com.livteam.jsoninja.actions.LoadJsonFromApiAction"
                     icon="AllIcons.Actions.Download"/>
@@ -124,6 +108,12 @@
         <action id="com.livteam.jsoninja.action.CopyJsonQueryAction"
                 class="com.livteam.jsoninja.actions.CopyJsonQueryAction"
         >
+        </action>
+
+        <action id="com.livteam.jsoninja.action.TypeConversionAction.Menu"
+                class="com.livteam.jsoninja.actions.TypeConversionAction">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
 
         <group id="com.livteam.jsoninja.action.group.EditorPopup" popup="false">

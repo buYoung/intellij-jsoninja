@@ -1,59 +1,62 @@
 package com.livteam.jsoninja.services.treesitter
 
-import com.dylibso.chicory.runtime.ExportFunction
-import com.dylibso.chicory.runtime.Instance
-import com.dylibso.chicory.runtime.Memory
 import java.nio.charset.StandardCharsets
 
 class WasmMemoryBridge(
-    private val memory: Memory,
-    private val allocFunction: ExportFunction,
-    private val deallocFunction: ExportFunction,
+    private val runtimeHandle: TreeSitterWasmRuntime.RuntimeHandle,
 ) {
-    constructor(instance: Instance) : this(
-        memory = instance.memory() ?: throw TreeSitterException("tree-sitter WASM module does not expose linear memory."),
-        allocFunction = instance.export("alloc"),
-        deallocFunction = instance.export("dealloc"),
+    data class BufferSlice(
+        val pointer: Int,
+        val length: Int,
     )
 
-    fun writeString(value: String): Pair<Int, Int> {
-        if (value.isEmpty()) {
-            return 0 to 0
-        }
-
+    fun writeUtf8String(value: String): BufferSlice {
         val bytes = value.toByteArray(StandardCharsets.UTF_8)
-        val pointer = allocFunction.apply(bytes.size.toLong()).firstOrNull()?.toInt() ?: 0
-        if (pointer <= 0) {
-            throw TreeSitterException("Failed to allocate WASM memory for UTF-8 input.")
+        if (bytes.isEmpty()) {
+            return BufferSlice(pointer = 0, length = 0)
         }
 
-        memory.write(pointer, bytes)
-        return pointer to bytes.size
+        val pointer = runtimeHandle.alloc.apply(bytes.size.toLong()).firstOrNull()?.toInt() ?: 0
+        check(pointer > 0) { "Failed to allocate WASM memory for input text." }
+        runtimeHandle.memory.write(pointer, bytes)
+        return BufferSlice(pointer = pointer, length = bytes.size)
     }
 
-    fun readString(
-        pointer: Int,
-        length: Int,
-    ): String {
-        if (pointer <= 0 || length <= 0) {
+    fun readUtf8String(bufferSlice: BufferSlice): String {
+        if (bufferSlice.length <= 0) {
+            return ""
+        }
+        return runtimeHandle.memory.readString(bufferSlice.pointer, bufferSlice.length, StandardCharsets.UTF_8)
+    }
+
+    fun releaseBuffer(bufferSlice: BufferSlice) {
+        if (bufferSlice.pointer <= 0 || bufferSlice.length < 0) {
+            return
+        }
+        runtimeHandle.dealloc.apply(bufferSlice.pointer.toLong(), bufferSlice.length.toLong())
+    }
+
+    fun unpackPointerLength(packedValue: Long): BufferSlice {
+        val pointer = (packedValue ushr 32).toInt()
+        val length = (packedValue and 0xffffffffL).toInt()
+        return BufferSlice(pointer = pointer, length = length)
+    }
+
+    fun isErrorCode(packedValue: Long): Boolean {
+        return (packedValue ushr 32) == 0L && packedValue.toInt() != 0
+    }
+
+    fun readLastErrorMessage(): String {
+        val packedValue = runtimeHandle.getLastError.apply().firstOrNull() ?: 0L
+        if (packedValue == 0L) {
             return ""
         }
 
-        return memory.readString(pointer, length, StandardCharsets.UTF_8)
-    }
-
-    fun decodePtrLen(packed: Long): Pair<Int, Int> {
-        return ((packed ushr 32).toInt()) to packed.toInt()
-    }
-
-    fun free(
-        pointer: Int,
-        length: Int,
-    ) {
-        if (pointer <= 0) {
-            return
+        val bufferSlice = unpackPointerLength(packedValue)
+        return try {
+            readUtf8String(bufferSlice)
+        } finally {
+            releaseBuffer(bufferSlice)
         }
-
-        deallocFunction.apply(pointer.toLong(), length.toLong())
     }
 }

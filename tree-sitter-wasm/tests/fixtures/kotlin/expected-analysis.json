@@ -1,0 +1,89 @@
+{
+  "language": "kotlin",
+  "declarations": [
+    {
+      "name": "UserResponse",
+      "kind": "class",
+      "span": {
+        "start_row": 0,
+        "start_col": 0,
+        "end_row": 3,
+        "end_col": 16
+      },
+      "annotations": [
+        {
+          "name": "Serializable",
+          "text": "@Serializable",
+          "span": {
+            "start_row": 0,
+            "start_col": 0,
+            "end_row": 0,
+            "end_col": 13
+          }
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "constraints": [],
+          "span": {
+            "start_row": 1,
+            "start_col": 24,
+            "end_row": 1,
+            "end_col": 25
+          }
+        }
+      ],
+      "super_types": [
+        {
+          "kind": "named",
+          "name": "BaseResponse",
+          "type_arguments": [],
+          "is_type_parameter": false,
+          "span": {
+            "start_row": 3,
+            "start_col": 4,
+            "end_row": 3,
+            "end_col": 16
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "source_name": "name",
+          "optional": false,
+          "span": {
+            "start_row": 2,
+            "start_col": 4,
+            "end_row": 2,
+            "end_col": 21
+          },
+          "annotations": [],
+          "type": {
+            "kind": "nullable",
+            "span": {
+              "start_row": 2,
+              "start_col": 14,
+              "end_row": 2,
+              "end_col": 21
+            },
+            "wrapped_type": {
+              "kind": "primitive",
+              "primitive": "string",
+              "span": {
+                "start_row": 2,
+                "start_col": 14,
+                "end_row": 2,
+                "end_col": 21
+              }
+            }
+          }
+        }
+      ],
+      "enum_values": [],
+      "aliased_type": null
+    }
+  ],
+  "diagnostics": []
+}

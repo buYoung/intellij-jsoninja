@@ -1,79 +1,56 @@
 package com.livteam.jsoninja.ui.component.convertType
 
-import com.intellij.openapi.Disposable
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.SimpleListCellRenderer
+import com.intellij.openapi.util.IconLoader
+import com.intellij.ui.components.JBPanel
 import com.livteam.jsoninja.model.SupportedLanguage
-import com.livteam.jsoninja.settings.JsoninjaSettingsState
-import javax.swing.JComponent
+import java.awt.BorderLayout
+import java.awt.Component
+import javax.swing.DefaultListCellRenderer
+import javax.swing.Icon
+import javax.swing.JList
 
-class LanguageSelectorComponent(
-    project: Project,
-) : Disposable {
-    private val settings = JsoninjaSettingsState.getInstance(project)
-    private var isUpdatingSelection = false
-    private var onLanguageChangedCallback: ((SupportedLanguage) -> Unit)? = null
+class LanguageSelectorComponent : JBPanel<LanguageSelectorComponent>(BorderLayout()) {
+    private val languageComboBox = ComboBox(SupportedLanguage.entries.toTypedArray())
+    private var onLanguageChanged: ((SupportedLanguage) -> Unit)? = null
 
-    private lateinit var languageComboBox: ComboBox<SupportedLanguage>
-
-    val component: JComponent by lazy { createComponent() }
-
-    fun setOnLanguageChanged(callback: (SupportedLanguage) -> Unit) {
-        onLanguageChangedCallback = callback
-    }
-
-    fun getSelectedLanguage(): SupportedLanguage {
-        return languageComboBox.selectedItem as? SupportedLanguage
-            ?: SupportedLanguage.fromNameOrDefault(settings.convertTypeLastLanguage)
+    init {
+        languageComboBox.renderer = object : DefaultListCellRenderer() {
+            override fun getListCellRendererComponent(
+                list: JList<*>?,
+                value: Any?,
+                index: Int,
+                isSelected: Boolean,
+                cellHasFocus: Boolean,
+            ): Component {
+                val component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+                val language = value as? SupportedLanguage
+                text = language?.getDisplayName().orEmpty()
+                icon = language?.let(::loadLanguageIcon)
+                return component
+            }
+        }
+        languageComboBox.addActionListener {
+            getSelectedLanguage()?.let { selectedLanguage ->
+                onLanguageChanged?.invoke(selectedLanguage)
+            }
+        }
+        add(languageComboBox, BorderLayout.CENTER)
     }
 
     fun setSelectedLanguage(language: SupportedLanguage) {
-        if (!::languageComboBox.isInitialized) {
-            component
-        }
-
-        if (languageComboBox.selectedItem == language) {
-            return
-        }
-
-        isUpdatingSelection = true
-        try {
-            languageComboBox.selectedItem = language
-        } finally {
-            isUpdatingSelection = false
-        }
-        persistSelectedLanguage(language)
+        languageComboBox.selectedItem = language
     }
 
-    override fun dispose() {
-        if (::languageComboBox.isInitialized) {
-            languageComboBox.actionListeners.forEach(languageComboBox::removeActionListener)
-        }
-        onLanguageChangedCallback = null
+    fun getSelectedLanguage(): SupportedLanguage? {
+        return languageComboBox.selectedItem as? SupportedLanguage
     }
 
-    private fun createComponent(): JComponent {
-        languageComboBox = ComboBox(SupportedLanguage.entries.toTypedArray()).apply {
-            prototypeDisplayValue = SupportedLanguage.TYPESCRIPT
-            renderer = SimpleListCellRenderer.create { label, value, _ ->
-                label.text = value?.displayName ?: ""
-                label.icon = value?.icon
-            }
-            selectedItem = SupportedLanguage.fromNameOrDefault(settings.convertTypeLastLanguage)
-            addActionListener {
-                val selectedLanguage = selectedItem as? SupportedLanguage ?: return@addActionListener
-                persistSelectedLanguage(selectedLanguage)
-                if (!isUpdatingSelection) {
-                    onLanguageChangedCallback?.invoke(selectedLanguage)
-                }
-            }
-        }
-
-        return languageComboBox
+    fun setOnLanguageChanged(callback: (SupportedLanguage) -> Unit) {
+        onLanguageChanged = callback
     }
 
-    private fun persistSelectedLanguage(language: SupportedLanguage) {
-        settings.convertTypeLastLanguage = language.name
+    private fun loadLanguageIcon(language: SupportedLanguage): Icon {
+        return IconLoader.getIcon("/icons/languages/${language.name.lowercase()}.svg", javaClass)
     }
 }
