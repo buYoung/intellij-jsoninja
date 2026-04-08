@@ -65,18 +65,21 @@ class JsonToTypeInferenceContext(
             jsonNode.isFloatingPointNumber || jsonNode.isBigDecimal -> {
                 TypeReference.Primitive(TypePrimitiveKind.DECIMAL)
             }
+
             jsonNode.isNumber -> TypeReference.Primitive(TypePrimitiveKind.NUMBER)
             jsonNode.isArray -> inferArrayType(
                 arrayNode = jsonNode as ArrayNode,
                 suggestedTypeName = suggestedTypeName,
                 depth = depth,
             )
+
             jsonNode.isObject -> inferObjectType(
                 objectNodes = listOf(jsonNode as ObjectNode),
                 suggestedTypeName = suggestedTypeName,
                 depth = depth,
                 forceDeclarationName = forceDeclarationName,
             )
+
             else -> TypeReference.AnyValue
         }
     }
@@ -118,7 +121,7 @@ class JsonToTypeInferenceContext(
                     inferredElementType
                 } else {
                     JsonToTypeSupport.mergeTypeReferences(
-                        mergedTypeReference!!,
+                        mergedTypeReference,
                         inferredElementType,
                         allowsNullableFields = options.allowsNullableFields,
                         usesExperimentalGoUnionTypes = options.usesExperimentalGoUnionTypes,
@@ -171,7 +174,7 @@ class JsonToTypeInferenceContext(
                     inferredFieldType
                 } else {
                     JsonToTypeSupport.mergeTypeReferences(
-                        mergedTypeReference!!,
+                        mergedTypeReference,
                         inferredFieldType,
                         allowsNullableFields = options.allowsNullableFields,
                         usesExperimentalGoUnionTypes = options.usesExperimentalGoUnionTypes,

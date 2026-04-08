@@ -1,6 +1,8 @@
 package com.livteam.jsoninja.ui.dialog.convertType
 
 import com.intellij.openapi.components.service
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
 import com.livteam.jsoninja.model.SupportedLanguage
@@ -29,7 +31,7 @@ class JsonToTypeDialogPresenter(
         bindView()
         applyConfig()
         view.setInputText(initialInputText)
-        schedulePreview()
+        scheduleInitialPreview()
     }
 
     val component
@@ -86,6 +88,15 @@ class JsonToTypeDialogPresenter(
         isApplyingState = true
         view.applyConfig(currentConfig)
         isApplyingState = false
+    }
+
+    private fun scheduleInitialPreview() {
+        invokeLater(ModalityState.any()) {
+            if (project.isDisposed) {
+                return@invokeLater
+            }
+            schedulePreview()
+        }
     }
 
     private fun schedulePreview() {
