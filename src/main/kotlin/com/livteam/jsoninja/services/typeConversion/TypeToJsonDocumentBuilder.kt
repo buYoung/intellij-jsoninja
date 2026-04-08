@@ -22,13 +22,32 @@ class TypeToJsonDocumentBuilder(
             declarationsByName = declarationsByName,
             rootTypeName = rootTypeName,
         )
+        val outputCount = options.outputCount.coerceIn(1, 100)
+        val rootDocument = buildSingleDocument(rootDeclaration, declarationsByName, options)
 
-        if (options.outputCount <= 1) {
-            return buildSingleDocument(rootDeclaration, declarationsByName, options)
+        if (outputCount <= 1) {
+            return rootDocument
+        }
+
+        if (rootDocument is ArrayNode) {
+            val mergedArrayNode = objectMapper.createArrayNode()
+            mergedArrayNode.addAll(rootDocument)
+
+            // Keep array roots flat by appending generated elements into the same array.
+            repeat(outputCount - 1) {
+                val generatedDocument = buildSingleDocument(rootDeclaration, declarationsByName, options)
+                if (generatedDocument is ArrayNode) {
+                    mergedArrayNode.addAll(generatedDocument)
+                } else {
+                    mergedArrayNode.add(generatedDocument)
+                }
+            }
+            return mergedArrayNode
         }
 
         val arrayNode = objectMapper.createArrayNode()
-        repeat(options.outputCount.coerceIn(1, 100)) {
+        arrayNode.add(rootDocument)
+        repeat(outputCount - 1) {
             arrayNode.add(buildSingleDocument(rootDeclaration, declarationsByName, options))
         }
         return arrayNode
