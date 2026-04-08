@@ -1,8 +1,5 @@
 package com.livteam.jsoninja.actions
 
-import com.intellij.diff.DiffDialogHints
-import com.intellij.diff.DiffManager
-import com.intellij.diff.editor.DiffEditorTabFilesManager
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -13,8 +10,6 @@ import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
-import com.livteam.jsoninja.ui.diff.JsonDiffRequestChain
-import com.livteam.jsoninja.ui.diff.JsonDiffVirtualFile
 import com.livteam.jsoninja.utils.JsonHelperUtils
 
 /**
@@ -43,12 +38,7 @@ class ShowJsonDiffAction : AnAction(
 
     companion object {
         fun openDiffForCurrentJson(project: Project, forceWindow: Boolean = false) {
-            val jsonDiffService = project.service<JsonDiffService>()
             val settings = JsoninjaSettingsState.getInstance(project)
-            val currentJson = JsonHelperUtils.getCurrentJsonFromToolWindow(project)
-            val leftJson = currentJson ?: "{}"
-            val rightJson = "{}"
-
             val displayMode = if (forceWindow) {
                 JsonDiffDisplayMode.WINDOW
             } else {
@@ -59,34 +49,14 @@ class ShowJsonDiffAction : AnAction(
                 }
             }
 
-            val diffSortKeys = settings.diffSortKeys
-
-            when (displayMode) {
-                JsonDiffDisplayMode.EDITOR_TAB -> showAsEditorTab(project, jsonDiffService, leftJson, rightJson, diffSortKeys)
-                JsonDiffDisplayMode.WINDOW -> showAsWindow(project, jsonDiffService, leftJson, rightJson, diffSortKeys)
-            }
+            openDiffForCurrentJson(project, displayMode)
         }
 
-        private fun showAsEditorTab(
-            project: Project,
-            diffService: JsonDiffService,
-            leftJson: String,
-            rightJson: String,
-            sortKeys: Boolean
-        ) {
-            val diffFile = JsonDiffVirtualFile(project, diffService, leftJson, rightJson, sortKeys)
-            DiffEditorTabFilesManager.getInstance(project).showDiffFile(diffFile, true)
-        }
-
-        private fun showAsWindow(
-            project: Project,
-            diffService: JsonDiffService,
-            leftJson: String,
-            rightJson: String,
-            sortKeys: Boolean
-        ) {
-            val diffChain = JsonDiffRequestChain(project, diffService, leftJson, rightJson, sortKeys)
-            DiffManager.getInstance().showDiff(project, diffChain, DiffDialogHints.FRAME)
+        fun openDiffForCurrentJson(project: Project, displayMode: JsonDiffDisplayMode) {
+            val jsonDiffService = project.service<JsonDiffService>()
+            val settings = JsoninjaSettingsState.getInstance(project)
+            val currentJson = JsonHelperUtils.getCurrentJsonFromToolWindow(project)
+            jsonDiffService.openDiff(displayMode, currentJson, settings.diffSortKeys)
         }
     }
 }

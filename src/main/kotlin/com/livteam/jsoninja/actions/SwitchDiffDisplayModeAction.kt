@@ -1,41 +1,24 @@
 package com.livteam.jsoninja.actions
 
-import com.intellij.diff.DiffDialogHints
-import com.intellij.diff.DiffManager
-import com.intellij.diff.editor.DiffEditorTabFilesManager
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
-import com.livteam.jsoninja.ui.diff.JsonDiffRequestChain
-import com.livteam.jsoninja.ui.diff.JsonDiffVirtualFile
 
 /**
  * Action to switch between Editor Tab and Window display modes for JSON diff
  * This action allows switching from the current diff view toolbar
  */
-class SwitchDiffDisplayModeAction : AnAction {
-    
-    // Default constructor for plugin.xml
-    constructor() : super(
-        LocalizationBundle.message("action.switch.diff.display.mode"),
-        LocalizationBundle.message("action.switch.diff.display.mode.description"),
-        AllIcons.Actions.ChangeView
-    )
-    
-    private var requestChain: JsonDiffRequestChain? = null
-
-    // Constructor with request chain (for backward compatibility)
-    constructor(requestChain: JsonDiffRequestChain) : this() {
-        this.requestChain = requestChain
-    }
-    
+class SwitchDiffDisplayModeAction : AnAction(
+    LocalizationBundle.message("action.switch.diff.display.mode"),
+    LocalizationBundle.message("action.switch.diff.display.mode.description"),
+    AllIcons.Actions.ChangeView
+) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val settings = JsoninjaSettingsState.getInstance(project)
@@ -55,23 +38,8 @@ class SwitchDiffDisplayModeAction : AnAction {
         
         // Save new mode to settings
         settings.diffDisplayMode = newMode.name
-        
-        // Get current diff contents if available
-        val leftJson = requestChain?.leftJson ?: "{}"
-        val rightJson = requestChain?.rightJson ?: "{}"
-        val sortKeys = requestChain?.sortKeys ?: false
-        
-        // Open in new mode
-        when (newMode) {
-            JsonDiffDisplayMode.EDITOR_TAB -> {
-                val diffFile = JsonDiffVirtualFile(project, jsonDiffService, leftJson, rightJson, sortKeys)
-                DiffEditorTabFilesManager.getInstance(project).showDiffFile(diffFile, true)
-            }
-            JsonDiffDisplayMode.WINDOW -> {
-                val diffChain = JsonDiffRequestChain(project, jsonDiffService, leftJson, rightJson, sortKeys)
-                DiffManager.getInstance().showDiff(project, diffChain, DiffDialogHints.FRAME)
-            }
-        }
+
+        jsonDiffService.switchDisplayMode(newMode)
     }
     
     override fun update(e: AnActionEvent) {
