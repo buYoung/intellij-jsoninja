@@ -19,6 +19,7 @@ import javax.swing.JComponent
 import javax.swing.JSplitPane
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
+import com.intellij.ui.dsl.builder.panel
 
 class JsonToTypeDialogView(
     project: com.intellij.openapi.project.Project,
@@ -38,17 +39,23 @@ class JsonToTypeDialogView(
         get() = rootPanel
 
     init {
-        val controlsPanel = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 8, 4)).apply {
-            add(JBLabel(LocalizationBundle.message("dialog.json.to.type.language")))
-            add(languageSelector)
-            add(JBLabel(LocalizationBundle.message("dialog.json.to.type.root.name")))
-            add(rootTypeNameTextField)
-            add(nullableCheckBox)
-            add(JBLabel(LocalizationBundle.message("dialog.json.to.type.naming")))
-            add(namingConventionComboBox)
-            add(JBLabel(LocalizationBundle.message("dialog.json.to.type.annotation")))
-            add(annotationStyleComboBox)
-            add(goUnionCheckBox)
+        val controlsPanel = panel {
+            row {
+                label(LocalizationBundle.message("dialog.json.to.type.language"))
+                cell(languageSelector)
+                label(LocalizationBundle.message("dialog.json.to.type.root.name")).gap(com.intellij.ui.dsl.builder.RightGap.SMALL)
+                cell(rootTypeNameTextField)
+                cell(nullableCheckBox)
+            }
+            row {
+                label(LocalizationBundle.message("dialog.json.to.type.naming"))
+                cell(namingConventionComboBox)
+                label(LocalizationBundle.message("dialog.json.to.type.annotation")).gap(com.intellij.ui.dsl.builder.RightGap.SMALL)
+                cell(annotationStyleComboBox)
+                cell(goUnionCheckBox)
+            }
+        }.apply {
+            border = com.intellij.util.ui.JBUI.Borders.empty(4, 8)
         }
 
         val splitPane = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inputEditorView, previewPanel).apply {

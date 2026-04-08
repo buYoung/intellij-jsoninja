@@ -18,6 +18,7 @@ import javax.swing.JComponent
 import javax.swing.JSpinner
 import javax.swing.JSplitPane
 import javax.swing.SpinnerNumberModel
+import com.intellij.ui.dsl.builder.panel
 
 class TypeToJsonDialogView(
     project: com.intellij.openapi.project.Project,
@@ -41,17 +42,23 @@ class TypeToJsonDialogView(
         get() = rootPanel
 
     init {
-        val controlsPanel = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 8, 4)).apply {
-            add(JBLabel(LocalizationBundle.message("dialog.type.to.json.language")))
-            add(languageSelector)
-            add(JBLabel(LocalizationBundle.message("dialog.type.to.json.fields.mode")))
-            add(fieldsModeComboBox)
-            add(nullableCheckBox)
-            add(realisticDataCheckBox)
-            add(JBLabel(LocalizationBundle.message("dialog.type.to.json.output.count")))
-            add(outputCountSpinner)
-            add(JBLabel(LocalizationBundle.message("dialog.type.to.json.format")))
-            add(formatStateComboBox)
+        val controlsPanel = panel {
+            row {
+                label(LocalizationBundle.message("dialog.type.to.json.language"))
+                cell(languageSelector)
+                label(LocalizationBundle.message("dialog.type.to.json.fields.mode")).gap(com.intellij.ui.dsl.builder.RightGap.SMALL)
+                cell(fieldsModeComboBox)
+                cell(nullableCheckBox)
+            }
+            row {
+                label(LocalizationBundle.message("dialog.type.to.json.output.count"))
+                cell(outputCountSpinner)
+                label(LocalizationBundle.message("dialog.type.to.json.format")).gap(com.intellij.ui.dsl.builder.RightGap.SMALL)
+                cell(formatStateComboBox)
+                cell(realisticDataCheckBox)
+            }
+        }.apply {
+            border = com.intellij.util.ui.JBUI.Borders.empty(4, 8)
         }
         val splitPane = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inputPanel, previewPanel).apply {
             resizeWeight = 0.46
