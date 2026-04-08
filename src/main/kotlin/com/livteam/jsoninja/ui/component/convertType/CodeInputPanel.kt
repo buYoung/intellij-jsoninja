@@ -1,23 +1,15 @@
 package com.livteam.jsoninja.ui.component.convertType
 
-import com.intellij.ide.highlighter.HighlighterFactory
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.EditorFactory
-import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
-import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.fileTypes.FileType
-import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.fileTypes.PlainTextFileType
-import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
-import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
-import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
+import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
+import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
 import java.awt.BorderLayout
 import javax.swing.JPanel
 
@@ -45,7 +37,7 @@ class CodeInputPanel(
     }
 
     fun setText(text: String) {
-        editorField?.text = text
+        setEditorTextAndRefreshCodeFolding(project, editorField, text)
     }
 
     fun getText(): String = editorField?.text.orEmpty()
@@ -66,28 +58,24 @@ class CodeInputPanel(
             (oldEditorField as? Disposable)?.let(Disposer::dispose)
         }
 
-        val fileType = resolveFileType(fileExtension)
-        val document = createDocument(text, fileExtension, fileType)
-        editorField = EditorTextField(document, project, fileType, false, false).also { createdEditorField ->
-            createdEditorField.setPlaceholder(placeholderText)
-            createdEditorField.putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
-            createdEditorField.addSettingsProvider { editor ->
-                editor.settings.isLineNumbersShown = true
-                editor.settings.isWhitespacesShown = false
-                editor.settings.isUseSoftWraps = true
-                editor.settings.isRightMarginShown = false
-                editor.settings.isIndentGuidesShown = true
-                editor.settings.isFoldingOutlineShown = true
-                editor.settings.isCaretRowShown = true
-                editor.isEmbeddedIntoDialogWrapper = true
-                if (editor is EditorEx) {
-                    val scheme = EditorColorsManager.getInstance().globalScheme
-                    editor.colorsScheme = scheme
-                    editor.highlighter = HighlighterFactory.createHighlighter(project, fileType)
-                    editor.setHorizontalScrollbarVisible(true)
-                    editor.setVerticalScrollbarVisible(true)
-                }
-            }
+        editorField = EditorTextFieldFactory.createCodeField(
+            project = project,
+            fileExtension = fileExtension,
+            initialText = text,
+            placeholderText = placeholderText,
+            shouldApplyEditorColors = true,
+            shouldApplyHighlighter = true,
+            shouldShowHorizontalScrollbar = true,
+            shouldShowVerticalScrollbar = true,
+            configureEditorSettings = {
+                isLineNumbersShown = true
+                isWhitespacesShown = false
+                isUseSoftWraps = true
+                isRightMarginShown = false
+                isIndentGuidesShown = true
+                isCaretRowShown = true
+            },
+        ).also { createdEditorField ->
             createdEditorField.document.addDocumentListener(object : DocumentListener {
                 override fun documentChanged(event: DocumentEvent) {
                     onTextChanged?.invoke(createdEditorField.text)
@@ -98,26 +86,6 @@ class CodeInputPanel(
         editorField?.let { add(it, BorderLayout.CENTER) }
         revalidate()
         repaint()
-    }
-
-    private fun resolveFileType(fileExtension: String): FileType {
-        val resolvedFileType = FileTypeManager.getInstance().getFileTypeByExtension(fileExtension)
-        return if (resolvedFileType is UnknownFileType) PlainTextFileType.INSTANCE else resolvedFileType
-    }
-
-    private fun createDocument(
-        text: String,
-        fileExtension: String,
-        fileType: FileType,
-    ) = if (fileType is PlainTextFileType) {
-        EditorFactory.getInstance().createDocument(text)
-    } else {
-        JsonDocumentFactory.createJsonDocument(
-            value = text,
-            project = project,
-            documentCreator = SimpleJsonDocumentCreator(),
-            fileExtension = fileExtension,
-        )
     }
 
     override fun dispose() {

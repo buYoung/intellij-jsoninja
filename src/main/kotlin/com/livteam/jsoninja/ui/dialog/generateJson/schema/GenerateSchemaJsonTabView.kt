@@ -1,7 +1,6 @@
 package com.livteam.jsoninja.ui.dialog.generateJson.schema
 
 import com.intellij.ide.IdeEventQueue
-import com.intellij.json.JsonFileType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.project.Project
@@ -17,8 +16,8 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
-import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
+import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
+import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import java.awt.BorderLayout
@@ -135,7 +134,7 @@ class GenerateSchemaJsonTabView(
     }
 
     fun setSchemaEditorText(schemaText: String) {
-        schemaEditor.text = schemaText
+        setEditorTextAndRefreshCodeFolding(project, schemaEditor, schemaText)
     }
 
     fun setLoadSchemaFromUrlButtonEnabled(isEnabled: Boolean) {
@@ -575,22 +574,17 @@ class GenerateSchemaJsonTabView(
 
     private fun createSchemaEditor(): EditorTextField {
         val initialSchemaText = LocalizationBundle.message("dialog.generate.json.schema.placeholder")
-        val document = JsonDocumentFactory.createJsonDocument(
-            initialSchemaText,
+        return EditorTextFieldFactory.createJsonField(
             project,
-            SimpleJsonDocumentCreator(),
-            "json"
+            fileExtension = "json",
+            initialText = initialSchemaText,
+            preferredSize = JBUI.size(620, 320),
+            shouldShowHorizontalScrollbar = true,
+            shouldShowVerticalScrollbar = true,
+            configureEditorSettings = {
+                applySchemaEditorSettings()
+            },
         )
-        return EditorTextField(document, project, JsonFileType.INSTANCE, false, false).apply {
-            preferredSize = JBUI.size(620, 320)
-            addSettingsProvider { editor ->
-                editor.settings.applySchemaEditorSettings()
-                editor.setHorizontalScrollbarVisible(true)
-                editor.setVerticalScrollbarVisible(true)
-                editor.isEmbeddedIntoDialogWrapper = true
-            }
-            putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
-        }
     }
 
     private fun EditorSettings.applySchemaEditorSettings() {
