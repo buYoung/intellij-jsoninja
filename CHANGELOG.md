@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Code Folding**: Fixed an issue where code folding no longer worked in the plugin editors on IDE 2026.1.
+- **JSON Diff Tool Window**: Fixed an issue where the contents of the existing JSON Diff tool window disappeared when clicking the action icon.
+
 ## [1.11.0] - 2026-04-08
 
 ### Added
