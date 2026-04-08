@@ -1,13 +1,6 @@
 package com.livteam.jsoninja.ui.component.convertType
 
-import com.intellij.ide.highlighter.HighlighterFactory
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.colors.EditorColorsManager
-import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.fileTypes.FileType
-import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.fileTypes.PlainTextFileType
-import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
@@ -15,8 +8,8 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
-import com.livteam.jsoninja.ui.component.editor.SimpleJsonDocumentCreator
+import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
+import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import javax.swing.JButton
@@ -70,7 +63,7 @@ class CodePreviewPanel(
         fileExtension: String,
     ) {
         ensureViewer(fileExtension)
-        viewerField?.text = text
+        setEditorTextAndRefreshCodeFolding(project, viewerField, text)
         cardLayout.show(cardPanel, SUCCESS_CARD)
     }
 
@@ -110,38 +103,31 @@ class CodePreviewPanel(
             (oldViewer as? Disposable)?.let(Disposer::dispose)
         }
 
-        val document = JsonDocumentFactory.createJsonDocument(
-            value = "",
+        val shouldEnableCodeFolding = shouldEnableCodeFolding(fileExtension)
+        viewerField = EditorTextFieldFactory.createCodeField(
             project = project,
-            documentCreator = SimpleJsonDocumentCreator(),
             fileExtension = fileExtension,
+            isViewer = true,
+            shouldEnableCodeFolding = shouldEnableCodeFolding,
+            shouldApplyEditorColors = true,
+            shouldApplyHighlighter = true,
+            shouldShowHorizontalScrollbar = true,
+            shouldShowVerticalScrollbar = true,
+            configureEditorSettings = {
+                isLineNumbersShown = true
+                isUseSoftWraps = true
+                isRightMarginShown = false
+                isIndentGuidesShown = false
+            },
         )
-        val fileType = resolveFileType(fileExtension)
-        viewerField = EditorTextField(document, project, fileType, true, false).also { createdViewer ->
-            createdViewer.putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
-            createdViewer.addSettingsProvider { editor ->
-                editor.settings.isLineNumbersShown = true
-                editor.settings.isUseSoftWraps = true
-                editor.settings.isRightMarginShown = false
-                editor.settings.isIndentGuidesShown = false
-                editor.isEmbeddedIntoDialogWrapper = true
-                if (editor is EditorEx) {
-                    val scheme = EditorColorsManager.getInstance().globalScheme
-                    editor.colorsScheme = scheme
-                    editor.highlighter = HighlighterFactory.createHighlighter(project, fileType)
-                    editor.setHorizontalScrollbarVisible(true)
-                    editor.setVerticalScrollbarVisible(true)
-                }
-            }
-        }
         viewerField?.let { successPanel.add(it, BorderLayout.CENTER) }
         successPanel.revalidate()
         successPanel.repaint()
     }
 
-    private fun resolveFileType(fileExtension: String): FileType {
-        val resolvedFileType = FileTypeManager.getInstance().getFileTypeByExtension(fileExtension)
-        return if (resolvedFileType is UnknownFileType) PlainTextFileType.INSTANCE else resolvedFileType
+    private fun shouldEnableCodeFolding(fileExtension: String): Boolean {
+        return fileExtension.equals("json", ignoreCase = true) ||
+            fileExtension.equals("json5", ignoreCase = true)
     }
 
     override fun dispose() {

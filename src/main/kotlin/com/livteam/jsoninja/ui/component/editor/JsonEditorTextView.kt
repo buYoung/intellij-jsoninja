@@ -1,18 +1,11 @@
 package com.livteam.jsoninja.ui.component.editor
 
-import com.intellij.ide.highlighter.HighlighterFactory
-import com.intellij.json.JsonFileType
-import com.intellij.json.JsonLanguage
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.editor.EditorSettings
-import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.fileTypes.FileType
-import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
@@ -43,42 +36,24 @@ class JsonEditorTextView(
     }
 
     private fun createJsonEditor(): EditorTextField {
-        val document = documentCreator.createDocument(EMPTY_TEXT, project, fileExtension)
-        val extensionToUse = fileExtension ?: "json5"
-        var fileType = FileTypeManager.getInstance().getFileTypeByExtension(extensionToUse)
-
-        if (fileType is UnknownFileType) {
-            fileType = JsonLanguage.INSTANCE.associatedFileType ?: JsonFileType.INSTANCE
-        }
-
-        return EditorTextField(document, project, fileType, false, false).also { editorField ->
-            configureEditor(editorField, fileType)
-        }
-    }
-
-    private fun configureEditor(editorField: EditorTextField, fileType: FileType) {
-        editorField.addSettingsProvider { editorInstance ->
-            editorInstance.contentComponent.name = OnboardingTutorialTargetIds.JSON_EDITOR
-            editorInstance.settings.applyEditorSettings()
-            applyEditorAppearance(editorInstance, fileType)
-            applyEditorScrollbars(editorInstance)
-            installEditorContextMenu(editorInstance)
-        }
-        editorField.setPlaceholder(PLACEHOLDER_TEXT)
-        editorField.putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
-    }
-
-    private fun applyEditorAppearance(editor: EditorEx, fileType: FileType) {
-        val globalScheme = EditorColorsManager.getInstance().globalScheme
-        editor.colorsScheme = globalScheme
-        editor.backgroundColor = globalScheme.defaultBackground
-        editor.highlighter = HighlighterFactory.createHighlighter(project, fileType)
-        editor.isEmbeddedIntoDialogWrapper = true
-    }
-
-    private fun applyEditorScrollbars(editor: EditorEx) {
-        editor.setHorizontalScrollbarVisible(true)
-        editor.setVerticalScrollbarVisible(true)
+        return EditorTextFieldFactory.createJsonField(
+            project = project,
+            fileExtension = fileExtension,
+            initialText = EMPTY_TEXT,
+            documentCreator = documentCreator,
+            placeholderText = PLACEHOLDER_TEXT,
+            shouldApplyEditorColors = true,
+            shouldApplyHighlighter = true,
+            shouldShowHorizontalScrollbar = true,
+            shouldShowVerticalScrollbar = true,
+            configureEditorSettings = {
+                applyEditorSettings()
+            },
+            customizeEditor = { _ ->
+                contentComponent.name = OnboardingTutorialTargetIds.JSON_EDITOR
+                installEditorContextMenu(this)
+            },
+        )
     }
 
     private fun installEditorContextMenu(editor: EditorEx) {
@@ -121,13 +96,12 @@ class JsonEditorTextView(
         isRightMarginShown = true
         isUseSoftWraps = true
         isIndentGuidesShown = true
-        isFoldingOutlineShown = true
     }
 
     fun getText(): String = editor.text
 
     fun setText(text: String) {
-        editor.text = text
+        setEditorTextAndRefreshCodeFolding(project, editor, text)
     }
 
     override fun dispose() {

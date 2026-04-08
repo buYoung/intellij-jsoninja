@@ -4,7 +4,6 @@ import com.intellij.ide.highlighter.HighlighterFactory
 import com.intellij.json.JsonFileType
 import com.intellij.json.JsonLanguage
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
@@ -27,6 +26,7 @@ import com.intellij.ui.dsl.builder.*
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiRequestMethod
 import java.awt.BorderLayout
@@ -238,16 +238,14 @@ class LoadJsonFromApiDialogView(
     }
 
     private fun createRequestBodyEditorTextField(): EditorTextField {
-        val document = EditorFactory.getInstance().createDocument("")
-        return EditorTextField(document, project, PlainTextFileType.INSTANCE, false, false).apply {
-            preferredSize = JBUI.size(620, 220)
-            setPlaceholder(LocalizationBundle.message("dialog.load.json.api.body.placeholder"))
-            addSettingsProvider { editor ->
-                editor.settings.applyRequestBodyEditorSettings()
-                editor.isEmbeddedIntoDialogWrapper = true
-            }
-            putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
-        }
+        return EditorTextFieldFactory.createPlainTextField(
+            project = project,
+            preferredSize = JBUI.size(620, 220),
+            placeholderText = LocalizationBundle.message("dialog.load.json.api.body.placeholder"),
+            configureEditorSettings = {
+                applyRequestBodyEditorSettings()
+            },
+        )
     }
 
     private fun EditorSettings.applyRequestBodyEditorSettings() {
