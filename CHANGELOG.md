@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-04-08
+
 ### Fixed
 
 - **Code Folding**: Fixed an issue where code folding no longer worked in the plugin editors on IDE 2026.1.
@@ -335,7 +337,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.1...HEAD
+[1.11.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.1...v1.11.0
 [1.10.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.9.0...v1.10.0
