@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-04-08
+
 ### Added
 
 - **JSON Diff Display Modes**: You can now choose how to view JSON Diff results.
@@ -15,7 +17,6 @@
 
 - **Code Folding**: Code folding works again in JSONinja editors on IDE 2026.1, so you can collapse and expand JSON objects and arrays as before.
 - **JSON Diff View**: The existing JSON Diff view no longer disappears when you click the diff action icon again; reopening a diff now preserves its contents and state.
-
 
 ## [1.11.1] - 2026-04-08
 
@@ -350,7 +351,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.1...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.2...HEAD
+[1.11.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.1...v1.11.0
 [1.10.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.0...v1.10.1
