@@ -82,3 +82,10 @@ This repository implements JSONinja, a JetBrains IDE plugin for editing, formatt
 | Background → Write + Undo | `executeOnPooledThread { compute(); WriteCommandAction.runWriteCommandAction(project) { } }` |
 | Write + Undo (EDT) | `WriteCommandAction.runWriteCommandAction(project) { }` |
 | Write Only (EDT) | `runWriteAction { }` |
+
+## Active Technologies
+- Kotlin (JVM), IntelliJ Platform SDK + IntelliJ Platform 2024.3 (`platformVersion=2024.3`), Jackson, JMESPath/jq (002-verification-coroutine-refactor)
+- N/A (IDE 플러그인, 별도 저장소 없음) (002-verification-coroutine-refactor)
+
+## Recent Changes
+- 002-verification-coroutine-refactor: Added Kotlin (JVM), IntelliJ Platform SDK + IntelliJ Platform 2024.3 (`platformVersion=2024.3`), Jackson, JMESPath/jq

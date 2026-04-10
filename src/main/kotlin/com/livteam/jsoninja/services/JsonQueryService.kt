@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.services
 
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
@@ -16,13 +17,22 @@ import net.thisptr.jackson.jq.BuiltinFunctionLoader
 import net.thisptr.jackson.jq.JsonQuery
 import net.thisptr.jackson.jq.Scope
 import net.thisptr.jackson.jq.Versions
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.fasterxml.jackson.databind.JsonNode
 
 /**
  * 다양한 쿼리 언어(Jayway JsonPath, JMESPath, jq)를 사용하여 JSON 데이터를 쿼리하는 서비스입니다.
  */
 @Service(Service.Level.PROJECT)
-class JsonQueryService(private val project: Project) {
+class JsonQueryService(
+    private val project: Project,
+    private val coroutineScope: CoroutineScope,
+) {
     private val LOG = logger<JsonQueryService>()
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
     
@@ -61,6 +71,35 @@ class JsonQueryService(private val project: Project) {
         } catch (e: Exception) {
             LOG.warn("쿼리 실행 중 오류 발생 ($type): $expression", e)
             null
+        }
+    }
+
+    fun launchValidatedQuery(
+        jsonString: String,
+        expression: String,
+        onCompleted: (JsonQueryExecutionResult) -> Unit,
+        onError: (Throwable) -> Unit,
+    ): Job {
+        return coroutineScope.launch {
+            try {
+                val executionResult = withContext(Dispatchers.Default) {
+                    if (!isValidExpression(expression)) {
+                        JsonQueryExecutionResult.InvalidExpression
+                    } else {
+                        JsonQueryExecutionResult.Success(query(jsonString, expression))
+                    }
+                }
+
+                withContext(Dispatchers.EDT) {
+                    onCompleted(executionResult)
+                }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            } catch (throwable: Throwable) {
+                withContext(Dispatchers.EDT) {
+                    onError(throwable)
+                }
+            }
         }
     }
 
@@ -152,4 +191,9 @@ class JsonQueryService(private val project: Project) {
             false
         }
     }
+}
+
+sealed interface JsonQueryExecutionResult {
+    data object InvalidExpression : JsonQueryExecutionResult
+    data class Success(val result: String?) : JsonQueryExecutionResult
 }

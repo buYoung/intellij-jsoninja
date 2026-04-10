@@ -2,7 +2,7 @@ package com.livteam.jsoninja.ui.component.editor
 
 import com.intellij.json.JsonFileType
 import com.intellij.json.JsonLanguage
-import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileTypes.FileTypeManager
@@ -10,6 +10,7 @@ import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.util.Key
+import com.intellij.openapi.util.Computable
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiFileFactory
@@ -46,7 +47,7 @@ object JsonDocumentFactory {
         value: String,
         project: Project?,
         documentCreator: SimpleJsonDocumentCreator,
-        fileExtension: String? = null
+        fileExtension: String? = null,
     ): Document {
         val extensionToUse = fileExtension ?: "json5"
         var fileType = FileTypeManager.getInstance().getFileTypeByExtension(extensionToUse)
@@ -59,23 +60,27 @@ object JsonDocumentFactory {
         val factory = PsiFileFactory.getInstance(notNullProject)
 
         val stamp = LocalTimeCounter.currentTime()
-        val psiFile = ReadAction.compute<PsiFile, RuntimeException> {
-            factory.createFileFromText(
-                "Dummy." + (fileType.defaultExtension.takeIf { it.isNotEmpty() } ?: extensionToUse),
-                fileType,
-                value,
-                stamp,
-                true,
-                false
-            )
-        }
+        val psiFile = ApplicationManager.getApplication().runReadAction(
+            Computable {
+                factory.createFileFromText(
+                    "Dummy." + (fileType.defaultExtension.takeIf { it.isNotEmpty() } ?: extensionToUse),
+                    fileType,
+                    value,
+                    stamp,
+                    true,
+                    false,
+                )
+            }
+        )
         psiFile.putUserData(JSONINJA_PSI_FILE_KEY, true)
 
         documentCreator.customizePsiFile(psiFile)
 
-        val document = ReadAction.compute<Document?, RuntimeException> {
-            PsiDocumentManager.getInstance(notNullProject).getDocument(psiFile)
-        }
+        val document = ApplicationManager.getApplication().runReadAction(
+            Computable {
+                PsiDocumentManager.getInstance(notNullProject).getDocument(psiFile)
+            }
+        )
 
         val finalDocument = document ?: EditorFactory.getInstance().createDocument(value)
         finalDocument.putUserData(JSONINJA_EDITOR_KEY, true)

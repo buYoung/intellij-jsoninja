@@ -2,19 +2,22 @@ package com.livteam.jsoninja.ui.onboarding
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.Balloon
 import com.intellij.ui.GotItTooltip
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.actions.ShowJsonDiffAction
 import com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction
+import com.livteam.jsoninja.services.JsoninjaCoroutineService
 import java.awt.Component
 import java.awt.Container
 import java.awt.Window
 import javax.swing.JComponent
 import javax.swing.Timer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class OnboardingStep8DiffTooltipController(
     private val project: Project,
@@ -24,6 +27,7 @@ class OnboardingStep8DiffTooltipController(
     private val isStep8Active: () -> Boolean,
     private val onStep8UiUpdated: () -> Unit
 ) {
+    private val coroutineScope = project.service<JsoninjaCoroutineService>().coroutineScope
     private var actionTooltip: GotItTooltip? = null
     private var sortKeysTooltip: GotItTooltip? = null
     private var retryTimer: Timer? = null
@@ -44,8 +48,8 @@ class OnboardingStep8DiffTooltipController(
         val actionTooltipId = "com.livteam.jsoninja.onboarding.step8.action.$tooltipSessionId.$sequence"
         val sortTooltipId = "com.livteam.jsoninja.onboarding.step8.sort.$tooltipSessionId.$sequence"
 
-        invokeLater(ModalityState.any()) {
-            if (isDisposed() || project.isDisposed || !isStep8Active()) return@invokeLater
+        coroutineScope.launch(Dispatchers.EDT) {
+            if (isDisposed() || project.isDisposed || !isStep8Active()) return@launch
             ShowJsonDiffAction.openDiffForCurrentJson(project, forceWindow = true)
             showTooltips(
                 stepTitleKey = stepTitleKey,

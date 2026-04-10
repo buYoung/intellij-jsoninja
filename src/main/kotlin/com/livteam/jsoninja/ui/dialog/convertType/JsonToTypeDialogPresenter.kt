@@ -1,16 +1,18 @@
 package com.livteam.jsoninja.ui.dialog.convertType
 
 import com.intellij.openapi.components.service
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
 import com.livteam.jsoninja.model.SupportedLanguage
+import com.livteam.jsoninja.services.JsoninjaCoroutineService
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.typeConversion.JsonToTypeConversionOptions
 import com.livteam.jsoninja.services.typeConversion.JsonToTypeConversionService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.utils.ConvertResultUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class JsonToTypeDialogPresenter(
     private val project: Project,
@@ -21,6 +23,7 @@ class JsonToTypeDialogPresenter(
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
     private val validator = JsonToTypeDialogValidator(objectMapper)
     private val conversionService = project.getService(JsonToTypeConversionService::class.java)
+    private val coroutineScope = project.service<JsoninjaCoroutineService>().coroutineScope
     private val previewExecutor = ConvertPreviewExecutor()
     private val view = JsonToTypeDialogView(project)
     private var currentConfig = settingsAdapter.load()
@@ -91,9 +94,9 @@ class JsonToTypeDialogPresenter(
     }
 
     private fun scheduleInitialPreview() {
-        invokeLater(ModalityState.any()) {
+        coroutineScope.launch(Dispatchers.EDT) {
             if (project.isDisposed) {
-                return@invokeLater
+                return@launch
             }
             schedulePreview()
         }

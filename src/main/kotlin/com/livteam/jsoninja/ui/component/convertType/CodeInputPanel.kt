@@ -76,11 +76,14 @@ class CodeInputPanel(
                 isCaretRowShown = true
             },
         ).also { createdEditorField ->
-            createdEditorField.document.addDocumentListener(object : DocumentListener {
-                override fun documentChanged(event: DocumentEvent) {
-                    onTextChanged?.invoke(createdEditorField.text)
-                }
-            })
+            createdEditorField.document.addDocumentListener(
+                object : DocumentListener {
+                    override fun documentChanged(event: DocumentEvent) {
+                        onTextChanged?.invoke(createdEditorField.text)
+                    }
+                },
+                this,
+            )
         }
 
         editorField?.let { add(it, BorderLayout.CENTER) }

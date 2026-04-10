@@ -4,25 +4,35 @@ import com.intellij.codeInsight.hint.HintManager
 import com.intellij.codeInsight.hint.HintManagerImpl
 import com.intellij.codeInsight.hint.HintUtil
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.event.EditorMouseMotionListener
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.event.EditorMouseEvent
+import com.intellij.openapi.editor.event.EditorMouseMotionListener
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.ui.LightweightHint
-import com.intellij.util.Alarm
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.utils.JsonPathHelper
 import javax.swing.JComponent
 import javax.swing.SwingUtilities
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class JsonEditorTooltipListener(
     private val project: Project,
     private val editorContainer: JComponent,
-    parentDisposable: Disposable
+    parentDisposable: Disposable,
 ) : EditorMouseMotionListener {
 
     companion object {
@@ -30,16 +40,26 @@ class JsonEditorTooltipListener(
     }
 
     private val settings = JsoninjaSettingsState.getInstance(project)
-    private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, parentDisposable)
+    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var tooltipJob: Job? = null
+
     @Volatile
     private var pendingTooltip: PendingTooltip? = null
     private var activeHint: LightweightHint? = null
 
+    init {
+        Disposer.register(parentDisposable) {
+            tooltipJob?.cancel()
+            coroutineScope.cancel()
+            activeHint?.hide()
+            activeHint = null
+            pendingTooltip = null
+        }
+    }
+
     override fun mouseMoved(e: EditorMouseEvent) {
         if (e.editor.project != project) return
 
-        // Check if the event comes from our editor
-        // We check if the editor component is a child of the editorContainer
         if (!SwingUtilities.isDescendingFrom(e.editor.component, editorContainer)) {
             return
         }
@@ -49,6 +69,7 @@ class JsonEditorTooltipListener(
 
         val editorEx = e.editor as? EditorEx ?: return
         if (!isModifierDown) {
+            tooltipJob?.cancel()
             cancelPending()
             if (editorEx.contentComponent.toolTipText != null) {
                 editorEx.contentComponent.toolTipText = null
@@ -57,62 +78,79 @@ class JsonEditorTooltipListener(
         }
 
         val offset = e.offset
-        val result = ReadAction.compute<TooltipResult?, RuntimeException> {
-            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(e.editor.document) ?: return@compute null
-            val element = psiFile.findElementAt(offset)
-            val queryType = JsonQueryType.fromString(settings.jsonQueryType)
-            val useDotNotation = queryType == JsonQueryType.JMESPATH || queryType == JsonQueryType.JACKSON_JQ
+        tooltipJob?.cancel()
+        tooltipJob = coroutineScope.launch {
+            try {
+                val result = readAction {
+                    val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(e.editor.document) ?: return@readAction null
+                    val element = psiFile.findElementAt(offset)
+                    val queryType = JsonQueryType.fromString(settings.jsonQueryType)
+                    val useDotNotation = queryType == JsonQueryType.JMESPATH || queryType == JsonQueryType.JACKSON_JQ
 
-            val templateResult = JsonPathHelper.getPathFromTemplateText(
-                documentText = e.editor.document.text,
-                offset = offset,
-                project = project,
-                isJmes = useDotNotation
-            )
+                    val templateResult = JsonPathHelper.getPathFromTemplateText(
+                        documentText = e.editor.document.text,
+                        offset = offset,
+                        project = project,
+                        isJmes = useDotNotation,
+                    )
 
-            val resolvedPath = templateResult?.path ?: if (element != null) {
-                when (queryType) {
-                    JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
-                    JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
-                    JsonQueryType.JACKSON_JQ -> JsonPathHelper.getJqPath(element)
+                    val resolvedPath = templateResult?.path ?: if (element != null) {
+                        when (queryType) {
+                            JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
+                            JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
+                            JsonQueryType.JACKSON_JQ -> JsonPathHelper.getJqPath(element)
+                        }
+                    } else null
+
+                    if (resolvedPath == null) return@readAction null
+
+                    val label = when (queryType) {
+                        JsonQueryType.JMESPATH -> "JMESPath"
+                        JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
+                        JsonQueryType.JACKSON_JQ -> "jq"
+                    }
+
+                    TooltipResult(
+                        text = "<html>$label: <b>$resolvedPath</b></html>",
+                        isTemplatePlaceholder = templateResult?.isInsidePlaceholder == true,
+                    )
                 }
-            } else null
 
-            if (resolvedPath == null) return@compute null
+                if (result != null && result.isTemplatePlaceholder) {
+                    val shouldSkip = withContext(Dispatchers.EDT) {
+                        if (editorEx.isDisposed) {
+                            return@withContext true
+                        }
+                        editorEx.contentComponent.toolTipText = null
+                        activeHint?.isVisible == true && pendingTooltip?.text == result.text
+                    }
+                    if (shouldSkip) {
+                        return@launch
+                    }
 
-            val label = when (queryType) {
-                JsonQueryType.JMESPATH -> "JMESPath"
-                JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
-                JsonQueryType.JACKSON_JQ -> "jq"
-            }
-
-            TooltipResult(
-                text = "<html>$label: <b>$resolvedPath</b></html>",
-                isTemplatePlaceholder = templateResult?.isInsidePlaceholder == true
-            )
-        }
-
-        if (result != null && result.isTemplatePlaceholder) {
-            // CtrlMouseHandler가 HintManager로 "property ..." hint를 표시하므로
-            // Swing tooltip 대신 HintManager를 사용하여 CtrlMouseHandler hint를 대체
-            editorEx.contentComponent.toolTipText = null
-
-            // 이미 같은 내용의 hint가 표시 중이면 재스케줄 불필요
-            if (activeHint?.isVisible == true && pendingTooltip?.text == result.text) {
-                return
-            }
-
-            val pending = PendingTooltip(offset, result.text)
-            pendingTooltip = pending
-            alarm.cancelAllRequests()
-            alarm.addRequest({
-                if (pendingTooltip == pending) {
-                    showTemplateHint(editorEx, result.text, offset)
+                    val pending = PendingTooltip(offset, result.text)
+                    pendingTooltip = pending
+                    delay(HINT_DELAY_MS.toLong())
+                    withContext(Dispatchers.EDT) {
+                        if (editorEx.isDisposed) {
+                            return@withContext
+                        }
+                        if (pendingTooltip == pending) {
+                            showTemplateHint(editorEx, result.text, offset)
+                        }
+                    }
+                } else {
+                    withContext(Dispatchers.EDT) {
+                        if (editorEx.isDisposed) {
+                            return@withContext
+                        }
+                        cancelPending()
+                        editorEx.contentComponent.toolTipText = result?.text
+                    }
                 }
-            }, HINT_DELAY_MS)
-        } else {
-            cancelPending()
-            editorEx.contentComponent.toolTipText = result?.text
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            }
         }
     }
 
@@ -132,24 +170,23 @@ class JsonEditorTooltipListener(
             HintManagerImpl.HIDE_BY_SCROLLING or
             HintManagerImpl.HIDE_BY_OTHER_HINT
         HintManagerImpl.getInstanceImpl().showEditorHint(
-            hint, editor, point, flags, 0, false
+            hint, editor, point, flags, 0, false,
         )
     }
 
     private fun cancelPending() {
         pendingTooltip = null
-        alarm.cancelAllRequests()
         activeHint?.hide()
         activeHint = null
     }
 
     private data class TooltipResult(
         val text: String,
-        val isTemplatePlaceholder: Boolean
+        val isTemplatePlaceholder: Boolean,
     )
 
     private data class PendingTooltip(
         val offset: Int,
-        val text: String?
+        val text: String?,
     )
 }

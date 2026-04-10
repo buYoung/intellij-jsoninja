@@ -14,6 +14,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <iconMapper mappingFile="JSONinjaIconMappings.json"/>
         <toolWindow factoryClass="com.livteam.jsoninja.ui.toolWindow.JsoninjaToolWindowFactory" id="JSONinja"
+                    anchor="right"
                     icon="com.livteam.jsoninja.icons.JsoninjaIcons.ToolWindowIcon"/>
 
         <projectConfigurable
@@ -37,8 +38,6 @@
     <applicationListeners>
         <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener"
                   topic="com.intellij.openapi.application.ApplicationActivationListener"/>
-        <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener"
-                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
 
     <actions>

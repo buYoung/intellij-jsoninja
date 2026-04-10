@@ -1,18 +1,15 @@
 package com.livteam.jsoninja.ui.component.jsonQuery
 
 import com.intellij.icons.AllIcons
-import com.intellij.util.ui.JBUI
-import com.intellij.ide.HelpTooltip
+import com.intellij.ui.ContextHelpLabel
 import com.intellij.ui.SearchTextField
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.ui.onboarding.OnboardingTutorialTargetIds
 import java.awt.BorderLayout
-import java.awt.Cursor
 import java.awt.event.KeyAdapter
-import java.net.URL
+import java.net.URI
 import javax.swing.JComponent
-import javax.swing.JLabel
 import javax.swing.JPanel
 
 /**
@@ -21,16 +18,12 @@ import javax.swing.JPanel
  */
 class JsonQueryView {
     private val jmesPathField = SearchTextField()
-    private val infoLabel = JLabel(AllIcons.General.ContextHelp)
     private val panel = JPanel(BorderLayout(4, 0))
-    private var currentHelpTooltip: HelpTooltip? = null
+    private var infoLabel = createInfoLabel(JsonQueryType.JMESPATH)
 
     init {
         jmesPathField.name = OnboardingTutorialTargetIds.QUERY_FIELD
         jmesPathField.textEditor.emptyText.text = LocalizationBundle.message("jmesPathPlaceholder")
-
-        infoLabel.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        infoLabel.border = JBUI.Borders.emptyRight(6)
 
         panel.add(jmesPathField, BorderLayout.CENTER)
         panel.add(infoLabel, BorderLayout.EAST)
@@ -60,19 +53,11 @@ class JsonQueryView {
     }
 
     private fun updateHelpTooltip(queryType: JsonQueryType) {
-        HelpTooltip.dispose(infoLabel)
-
-        val (title, description, link) = getHelpContent(queryType)
-
-        currentHelpTooltip = HelpTooltip()
-            .setTitle(title)
-            .setDescription(description)
-            .setBrowserLink(
-                LocalizationBundle.message("queryHelp.learnMore"),
-                URL(link)
-            )
-
-        currentHelpTooltip?.installOn(infoLabel)
+        panel.remove(infoLabel)
+        infoLabel = createInfoLabel(queryType)
+        panel.add(infoLabel, BorderLayout.EAST)
+        panel.revalidate()
+        panel.repaint()
     }
 
     private fun getHelpContent(queryType: JsonQueryType): Triple<String, String, String> {
@@ -94,7 +79,19 @@ class JsonQueryView {
         return Triple(
             LocalizationBundle.message(titleKey),
             LocalizationBundle.message(descKey),
-            link
+            link,
         )
+    }
+
+    private fun createInfoLabel(queryType: JsonQueryType): ContextHelpLabel {
+        val (title, description, link) = getHelpContent(queryType)
+        return ContextHelpLabel.createWithBrowserLink(
+            title,
+            description,
+            LocalizationBundle.message("queryHelp.learnMore"),
+            URI.create(link).toURL(),
+        ).also {
+            it.icon = AllIcons.General.ContextHelp
+        }
     }
 }

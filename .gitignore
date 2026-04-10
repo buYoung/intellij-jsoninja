@@ -8,9 +8,13 @@ out
 
 *.class
 *.jar
+*.iml
 *.log
 .env*
 .DS_Store
+Thumbs.db
+*.tmp
+*.swp
 .vscode/
 
 instrumented*

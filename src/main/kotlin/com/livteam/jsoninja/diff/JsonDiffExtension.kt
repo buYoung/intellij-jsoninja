@@ -7,7 +7,7 @@ import com.intellij.diff.EditorDiffViewer
 import com.intellij.diff.FrameDiffTool
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.json.JsonFileType
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
@@ -18,7 +18,6 @@ import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.util.Alarm
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
@@ -27,6 +26,15 @@ import java.io.IOException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 자동 JSON 포맷팅을 제공하는 JSON diff viewer extension.
@@ -266,7 +274,8 @@ class JsonDiffExtension : DiffExtension() {
     ) {
         val document = editor.document
         val state = getDocumentState(document)
-        val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, viewer)
+        val formatterScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        var debounceJob: Job? = null
         val fileName = editor.virtualFile?.name ?: "<unknown>"
 
         val documentListener = object : DocumentListener {
@@ -299,31 +308,36 @@ class JsonDiffExtension : DiffExtension() {
                 // 대용량 파일은 viewer 생성 시점에서 warning dialog이 처리
                 // 여기서 하드 리미트가 필요 없음 - 사용자가 이미 동의했거나 warning이 비활성화됨
 
-                // 대기 중인 포맷팅 취소
-                alarm.cancelAllRequests()
-
-                // debounce로 새로운 포맷팅 예약
-                alarm.addRequest({
+                debounceJob?.cancel()
+                debounceJob = formatterScope.launch {
+                    delay(Constants.DEBOUNCE_DELAY.toLong())
                     if (!project.isDisposed) {
-                        scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys)
+                        scheduleJsonFormatting(
+                            project = project,
+                            document = document,
+                            formatterService = formatterService,
+                            fileName = fileName,
+                            sortKeys = sortKeys,
+                            coroutineScope = formatterScope,
+                        )
                     }
-                }, Constants.DEBOUNCE_DELAY)
+                }
             }
         }
 
-        document.addDocumentListener(documentListener)
+        document.addDocumentListener(documentListener, viewer)
 
-        // viewer가 dispose될 때 listener 제거 및 정리
+        // viewer가 dispose될 때 추가 정리만 수행
         Disposer.register(viewer) {
-            document.removeDocumentListener(documentListener)
-            alarm.cancelAllRequests()
+            debounceJob?.cancel()
+            formatterScope.cancel()
             // WeakHashMap이 자연스럽게 document state를 정리하도록 함
             LOG.debug("Disposed JSON diff extension for '$fileName'")
         }
 
         // content가 있으면 초기 포맷팅 수행
         if (document.text.isNotBlank()) {
-            scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys)
+            scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys, formatterScope)
         }
     }
 
@@ -336,14 +350,23 @@ class JsonDiffExtension : DiffExtension() {
         document: Document,
         formatterService: JsonFormatterService,
         fileName: String,
-        sortKeys: Boolean
+        sortKeys: Boolean,
+        coroutineScope: CoroutineScope,
     ) {
         if (project.isDisposed) return
 
-        ApplicationManager.getApplication().executeOnPooledThread {
-            val formattedResult = formatJsonInBackground(document, formatterService, fileName, sortKeys)
-            if (formattedResult != null && !project.isDisposed) {
-                applyJsonFormatting(project, document, formattedResult, fileName)
+        coroutineScope.launch {
+            try {
+                val formattedResult = withContext(Dispatchers.Default) {
+                    formatJsonInBackground(document, formatterService, fileName, sortKeys)
+                }
+                if (formattedResult != null && !project.isDisposed) {
+                    withContext(Dispatchers.EDT) {
+                        applyJsonFormatting(project, document, formattedResult, fileName)
+                    }
+                }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
             }
         }
     }

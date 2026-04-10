@@ -1,14 +1,17 @@
 package com.livteam.jsoninja.ui.component.editor
 
 import com.intellij.codeInsight.folding.CodeFoldingManager
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.readActionBlocking
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.project.Project
 import com.intellij.ui.EditorTextField
+import com.livteam.jsoninja.services.JsoninjaCoroutineService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 internal class FoldingAwareEditorTextField(
     document: Document,
@@ -41,20 +44,17 @@ private fun refreshFoldRegions(
         return
     }
 
-    ApplicationManager.getApplication().invokeLater(
-        {
+    project.service<JsoninjaCoroutineService>().coroutineScope.launch(Dispatchers.EDT) {
+        if (project.isDisposed || editor.isDisposed) {
+            return@launch
+        }
+
+        readActionBlocking {
             if (project.isDisposed || editor.isDisposed) {
-                return@invokeLater
+                return@readActionBlocking
             }
 
-            ReadAction.run<RuntimeException> {
-                if (project.isDisposed || editor.isDisposed) {
-                    return@run
-                }
-
-                CodeFoldingManager.getInstance(project).updateFoldRegions(editor)
-            }
-        },
-        ModalityState.any(),
-    )
+            CodeFoldingManager.getInstance(project).updateFoldRegions(editor)
+        }
+    }
 }

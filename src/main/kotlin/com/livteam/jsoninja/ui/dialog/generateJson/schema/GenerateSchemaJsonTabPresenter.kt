@@ -1,8 +1,6 @@
 package com.livteam.jsoninja.ui.dialog.generateJson.schema
 
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
@@ -10,6 +8,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.ValidationInfo
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.services.JsoninjaCoroutineService
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.schema.JsonSchemaDataGenerationService
 import com.livteam.jsoninja.services.schema.JsonSchemaGenerationException
@@ -21,6 +20,14 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 import javax.swing.JComponent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class GenerateSchemaJsonTabPresenter(
     private val project: Project?
@@ -30,6 +37,9 @@ class GenerateSchemaJsonTabPresenter(
     private val view = GenerateSchemaJsonTabView(project, initialConfig)
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
     private val jmesPathRuntime = JacksonRuntime()
+    private val ownsCoroutineScope = project == null
+    private val coroutineScope =
+        project?.service<JsoninjaCoroutineService>()?.coroutineScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val schemaDataGenerationService = project?.getService(JsonSchemaDataGenerationService::class.java)
 
     @Volatile
@@ -37,6 +47,8 @@ class GenerateSchemaJsonTabPresenter(
 
     private var schemaStoreCatalogItems: List<SchemaStoreCatalogItem> = emptyList()
     private var schemaStoreCatalogState = SchemaStoreCatalogState.LOADING
+    private var schemaStoreCatalogJob: Job? = null
+    private var schemaLoadJob: Job? = null
 
     init {
         view.setOnSchemaUrlInputChanged { filterSchemaStoreCatalogItemsByInput() }
@@ -107,6 +119,11 @@ class GenerateSchemaJsonTabPresenter(
 
     fun dispose() {
         isDisposed = true
+        schemaStoreCatalogJob?.cancel()
+        schemaLoadJob?.cancel()
+        if (ownsCoroutineScope) {
+            coroutineScope.cancel()
+        }
         view.dispose()
     }
 
@@ -123,25 +140,31 @@ class GenerateSchemaJsonTabPresenter(
             showPopupWhenAvailable = false
         )
 
-        ApplicationManager.getApplication().executeOnPooledThread {
-            if (isDisposed) return@executeOnPooledThread
+        schemaStoreCatalogJob?.cancel()
+        schemaStoreCatalogJob = coroutineScope.launch {
             try {
-                val schemaStoreCatalogText = fetchSchemaText(SCHEMA_STORE_CATALOG_URL)
-                val parsedSchemaStoreCatalogItems = parseSchemaStoreCatalog(schemaStoreCatalogText)
-                if (parsedSchemaStoreCatalogItems.isEmpty()) {
-                    throw IOException("SchemaStore catalog has no valid entries.")
+                if (isDisposed) return@launch
+                val parsedSchemaStoreCatalogItems = withContext(Dispatchers.IO) {
+                    val schemaStoreCatalogText = fetchSchemaText(SCHEMA_STORE_CATALOG_URL)
+                    val catalogItems = parseSchemaStoreCatalog(schemaStoreCatalogText)
+                    if (catalogItems.isEmpty()) {
+                        throw IOException("SchemaStore catalog has no valid entries.")
+                    }
+                    catalogItems
                 }
 
-                invokeLater(ModalityState.any()) {
-                    if (isDisposed) return@invokeLater
+                withContext(Dispatchers.EDT) {
+                    if (isDisposed) return@withContext
                     schemaStoreCatalogItems = parsedSchemaStoreCatalogItems
                     schemaStoreCatalogState = SchemaStoreCatalogState.READY
                     filterSchemaStoreCatalogItemsByInput()
                 }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
             } catch (exception: Exception) {
                 LOG.warn("Failed to load SchemaStore catalog.", exception)
-                invokeLater(ModalityState.any()) {
-                    if (isDisposed) return@invokeLater
+                withContext(Dispatchers.EDT) {
+                    if (isDisposed) return@withContext
                     schemaStoreCatalogItems = emptyList()
                     schemaStoreCatalogState = SchemaStoreCatalogState.FAILED
                     view.updateSchemaUrlSuggestions(
@@ -376,29 +399,35 @@ class GenerateSchemaJsonTabPresenter(
 
         view.setLoadSchemaFromUrlButtonEnabled(false)
 
-        ApplicationManager.getApplication().executeOnPooledThread {
-            if (isDisposed) return@executeOnPooledThread
+        schemaLoadJob?.cancel()
+        schemaLoadJob = coroutineScope.launch {
             try {
-                val fetchedSchemaText = fetchSchemaText(schemaUrl)
-                if (fetchedSchemaText.trim().isEmpty()) {
-                    throw IOException(LocalizationBundle.message("dialog.generate.json.schema.url.fetch.empty"))
+                if (isDisposed) return@launch
+                val fetchedSchemaText = withContext(Dispatchers.IO) {
+                    val schemaText = fetchSchemaText(schemaUrl)
+                    if (schemaText.trim().isEmpty()) {
+                        throw IOException(LocalizationBundle.message("dialog.generate.json.schema.url.fetch.empty"))
+                    }
+                    schemaText
                 }
 
-                invokeLater(ModalityState.any()) {
-                    if (isDisposed) return@invokeLater
+                withContext(Dispatchers.EDT) {
+                    if (isDisposed) return@withContext
                     setSchemaEditorText(fetchedSchemaText)
                     view.markSchemaStoreSelectionLoaded()
                 }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
             } catch (exception: Exception) {
                 val message = exception.message
                     ?: LocalizationBundle.message("dialog.generate.json.schema.url.fetch.failed")
-                invokeLater(ModalityState.any()) {
-                    if (isDisposed) return@invokeLater
+                withContext(Dispatchers.EDT) {
+                    if (isDisposed) return@withContext
                     showSchemaUrlError(message)
                 }
             } finally {
-                invokeLater(ModalityState.any()) {
-                    if (isDisposed) return@invokeLater
+                withContext(Dispatchers.EDT) {
+                    if (isDisposed) return@withContext
                     view.setLoadSchemaFromUrlButtonEnabled(true)
                 }
             }

@@ -1,17 +1,16 @@
 package com.livteam.jsoninja.ui.component.jsonQuery
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.services.JsonQueryExecutionResult
 import com.livteam.jsoninja.services.JsonQueryService
 import com.livteam.jsoninja.settings.JsoninjaSettingsListener
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
+import kotlinx.coroutines.Job
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.KeyEvent.VK_ENTER
@@ -30,6 +29,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
 
     @Volatile
     private var isDisposed = false
+    private var searchJob: Job? = null
 
     private var onSearchCallback: ((String, String) -> Unit)? = null
     private var onBeforeSearchCallback: (() -> Unit)? = null
@@ -65,10 +65,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
                     // 쿼리가 비어있으면 원본 JSON으로 돌아감
                     if (query.isEmpty()) {
                         model.lastQuery = ""
-
-                        invokeLater(ModalityState.any()) {
-                            onSearchCallback?.invoke(model.originalJson, model.originalJson)
-                        }
+                        onSearchCallback?.invoke(model.originalJson, model.originalJson)
                     } else {
                         model.lastQuery = query
                         performSearch(query)
@@ -100,37 +97,36 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
             return
         }
 
-        // 백그라운드 스레드에서 쿼리 실행
-        ApplicationManager.getApplication().executeOnPooledThread {
-            try {
-                if (isDisposed) return@executeOnPooledThread
-                // 쿼리 유효성 먼저 검사
-                if (!jsonQueryService.isValidExpression(query)) {
-                    LOG.warn("유효하지 않은 쿼리 표현식: $query")
-                    return@executeOnPooledThread
+        searchJob?.cancel()
+        searchJob = jsonQueryService.launchValidatedQuery(
+            jsonString = model.originalJson,
+            expression = query,
+            onCompleted = { executionResult ->
+                if (isDisposed) {
+                    return@launchValidatedQuery
                 }
 
-                val result = jsonQueryService.query(model.originalJson, query)
-
-                // UI 업데이트는 EDT에서 수행
-                invokeLater(ModalityState.any()) {
-                    if (isDisposed) return@invokeLater
-                    if (result == null) {
-                        return@invokeLater
+                when (executionResult) {
+                    JsonQueryExecutionResult.InvalidExpression -> {
+                        LOG.warn("유효하지 않은 쿼리 표현식: $query")
                     }
 
-                    if (result.isEmpty()) {
-                        // 결과가 비어있어도 콜백은 호출하여 UI가 현재 결과를 반영하도록 함
-                        LOG.warn("쿼리 결과가 없습니다: $query")
+                    is JsonQueryExecutionResult.Success -> {
+                        val result = executionResult.result ?: return@launchValidatedQuery
+                        if (result.isEmpty()) {
+                            LOG.warn("쿼리 결과가 없습니다: $query")
+                        }
+                        onSearchCallback?.invoke(model.originalJson, result)
                     }
-
-                    onSearchCallback?.invoke(model.originalJson, result)
                 }
-            } catch (e: Exception) {
-                LOG.error("쿼리 실행 중 오류 발생", e)
-                // 예외 발생 시에도 이전 상태 유지
-            }
-        }
+            },
+            onError = { throwable ->
+                if (isDisposed) {
+                    return@launchValidatedQuery
+                }
+                LOG.error("쿼리 실행 중 오류 발생", throwable)
+            },
+        )
     }
 
     /**
@@ -199,6 +195,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
 
     override fun dispose() {
         isDisposed = true
+        searchJob?.cancel()
         messageBusConnection.disconnect()
     }
 }

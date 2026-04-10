@@ -1,11 +1,10 @@
 package com.livteam.jsoninja.ui.dialog.loadJson
 
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.services.JsoninjaCoroutineService
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiLoadRequest
@@ -15,6 +14,11 @@ import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import javax.swing.JComponent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class LoadJsonFromApiDialogPresenter(
     private val project: Project,
@@ -22,10 +26,12 @@ class LoadJsonFromApiDialogPresenter(
     private val onDialogCloseRequested: () -> Unit
 ) {
     private val view = LoadJsonFromApiDialogView(project)
+    private val coroutineScope = project.service<JsoninjaCoroutineService>().coroutineScope
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
 
     @Volatile
     private var isDisposed = false
+    private var loadJob: Job? = null
 
     init {
         view.setOnSendRequested { handleSendRequested() }
@@ -37,6 +43,7 @@ class LoadJsonFromApiDialogPresenter(
 
     fun dispose() {
         isDisposed = true
+        loadJob?.cancel()
         view.dispose()
     }
 
@@ -52,41 +59,46 @@ class LoadJsonFromApiDialogPresenter(
         }
 
         view.setLoading(true)
+        loadJob?.cancel()
+        loadJob = coroutineScope.launch {
+            try {
+                val responseJson = withContext(Dispatchers.IO) {
+                    loadJsonResponse(apiLoadRequest)
+                }
 
-        ApplicationManager.getApplication().executeOnPooledThread {
-            val loadResult = runCatching {
-                loadJsonResponse(apiLoadRequest)
-            }
-
-            invokeLater(ModalityState.any()) {
-                if (isDisposed) return@invokeLater
-                view.setLoading(false)
-
-                loadResult.fold(
-                    onSuccess = { responseJson ->
-                        runCatching {
-                            onJsonLoaded(responseJson)
-                            onDialogCloseRequested()
-                        }.onFailure { callbackException ->
-                            view.showErrorMessage(
-                                callbackException.message
-                                    ?: LocalizationBundle.message(
-                                        "dialog.load.json.api.error.request.failed",
-                                        callbackException.javaClass.simpleName
-                                    )
-                            )
-                        }
-                    },
-                    onFailure = { throwable ->
+                withContext(Dispatchers.EDT) {
+                    if (isDisposed) return@withContext
+                    try {
+                        onJsonLoaded(responseJson)
+                        onDialogCloseRequested()
+                    } catch (callbackException: Exception) {
                         view.showErrorMessage(
-                            throwable.message
+                            callbackException.message
                                 ?: LocalizationBundle.message(
                                     "dialog.load.json.api.error.request.failed",
-                                    throwable.javaClass.simpleName
+                                    callbackException.javaClass.simpleName
                                 )
                         )
                     }
-                )
+                }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            } catch (throwable: Throwable) {
+                withContext(Dispatchers.EDT) {
+                    if (isDisposed) return@withContext
+                    view.showErrorMessage(
+                        throwable.message
+                            ?: LocalizationBundle.message(
+                                "dialog.load.json.api.error.request.failed",
+                                throwable.javaClass.simpleName
+                            )
+                    )
+                }
+            } finally {
+                withContext(Dispatchers.EDT) {
+                    if (isDisposed) return@withContext
+                    view.setLoading(false)
+                }
             }
         }
     }
