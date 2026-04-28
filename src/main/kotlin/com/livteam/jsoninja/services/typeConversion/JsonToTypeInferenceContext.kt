@@ -154,7 +154,7 @@ class JsonToTypeInferenceContext(
         val usedFieldNames = mutableSetOf<String>()
         val fieldSourceNames = linkedMapOf<String, MutableList<JsonNode>>()
         objectNodes.forEach { objectNode ->
-            objectNode.fields().forEachRemaining { (fieldName, fieldValue) ->
+            objectNode.properties().forEach { (fieldName, fieldValue) ->
                 fieldSourceNames.getOrPut(fieldName) { mutableListOf() }.add(fieldValue)
             }
         }

@@ -1,16 +1,18 @@
 package com.livteam.jsoninja.ui.component.jsonQuery
 
 import com.intellij.icons.AllIcons
-import com.intellij.util.ui.JBUI
 import com.intellij.ide.HelpTooltip
+import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.ui.SearchTextField
+import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.ui.onboarding.OnboardingTutorialTargetIds
 import java.awt.BorderLayout
 import java.awt.Cursor
 import java.awt.event.KeyAdapter
-import java.net.URL
+import java.net.URI
+import java.util.function.Supplier
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
@@ -64,15 +66,48 @@ class JsonQueryView {
 
         val (title, description, link) = getHelpContent(queryType)
 
-        currentHelpTooltip = HelpTooltip()
-            .setTitle(title)
-            .setDescription(description)
+        currentHelpTooltip = createHelpTooltip(title, description)
             .setBrowserLink(
                 LocalizationBundle.message("queryHelp.learnMore"),
-                URL(link)
+                URI(link).toURL()
             )
 
         currentHelpTooltip?.installOn(infoLabel)
+    }
+
+    private fun createHelpTooltip(title: String, description: String): HelpTooltip {
+        val helpTooltip = HelpTooltip()
+        applyHelpTooltipTitle(helpTooltip, title)
+        applyHelpTooltipDescription(helpTooltip, description)
+        return helpTooltip
+    }
+
+    private fun applyHelpTooltipTitle(helpTooltip: HelpTooltip, title: String) {
+        val htmlTitleSupplier = Supplier { HtmlChunk.text(title) }
+        if (invokeHelpTooltipMethod(helpTooltip, "setTitleSupplier", Supplier::class.java, htmlTitleSupplier)) {
+            return
+        }
+
+        invokeHelpTooltipMethod(helpTooltip, "setTitle", Supplier::class.java, Supplier { title })
+    }
+
+    private fun applyHelpTooltipDescription(helpTooltip: HelpTooltip, description: String) {
+        if (invokeHelpTooltipMethod(helpTooltip, "setDescription", HtmlChunk::class.java, HtmlChunk.text(description))) {
+            return
+        }
+
+        invokeHelpTooltipMethod(helpTooltip, "setDescription", String::class.java, description)
+    }
+
+    private fun invokeHelpTooltipMethod(
+        helpTooltip: HelpTooltip,
+        methodName: String,
+        parameterType: Class<*>,
+        argument: Any,
+    ): Boolean {
+        return runCatching {
+            HelpTooltip::class.java.getMethod(methodName, parameterType).invoke(helpTooltip, argument)
+        }.isSuccess
     }
 
     private fun getHelpContent(queryType: JsonQueryType): Triple<String, String, String> {

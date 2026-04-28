@@ -76,7 +76,7 @@ class CodeInputPanel(
                 isCaretRowShown = true
             },
         ).also { createdEditorField ->
-            createdEditorField.document.addDocumentListener(object : DocumentListener {
+            createdEditorField.addDocumentListener(object : DocumentListener {
                 override fun documentChanged(event: DocumentEvent) {
                     onTextChanged?.invoke(createdEditorField.text)
                 }

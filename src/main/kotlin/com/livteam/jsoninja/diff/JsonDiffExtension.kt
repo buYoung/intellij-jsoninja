@@ -311,11 +311,10 @@ class JsonDiffExtension : DiffExtension() {
             }
         }
 
-        document.addDocumentListener(documentListener)
+        document.addDocumentListener(documentListener, viewer)
 
         // viewer가 dispose될 때 listener 제거 및 정리
         Disposer.register(viewer) {
-            document.removeDocumentListener(documentListener)
             alarm.cancelAllRequests()
             // WeakHashMap이 자연스럽게 document state를 정리하도록 함
             LOG.debug("Disposed JSON diff extension for '$fileName'")

@@ -4,11 +4,12 @@ import com.intellij.codeInsight.hint.HintManager
 import com.intellij.codeInsight.hint.HintManagerImpl
 import com.intellij.codeInsight.hint.HintUtil
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.event.EditorMouseMotionListener
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.event.EditorMouseEvent
+import com.intellij.openapi.editor.event.EditorMouseMotionListener
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.ui.LightweightHint
@@ -57,8 +58,8 @@ class JsonEditorTooltipListener(
         }
 
         val offset = e.offset
-        val result = ReadAction.compute<TooltipResult?, RuntimeException> {
-            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(e.editor.document) ?: return@compute null
+        val result = ApplicationManager.getApplication().runReadAction(Computable<TooltipResult?> {
+            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(e.editor.document) ?: return@Computable null
             val element = psiFile.findElementAt(offset)
             val queryType = JsonQueryType.fromString(settings.jsonQueryType)
             val useDotNotation = queryType == JsonQueryType.JMESPATH || queryType == JsonQueryType.JACKSON_JQ
@@ -78,7 +79,7 @@ class JsonEditorTooltipListener(
                 }
             } else null
 
-            if (resolvedPath == null) return@compute null
+            if (resolvedPath == null) return@Computable null
 
             val label = when (queryType) {
                 JsonQueryType.JMESPATH -> "JMESPath"
@@ -90,7 +91,7 @@ class JsonEditorTooltipListener(
                 text = "<html>$label: <b>$resolvedPath</b></html>",
                 isTemplatePlaceholder = templateResult?.isInsidePlaceholder == true
             )
-        }
+        })
 
         if (result != null && result.isTemplatePlaceholder) {
             // CtrlMouseHandler가 HintManager로 "property ..." hint를 표시하므로
