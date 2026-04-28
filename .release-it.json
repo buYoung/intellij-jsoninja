@@ -9,19 +9,5 @@
   },
   "hooks": {
     "after:bump": "node scripts/update-changelog-with-codex.cjs ${latestTag} ${version}"
-  },
-  "plugins": {
-    "@release-it/bumper": {
-      "in": {
-        "file": "gradle.properties",
-        "type": "text/x-properties",
-        "path": "pluginVersion"
-      },
-      "out": {
-        "file": "gradle.properties",
-        "type": "text/x-properties",
-        "path": "pluginVersion"
-      }
-    }
   }
 }

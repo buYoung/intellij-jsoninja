@@ -45,6 +45,34 @@ function getCommitSummary(baseTag) {
   }
 }
 
+function updateVersionFiles() {
+  const gradlePropertiesPath = path.join(rootDirectory, "gradle.properties");
+  const gradleProperties = fs.readFileSync(gradlePropertiesPath, "utf8");
+  const nextGradleProperties = gradleProperties.replace(
+    /^pluginVersion=.*$/m,
+    `pluginVersion=${releaseVersion}`,
+  );
+
+  if (nextGradleProperties === gradleProperties) {
+    throw new Error("pluginVersion was not found in gradle.properties.");
+  }
+
+  fs.writeFileSync(gradlePropertiesPath, nextGradleProperties);
+
+  const pluginXmlPath = path.join(rootDirectory, "src/main/resources/META-INF/plugin.xml");
+  const pluginXml = fs.readFileSync(pluginXmlPath, "utf8");
+  const nextPluginXml = pluginXml.replace(
+    /(<version>)[^<]+(<\/version>)/,
+    `$1${releaseVersion}$2`,
+  );
+
+  if (nextPluginXml === pluginXml) {
+    throw new Error("version element was not found in src/main/resources/META-INF/plugin.xml.");
+  }
+
+  fs.writeFileSync(pluginXmlPath, nextPluginXml);
+}
+
 function getChangelogReference() {
   const changelogPath = path.join(rootDirectory, "CHANGELOG.md");
   const changelog = fs.readFileSync(changelogPath, "utf8");
@@ -98,17 +126,45 @@ function buildPrompt(baseTag, commitSummary, changelogReference) {
   ].join("\n");
 }
 
+function getCodexExecHelp() {
+  const result = spawnSync("codex", ["exec", "--help"], {
+    cwd: rootDirectory,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return `${result.stdout || ""}\n${result.stderr || ""}`;
+}
+
+function buildCodexArguments() {
+  const helpText = getCodexExecHelp();
+  const argumentsList = ["exec", "-C", rootDirectory];
+
+  if (helpText.includes("--sandbox")) {
+    argumentsList.push("--sandbox", "workspace-write");
+  }
+
+  if (helpText.includes("--ask-for-approval")) {
+    argumentsList.push("--ask-for-approval", "never");
+  } else if (helpText.includes("--full-auto")) {
+    argumentsList.push("--full-auto");
+  }
+
+  argumentsList.push("-");
+  return argumentsList;
+}
+
 function runCodex(prompt) {
-  const result = spawnSync(
-    "codex",
-    ["exec", "-C", rootDirectory, "--sandbox", "workspace-write", "--ask-for-approval", "never", "-"],
-    {
-      cwd: rootDirectory,
-      input: prompt,
-      stdio: ["pipe", "inherit", "inherit"],
-      encoding: "utf8",
-    },
-  );
+  const result = spawnSync("codex", buildCodexArguments(), {
+    cwd: rootDirectory,
+    input: prompt,
+    stdio: ["pipe", "inherit", "inherit"],
+    encoding: "utf8",
+  });
 
   if (result.error) {
     throw result.error;
@@ -126,7 +182,10 @@ function assertExpectedFilesOnly() {
     .filter(Boolean);
 
   const unexpectedFiles = changedFiles.filter(
-    (filePath) => filePath !== "CHANGELOG.md" && filePath !== "gradle.properties",
+    (filePath) =>
+      filePath !== "CHANGELOG.md" &&
+      filePath !== "gradle.properties" &&
+      filePath !== "src/main/resources/META-INF/plugin.xml",
   );
 
   if (unexpectedFiles.length === 0) {
@@ -137,7 +196,7 @@ function assertExpectedFilesOnly() {
   for (const filePath of unexpectedFiles) {
     console.error(filePath);
   }
-  console.error("Only CHANGELOG.md and gradle.properties may be changed during release.");
+  console.error("Only CHANGELOG.md, gradle.properties, and src/main/resources/META-INF/plugin.xml may be changed during release.");
   process.exit(1);
 }
 
@@ -150,6 +209,8 @@ if (!baseTag) {
 }
 
 const commitSummary = getCommitSummary(baseTag);
+updateVersionFiles();
+
 if (!commitSummary) {
   console.log(`No commits found after ${baseTag}.`);
   process.exit(0);
