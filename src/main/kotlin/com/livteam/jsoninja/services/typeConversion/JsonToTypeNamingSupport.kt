@@ -35,7 +35,7 @@ object JsonToTypeNamingSupport {
         parentTypeName: String,
         fieldSourceName: String,
     ): String {
-        return toTypeName(parentTypeName + singularize(fieldSourceName))
+        return toTypeName("$parentTypeName ${singularize(fieldSourceName)}")
     }
 
     fun singularize(rawName: String): String {

@@ -98,7 +98,7 @@ class TypeToJsonNodeGenerator(
         return when (declaration.aliasedTypeReference) {
             null -> {
                 if (declaration.enumValues.isNotEmpty()) {
-                    objectMapper.valueToTree(declaration.enumValues.firstOrNull().orEmpty())
+                    objectMapper.valueToTree<JsonNode>(declaration.enumValues.firstOrNull().orEmpty())
                 } else {
                     val objectNode = objectMapper.createObjectNode()
                     TypeDeclarationFieldResolver.resolveFields(

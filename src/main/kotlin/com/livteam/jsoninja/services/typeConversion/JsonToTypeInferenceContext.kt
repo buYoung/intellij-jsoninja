@@ -221,7 +221,7 @@ class JsonToTypeInferenceContext(
             signatureToDeclarationName[signature] ?: JsonToTypeNamingSupport.toTypeName(suggestedTypeName)
         }
         signatureToDeclarationName.putIfAbsent(signature, declarationName)
-        declarationsByName[declarationName] = TypeDeclaration(
+        val inferredDeclaration = TypeDeclaration(
             name = declarationName,
             declarationKind = when (language) {
                 SupportedLanguage.TYPESCRIPT -> TypeDeclarationKind.INTERFACE
@@ -230,6 +230,60 @@ class JsonToTypeInferenceContext(
             },
             fields = inferredFields,
         )
+        declarationsByName[declarationName] = declarationsByName[declarationName]?.let { existingDeclaration ->
+            existingDeclaration.copy(
+                fields = mergeDeclarationFields(
+                    existingFields = existingDeclaration.fields,
+                    incomingFields = inferredFields,
+                ),
+            )
+        } ?: inferredDeclaration
         return TypeReference.Named(declarationName)
+    }
+
+    private fun mergeDeclarationFields(
+        existingFields: List<TypeField>,
+        incomingFields: List<TypeField>,
+    ): List<TypeField> {
+        val existingFieldsBySourceName = existingFields.associateBy(TypeField::sourceName)
+        val incomingFieldsBySourceName = incomingFields.associateBy(TypeField::sourceName)
+        val fieldSourceNames = existingFields.map(TypeField::sourceName) +
+            incomingFields.map(TypeField::sourceName).filterNot(existingFieldsBySourceName::containsKey)
+
+        return fieldSourceNames.map { fieldSourceName ->
+            val existingField = existingFieldsBySourceName[fieldSourceName]
+            val incomingField = incomingFieldsBySourceName[fieldSourceName]
+
+            when {
+                existingField != null && incomingField != null -> existingField.copy(
+                    typeReference = JsonToTypeSupport.mergeTypeReferences(
+                        existingField.typeReference,
+                        incomingField.typeReference,
+                        allowsNullableFields = options.allowsNullableFields,
+                        usesExperimentalGoUnionTypes = options.usesExperimentalGoUnionTypes,
+                    ),
+                    isOptional = existingField.isOptional || incomingField.isOptional,
+                )
+                existingField != null -> existingField.copy(
+                    typeReference = JsonToTypeSupport.mergeTypeReferences(
+                        existingField.typeReference,
+                        JsonToTypeSupport.nullPlaceholder(),
+                        allowsNullableFields = options.allowsNullableFields,
+                        usesExperimentalGoUnionTypes = options.usesExperimentalGoUnionTypes,
+                    ),
+                    isOptional = true,
+                )
+                incomingField != null -> incomingField.copy(
+                    typeReference = JsonToTypeSupport.mergeTypeReferences(
+                        incomingField.typeReference,
+                        JsonToTypeSupport.nullPlaceholder(),
+                        allowsNullableFields = options.allowsNullableFields,
+                        usesExperimentalGoUnionTypes = options.usesExperimentalGoUnionTypes,
+                    ),
+                    isOptional = true,
+                )
+                else -> error("Cannot merge missing field `$fieldSourceName`.")
+            }
+        }.sortedBy(TypeField::name)
     }
 }

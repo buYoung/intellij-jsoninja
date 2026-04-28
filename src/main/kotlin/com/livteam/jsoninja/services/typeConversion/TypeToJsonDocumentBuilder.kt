@@ -70,7 +70,35 @@ class TypeToJsonDocumentBuilder(
         rootTypeName?.let(declarationsByName::get)?.let { return it }
 
         declarations.firstOrNull(::isContainerAliasDeclaration)?.let { return it }
+        selectUniqueUnreferencedDeclaration(declarations)?.let { return it }
         return declarations.firstOrNull() ?: error("No type declarations found.")
+    }
+
+    private fun selectUniqueUnreferencedDeclaration(declarations: List<TypeDeclaration>): TypeDeclaration? {
+        val referencedTypeNames = declarations.flatMap(::collectReferencedTypeNames).toSet()
+        val rootCandidates = declarations.filter { it.name !in referencedTypeNames }
+        return rootCandidates.singleOrNull()
+    }
+
+    private fun collectReferencedTypeNames(declaration: TypeDeclaration): List<String> {
+        return declaration.superTypeNames +
+            declaration.fields.flatMap { collectReferencedTypeNames(it.typeReference) } +
+            declaration.aliasedTypeReference?.let(::collectReferencedTypeNames).orEmpty()
+    }
+
+    private fun collectReferencedTypeNames(typeReference: TypeReference): List<String> {
+        return when (typeReference) {
+            TypeReference.AnyValue -> emptyList()
+            is TypeReference.InlineObject -> typeReference.fields.flatMap { collectReferencedTypeNames(it.typeReference) }
+            is TypeReference.ListReference -> collectReferencedTypeNames(typeReference.elementType)
+            is TypeReference.MapReference -> {
+                collectReferencedTypeNames(typeReference.keyType) + collectReferencedTypeNames(typeReference.valueType)
+            }
+            is TypeReference.Named -> listOf(typeReference.name)
+            is TypeReference.Nullable -> collectReferencedTypeNames(typeReference.wrappedType)
+            is TypeReference.Primitive -> emptyList()
+            is TypeReference.Union -> typeReference.members.flatMap(::collectReferencedTypeNames)
+        }
     }
 
     private fun isContainerAliasDeclaration(declaration: TypeDeclaration): Boolean {
