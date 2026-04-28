@@ -160,10 +160,15 @@ internal object EditorTextFieldFactory {
 
         placeholderText?.let(editorTextField::setPlaceholder)
         preferredSize?.let { editorTextField.preferredSize = it }
-        editorTextField.putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
+        editorTextField.setSupplementary(true)
         editorTextField.addSettingsProvider { editor ->
             editor.settings.configureEditorSettings()
             editor.settings.isFoldingOutlineShown = shouldEnableCodeFolding
+            if (shouldEnableCodeFolding) {
+                editor.settings.isLineMarkerAreaShown = true
+                editor.settings.setGutterIconsShown(true)
+                editor.settings.isAutoCodeFoldingEnabled = true
+            }
             editor.isEmbeddedIntoDialogWrapper = shouldEmbedIntoDialogWrapper
 
             if (shouldApplyEditorColors || shouldApplyHighlighter) {

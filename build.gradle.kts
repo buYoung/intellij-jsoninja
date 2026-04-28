@@ -78,7 +78,7 @@ version = providers.gradleProperty("pluginVersion").get()
 
 // Set the JVM language level used to build the project.
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 // Configure project's dependencies
@@ -160,7 +160,7 @@ val checkWasmPrerequisites by tasks.registering {
         if (installedTargets.lineSequence().none { it.trim() == treeSitterWasmTarget }) {
             throw GradleException(
                 "Rust target $treeSitterWasmTarget is not installed. " +
-                    "Run `rustup target add $treeSitterWasmTarget` first."
+                        "Run `rustup target add $treeSitterWasmTarget` first."
             )
         }
     }
