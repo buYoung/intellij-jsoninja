@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const { execFileSync, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDirectory = path.resolve(__dirname, "..");
@@ -44,25 +45,54 @@ function getCommitSummary(baseTag) {
   }
 }
 
-function buildPrompt(baseTag, commitSummary) {
+function getChangelogReference() {
+  const changelogPath = path.join(rootDirectory, "CHANGELOG.md");
+  const changelog = fs.readFileSync(changelogPath, "utf8");
+  const sectionMatches = [...changelog.matchAll(/^## \[[^\]]+\].*$/gm)];
+
+  if (sectionMatches.length === 0) {
+    return changelog.slice(0, 4000);
+  }
+
+  const referenceEndIndex = sectionMatches[3]?.index ?? Math.min(changelog.length, 5000);
+  return changelog.slice(0, referenceEndIndex).trim();
+}
+
+function buildPrompt(baseTag, commitSummary, changelogReference) {
   return [
     "Update only CHANGELOG.md for JSONinja.",
     "",
-    "Constraints:",
+    "Goal:",
+    "- Write a user-facing changelog entry that makes a product user immediately understand what was added, changed, or fixed.",
+    "- Do not describe implementation work. Explain the visible behavior or workflow impact.",
+    "",
+    "Editing constraints:",
     '- Modify only the section below "## [Unreleased]".',
     "- Do not create a versioned release section.",
     "- Do not move existing release sections.",
     "- Preserve the existing Keep a Changelog style.",
     '- Use category headings such as "### Added", "### Changed", and "### Fixed" only when the commits support them.',
-    "- Keep the bullets concise, user-facing, and similar to the existing CHANGELOG.md wording.",
     "- If an existing Unreleased bullet already describes the same change, refine it instead of duplicating it.",
     "- Do not edit code, release configuration, package metadata, or any file other than CHANGELOG.md.",
     "- Do not run tests, linting, or formatting commands.",
     "",
+    "Writing rules:",
+    "- Do not include source file paths, package names, class names, function names, commit hashes, branch names, or test/build details.",
+    "- Do not mention refactoring, presenter/service internals, dependency changes, or implementation mechanics unless they directly changed user-visible behavior.",
+    '- Prefer the existing pattern: "- **Feature Area**: Clear user-facing sentence."',
+    '- Each bullet must answer either "what can users do now?", "what behaves differently?", or "what problem is fixed?".',
+    "- Avoid vague wording such as \"improved\", \"updated\", or \"fixed issues\" unless the concrete user-visible result is stated.",
+    "- Keep nested bullets only when a feature has multiple user-visible capabilities.",
+    "- Use English because the existing changelog is written in English.",
+    "",
     `Base release tag: ${baseTag}`,
     `Release version: ${releaseVersion}`,
     "",
+    "Existing changelog style reference:",
+    changelogReference,
+    "",
     "Commits after the base release tag:",
+    "Use these commits and changed paths only as evidence. Do not copy technical file names or code identifiers into the changelog.",
     commitSummary,
     "",
   ].join("\n");
@@ -125,5 +155,5 @@ if (!commitSummary) {
   process.exit(0);
 }
 
-runCodex(buildPrompt(baseTag, commitSummary));
+runCodex(buildPrompt(baseTag, commitSummary, getChangelogReference()));
 assertExpectedFilesOnly();
