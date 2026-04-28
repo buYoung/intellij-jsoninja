@@ -1,16 +1,22 @@
 package com.livteam.jsoninja.ui.dialog.convertType
 
-import com.intellij.openapi.components.service
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.asContextElement
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
 import com.livteam.jsoninja.model.SupportedLanguage
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.typeConversion.JsonToTypeConversionOptions
 import com.livteam.jsoninja.services.typeConversion.JsonToTypeConversionService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.utils.ConvertResultUtils
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class JsonToTypeDialogPresenter(
     private val project: Project,
@@ -21,7 +27,8 @@ class JsonToTypeDialogPresenter(
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
     private val validator = JsonToTypeDialogValidator(objectMapper)
     private val conversionService = project.getService(JsonToTypeConversionService::class.java)
-    private val previewExecutor = ConvertPreviewExecutor()
+    private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
+    private val previewExecutor = ConvertPreviewExecutor(coroutineScope)
     private val view = JsonToTypeDialogView(project)
     private var currentConfig = settingsAdapter.load()
     private var currentPreviewText: String = ""
@@ -64,6 +71,7 @@ class JsonToTypeDialogPresenter(
 
     fun dispose() {
         previewExecutor.dispose()
+        coroutineScope.cancel()
         view.dispose()
     }
 
@@ -91,11 +99,13 @@ class JsonToTypeDialogPresenter(
     }
 
     private fun scheduleInitialPreview() {
-        invokeLater(ModalityState.any()) {
-            if (project.isDisposed) {
-                return@invokeLater
+        coroutineScope.launch {
+            withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
+                if (project.isDisposed) {
+                    return@withContext
+                }
+                schedulePreview()
             }
-            schedulePreview()
         }
     }
 
@@ -112,25 +122,27 @@ class JsonToTypeDialogPresenter(
             return
         }
 
+        val inputText = view.getInputText()
+        val previewConfig = currentConfig
         previewExecutor.submit(
             delayMs = 300,
             onLoading = { view.showLoadingPreview() },
             computePreview = {
                 conversionService.convert(
-                    jsonText = view.getInputText(),
-                    language = currentConfig.language,
+                    jsonText = inputText,
+                    language = previewConfig.language,
                     options = JsonToTypeConversionOptions(
-                        rootTypeName = currentConfig.rootTypeName,
-                        namingConvention = currentConfig.namingConvention,
-                        annotationStyle = currentConfig.annotationStyle,
-                        allowsNullableFields = currentConfig.allowsNullableFields,
-                        usesExperimentalGoUnionTypes = currentConfig.usesExperimentalGoUnionTypes,
+                        rootTypeName = previewConfig.rootTypeName,
+                        namingConvention = previewConfig.namingConvention,
+                        annotationStyle = previewConfig.annotationStyle,
+                        allowsNullableFields = previewConfig.allowsNullableFields,
+                        usesExperimentalGoUnionTypes = previewConfig.usesExperimentalGoUnionTypes,
                     ),
                 )
             },
             onSuccess = { previewText ->
                 currentPreviewText = previewText
-                view.showSuccessPreview(previewText, currentConfig.language.fileExtension)
+                view.showSuccessPreview(previewText, previewConfig.language.fileExtension)
             },
             onError = { error ->
                 currentPreviewText = ""

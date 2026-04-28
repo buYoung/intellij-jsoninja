@@ -2,7 +2,8 @@ package com.livteam.jsoninja.ui.component.editor
 
 import com.intellij.lang.folding.LanguageFolding
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.event.DocumentEvent
@@ -11,6 +12,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.ui.EditorTextField
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal class FoldingAwareEditorTextField(
     document: Document,
@@ -59,11 +63,10 @@ private fun refreshFoldRegions(
     }
 
     val application = ApplicationManager.getApplication()
-    val modalityState = ModalityState.stateForComponent(editor.component)
-    application.invokeLater(
-        {
+    project.service<JsoninjaCoroutineScopeService>().launch {
+        withContext(Dispatchers.EDT) {
             if (project.isDisposed || editor.isDisposed) {
-                return@invokeLater
+                return@withContext
             }
 
             val foldRegions = application.runReadAction<List<ManualFoldRegion>> {
@@ -75,13 +78,12 @@ private fun refreshFoldRegions(
             }
 
             if (project.isDisposed || editor.isDisposed) {
-                return@invokeLater
+                return@withContext
             }
 
             applyFoldRegions(editor, foldRegions)
-        },
-        modalityState,
-    )
+        }
+    }
 }
 
 private fun collectFoldRegions(

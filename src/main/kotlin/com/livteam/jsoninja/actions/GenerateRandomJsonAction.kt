@@ -2,13 +2,13 @@ package com.livteam.jsoninja.actions
 
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.ui.Messages
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.RandomJsonDataCreator
 import com.livteam.jsoninja.services.schema.JsonSchemaDataGenerationService
 import com.livteam.jsoninja.services.schema.JsonSchemaGenerationException
@@ -16,6 +16,9 @@ import com.livteam.jsoninja.ui.dialog.generateJson.GenerateJsonDialog
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class GenerateRandomJsonAction : AnAction(
     LocalizationBundle.message("action.generate.random.json.text"),
@@ -32,28 +35,33 @@ class GenerateRandomJsonAction : AnAction(
         if (dialog.showAndGet()) {
             val config = dialog.getConfig()
 
-            ApplicationManager.getApplication().executeOnPooledThread {
+            project.service<JsoninjaCoroutineScopeService>().launch {
                 try {
-                    val generatedJson = when (config.generationMode) {
-                        JsonGenerationMode.RANDOM -> {
-                            val creator = RandomJsonDataCreator()
-                            val prettyPrint = config.isJson5
-                            creator.generateConfiguredJsonString(config, prettyPrint = prettyPrint)
-                        }
+                    val generatedJson = withContext(Dispatchers.Default) {
+                        when (config.generationMode) {
+                            JsonGenerationMode.RANDOM -> {
+                                val creator = RandomJsonDataCreator()
+                                val prettyPrint = config.isJson5
+                                creator.generateConfiguredJsonString(config, prettyPrint = prettyPrint)
+                            }
 
-                        JsonGenerationMode.SCHEMA -> {
-                            val schemaDataGenerationService =
-                                project.getService(JsonSchemaDataGenerationService::class.java)
-                            schemaDataGenerationService.generateFromSchema(config)
+                            JsonGenerationMode.SCHEMA -> {
+                                val schemaDataGenerationService =
+                                    project.getService(JsonSchemaDataGenerationService::class.java)
+                                schemaDataGenerationService.generateFromSchema(config)
+                            }
                         }
                     }
 
-                    invokeLater(ModalityState.any()) {
+                    withContext(Dispatchers.EDT) {
+                        if (project.isDisposed) return@withContext
                         panel.presenter.setRandomJsonData(
                             generatedJson,
                             skipFormatting = shouldSkipFormatting(config)
                         )
                     }
+                } catch (cancellationException: CancellationException) {
+                    throw cancellationException
                 } catch (generationException: JsonSchemaGenerationException) {
                     LOG.error(
                         "Schema generation failed. pointer=${generationException.jsonPointer}, message=${generationException.message}",
@@ -65,7 +73,8 @@ class GenerateRandomJsonAction : AnAction(
                     val errorMessage = (generationException.message
                         ?: LocalizationBundle.message("dialog.generate.json.error.generic")) + pointerSuffix
 
-                    invokeLater(ModalityState.any()) {
+                    withContext(Dispatchers.EDT) {
+                        if (project.isDisposed) return@withContext
                         Messages.showErrorDialog(
                             project,
                             errorMessage,
@@ -74,7 +83,8 @@ class GenerateRandomJsonAction : AnAction(
                     }
                 } catch (exception: Exception) {
                     LOG.error("Unexpected error while generating JSON.", exception)
-                    invokeLater(ModalityState.any()) {
+                    withContext(Dispatchers.EDT) {
+                        if (project.isDisposed) return@withContext
                         Messages.showErrorDialog(
                             project,
                             exception.message ?: LocalizationBundle.message("dialog.generate.json.error.generic"),
@@ -83,7 +93,8 @@ class GenerateRandomJsonAction : AnAction(
                     }
                 } catch (error: Throwable) {
                     LOG.error("Fatal error while generating JSON.", error)
-                    invokeLater(ModalityState.any()) {
+                    withContext(Dispatchers.EDT) {
+                        if (project.isDisposed) return@withContext
                         Messages.showErrorDialog(
                             project,
                             error.message ?: LocalizationBundle.message("dialog.generate.json.error.generic"),

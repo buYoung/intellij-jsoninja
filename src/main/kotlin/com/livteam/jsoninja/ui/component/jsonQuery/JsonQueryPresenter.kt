@@ -1,13 +1,13 @@
 package com.livteam.jsoninja.ui.component.jsonQuery
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonQueryService
 import com.livteam.jsoninja.settings.JsoninjaSettingsListener
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
@@ -16,6 +16,11 @@ import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.KeyEvent.VK_ENTER
 import javax.swing.JComponent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * JMESPath 검색 로직을 담당하는 Presenter
@@ -27,6 +32,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
 
     private val jsonQueryService = project.getService(JsonQueryService::class.java)
     private val jsonFormatterService = project.getService(JsonFormatterService::class.java)
+    private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
 
     @Volatile
     private var isDisposed = false
@@ -66,8 +72,11 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
                     if (query.isEmpty()) {
                         model.lastQuery = ""
 
-                        invokeLater(ModalityState.any()) {
-                            onSearchCallback?.invoke(model.originalJson, model.originalJson)
+                        coroutineScope.launch {
+                            withContext(Dispatchers.EDT) {
+                                if (isDisposed) return@withContext
+                                onSearchCallback?.invoke(model.originalJson, model.originalJson)
+                            }
                         }
                     } else {
                         model.lastQuery = query
@@ -100,23 +109,24 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
             return
         }
 
-        // 백그라운드 스레드에서 쿼리 실행
-        ApplicationManager.getApplication().executeOnPooledThread {
+        val originalJson = model.originalJson
+        coroutineScope.launch {
             try {
-                if (isDisposed) return@executeOnPooledThread
+                if (isDisposed) return@launch
                 // 쿼리 유효성 먼저 검사
                 if (!jsonQueryService.isValidExpression(query)) {
                     LOG.warn("유효하지 않은 쿼리 표현식: $query")
-                    return@executeOnPooledThread
+                    return@launch
                 }
 
-                val result = jsonQueryService.query(model.originalJson, query)
+                val result = withContext(Dispatchers.Default) {
+                    jsonQueryService.query(originalJson, query)
+                }
 
-                // UI 업데이트는 EDT에서 수행
-                invokeLater(ModalityState.any()) {
-                    if (isDisposed) return@invokeLater
+                withContext(Dispatchers.EDT) {
+                    if (isDisposed) return@withContext
                     if (result == null) {
-                        return@invokeLater
+                        return@withContext
                     }
 
                     if (result.isEmpty()) {
@@ -124,8 +134,10 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
                         LOG.warn("쿼리 결과가 없습니다: $query")
                     }
 
-                    onSearchCallback?.invoke(model.originalJson, result)
+                    onSearchCallback?.invoke(originalJson, result)
                 }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
             } catch (e: Exception) {
                 LOG.error("쿼리 실행 중 오류 발생", e)
                 // 예외 발생 시에도 이전 상태 유지
@@ -199,6 +211,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
 
     override fun dispose() {
         isDisposed = true
+        coroutineScope.cancel()
         messageBusConnection.disconnect()
     }
 }

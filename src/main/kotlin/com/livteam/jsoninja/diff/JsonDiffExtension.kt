@@ -7,7 +7,8 @@ import com.intellij.diff.EditorDiffViewer
 import com.intellij.diff.FrameDiffTool
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.json.JsonFileType
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
@@ -21,11 +22,18 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.util.Alarm
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.dialog.LargeFileWarningDialog
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 /**
@@ -38,8 +46,8 @@ import kotlin.math.abs
  * - 과도한 처리를 방지하는 debounced 포맷팅
  * - 재진입 update 보호
  *
- * Threading: 모든 document 작업은 EDT에서 수행됩니다. 무거운 JSON parsing은
- * 가능한 경우 background thread로 이동됩니다.
+ * Threading: document 변경은 EDT의 WriteCommandAction에서 수행합니다.
+ * 무거운 JSON parsing은 background coroutine으로 이동됩니다.
  */
 class JsonDiffExtension : DiffExtension() {
 
@@ -268,6 +276,7 @@ class JsonDiffExtension : DiffExtension() {
         val state = getDocumentState(document)
         val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, viewer)
         val fileName = editor.virtualFile?.name ?: "<unknown>"
+        val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
 
         val documentListener = object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
@@ -305,7 +314,7 @@ class JsonDiffExtension : DiffExtension() {
                 // debounce로 새로운 포맷팅 예약
                 alarm.addRequest({
                     if (!project.isDisposed) {
-                        scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys)
+                        scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys, coroutineScope)
                     }
                 }, Constants.DEBOUNCE_DELAY)
             }
@@ -316,77 +325,83 @@ class JsonDiffExtension : DiffExtension() {
         // viewer가 dispose될 때 listener 제거 및 정리
         Disposer.register(viewer) {
             alarm.cancelAllRequests()
+            coroutineScope.cancel()
             // WeakHashMap이 자연스럽게 document state를 정리하도록 함
             LOG.debug("Disposed JSON diff extension for '$fileName'")
         }
 
         // content가 있으면 초기 포맷팅 수행
         if (document.text.isNotBlank()) {
-            scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys)
+            scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys, coroutineScope)
         }
     }
 
     /**
-     * background thread에서 JSON 포맷팅 작업을 예약하고, 다음 EDT에서 변경사항을 적용합니다.
-     * 안전한 document access를 위해 ReadAction을, 변경을 위해 WriteCommandAction을 사용합니다.
+     * 코루틴으로 JSON 포맷팅 작업을 예약하고, EDT에서 변경사항을 적용합니다.
      */
     private fun scheduleJsonFormatting(
         project: Project,
         document: Document,
         formatterService: JsonFormatterService,
         fileName: String,
-        sortKeys: Boolean
+        sortKeys: Boolean,
+        coroutineScope: CoroutineScope,
     ) {
         if (project.isDisposed) return
 
-        ApplicationManager.getApplication().executeOnPooledThread {
+        coroutineScope.launch {
             val formattedResult = formatJsonInBackground(document, formatterService, fileName, sortKeys)
             if (formattedResult != null && !project.isDisposed) {
-                applyJsonFormatting(project, document, formattedResult, fileName)
+                withContext(Dispatchers.EDT) {
+                    if (project.isDisposed) return@withContext
+                    applyJsonFormatting(project, document, formattedResult, fileName)
+                }
             }
         }
     }
 
     /**
-     * background thread에서 JSON 포맷팅 연산을 수행합니다.
+     * background coroutine에서 JSON 포맷팅 연산을 수행합니다.
      * 포맷팅을 스킵하거나 실패한 경우 null을 반환합니다.
      */
-    private fun formatJsonInBackground(
+    private suspend fun formatJsonInBackground(
         document: Document,
         formatterService: JsonFormatterService,
         fileName: String,
         sortKeys: Boolean
     ): String? {
-        // 재진입 update 방지
-        if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
-            LOG.debug("Skipping formatting due to change guard for '$fileName'")
-            return null
-        }
-
-        val state = getDocumentState(document)
-        if (state.isSelfUpdate.get()) {
-            LOG.debug("Skipping formatting due to self-update flag for '$fileName'")
-            return null
-        }
-
-        val text = document.text
-        val trimmed = text.trim()
-        if (trimmed.isEmpty()) {
-            LOG.debug("Document '$fileName' is empty, skipping formatting")
-            return null
-        }
-
-        // 불필요한 작업을 방지하기 위해 content hash 확인
-        val contentHash = trimmed.hashCode()
-        if (state.lastContentHash == contentHash) {
-            LOG.debug("Document '$fileName' content unchanged, skipping formatting")
-            return null
-        }
-
         return try {
+            // 재진입 update 방지
+            if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
+                LOG.debug("Skipping formatting due to change guard for '$fileName'")
+                return null
+            }
+
+            val state = getDocumentState(document)
+            if (state.isSelfUpdate.get()) {
+                LOG.debug("Skipping formatting due to self-update flag for '$fileName'")
+                return null
+            }
+
+            val text = readAction { document.text }
+            val trimmed = text.trim()
+            if (trimmed.isEmpty()) {
+                LOG.debug("Document '$fileName' is empty, skipping formatting")
+                return null
+            }
+
+            // 불필요한 작업을 방지하기 위해 content hash 확인
+            val contentHash = trimmed.hashCode()
+            if (state.lastContentHash == contentHash) {
+                LOG.debug("Document '$fileName' content unchanged, skipping formatting")
+                return null
+            }
+
             val startTime = System.currentTimeMillis()
             // JsonFormatterService는 요구사항대로 내부적으로 isValidJson을 통해 검증
-            val formatted = formatterService.formatJson(trimmed, JsonFormatState.PRETTIFY, sortKeys)
+            val formatted = withContext(Dispatchers.Default) {
+                formatterService.formatJson(trimmed, JsonFormatState.PRETTIFY, sortKeys)
+            }
             val formatTime = System.currentTimeMillis() - startTime
 
             state.lastContentHash = contentHash
@@ -397,6 +412,8 @@ class JsonDiffExtension : DiffExtension() {
 
             if (formatted != trimmed) formatted else null
 
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
         } catch (e: ProcessCanceledException) {
             // background task 중단을 적절히 처리하기 위해 취소 예외를 다시 던짐
             throw e
@@ -404,9 +421,9 @@ class JsonDiffExtension : DiffExtension() {
             LOG.debug("JSON processing failed for '$fileName': ${e.message}")
             null
         } catch (e: OutOfMemoryError) {
-            LOG.error("OutOfMemoryError during JSON formatting for '$fileName' (${document.textLength} chars)", e)
+            LOG.error("OutOfMemoryError during JSON formatting for '$fileName'", e)
             // 이 document에 대한 재시도를 방지하는 flag 설정
-            state.detectionResult = JsonDetectionResult.NO
+            getDocumentState(document).detectionResult = JsonDetectionResult.NO
             null
         } catch (e: IOException) {
             LOG.warn("IO error during JSON formatting for '$fileName'", e)

@@ -1,11 +1,12 @@
 package com.livteam.jsoninja.ui.dialog.loadJson
 
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiLoadRequest
@@ -15,6 +16,11 @@ import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import javax.swing.JComponent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class LoadJsonFromApiDialogPresenter(
     private val project: Project,
@@ -23,6 +29,7 @@ class LoadJsonFromApiDialogPresenter(
 ) {
     private val view = LoadJsonFromApiDialogView(project)
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
+    private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
 
     @Volatile
     private var isDisposed = false
@@ -37,6 +44,7 @@ class LoadJsonFromApiDialogPresenter(
 
     fun dispose() {
         isDisposed = true
+        coroutineScope.cancel()
         view.dispose()
     }
 
@@ -53,13 +61,21 @@ class LoadJsonFromApiDialogPresenter(
 
         view.setLoading(true)
 
-        ApplicationManager.getApplication().executeOnPooledThread {
-            val loadResult = runCatching {
-                loadJsonResponse(apiLoadRequest)
+        coroutineScope.launch {
+            val loadResult = try {
+                Result.success(
+                    withContext(Dispatchers.IO) {
+                        loadJsonResponse(apiLoadRequest)
+                    }
+                )
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            } catch (throwable: Throwable) {
+                Result.failure(throwable)
             }
 
-            invokeLater(ModalityState.any()) {
-                if (isDisposed) return@invokeLater
+            withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
+                if (isDisposed) return@withContext
                 view.setLoading(false)
 
                 loadResult.fold(

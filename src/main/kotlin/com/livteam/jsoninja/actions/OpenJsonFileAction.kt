@@ -3,11 +3,14 @@ package com.livteam.jsoninja.actions
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.runWriteAction
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.components.service
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * JSON 파일을 열어 새 탭에 로드하는 액션 클래스입니다.
@@ -39,10 +42,16 @@ class OpenJsonFileAction : AnAction(
         )
 
         fileChooser?.let { virtualFile ->
-            val content = String(virtualFile.contentsToByteArray())
             val extension = virtualFile.extension
-            runWriteAction {
-                panel.presenter.addNewTab(content, extension)
+            project.service<JsoninjaCoroutineScopeService>().launch {
+                val content = withContext(Dispatchers.IO) {
+                    String(virtualFile.contentsToByteArray())
+                }
+
+                withContext(Dispatchers.EDT) {
+                    if (project.isDisposed) return@withContext
+                    panel.presenter.addNewTab(content, extension)
+                }
             }
         }
     }

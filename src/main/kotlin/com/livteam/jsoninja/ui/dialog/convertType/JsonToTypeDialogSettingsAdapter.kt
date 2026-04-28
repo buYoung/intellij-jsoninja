@@ -13,12 +13,14 @@ class JsonToTypeDialogSettingsAdapter(
         val language = SupportedLanguage.fromPersistedValue(settings.jsonToTypeLastLanguage)
         return JsonToTypeDialogConfig(
             language = language,
-            namingConvention = NamingConvention.fromPersistedValue(settings.jsonToTypeDefaultNaming)
-                ?: language.defaultNamingConvention,
-            annotationStyle = JsonToTypeAnnotationStyle.fromPersistedValue(settings.jsonToTypeAnnotationStyle)
-                ?: language.defaultAnnotationStyle,
+            namingConvention = language.getSupportedNamingConvention(
+                NamingConvention.fromPersistedValue(settings.jsonToTypeDefaultNaming),
+            ),
+            annotationStyle = language.getSupportedAnnotationStyle(
+                JsonToTypeAnnotationStyle.fromPersistedValue(settings.jsonToTypeAnnotationStyle),
+            ),
             allowsNullableFields = settings.jsonToTypeNullableByDefault,
-            usesExperimentalGoUnionTypes = settings.jsonToTypeUsesExperimentalGoUnionTypes,
+            usesExperimentalGoUnionTypes = false,
         )
     }
 
@@ -30,6 +32,7 @@ class JsonToTypeDialogSettingsAdapter(
             language = language,
             namingConvention = language.defaultNamingConvention,
             annotationStyle = language.defaultAnnotationStyle,
+            usesExperimentalGoUnionTypes = false,
         )
     }
 

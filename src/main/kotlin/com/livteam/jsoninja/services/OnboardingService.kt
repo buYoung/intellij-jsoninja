@@ -2,8 +2,7 @@ package com.livteam.jsoninja.services
 
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -16,9 +15,16 @@ import com.livteam.jsoninja.ui.onboarding.OnboardingWelcomeDialog
 import java.awt.Component
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Service(Service.Level.PROJECT)
-class OnboardingService(private val project: Project) {
+class OnboardingService(
+    private val project: Project,
+    private val coroutineScope: CoroutineScope,
+) {
 
     private var tutorialDialog: OnboardingTutorialDialog? = null
 
@@ -41,14 +47,18 @@ class OnboardingService(private val project: Project) {
     fun startTutorial() {
         if (project.isDisposed) return
 
-        invokeLater(ModalityState.any()) {
-            if (project.isDisposed) return@invokeLater
+        coroutineScope.launch {
+            withContext(Dispatchers.EDT) {
+                if (project.isDisposed) return@withContext
 
-            val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID) ?: return@invokeLater
-            toolWindow.show {
-                invokeLater(ModalityState.any()) {
-                    if (project.isDisposed) return@invokeLater
-                    openTutorialDialog(toolWindow)
+                val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID) ?: return@withContext
+                toolWindow.show {
+                    coroutineScope.launch {
+                        withContext(Dispatchers.EDT) {
+                            if (project.isDisposed) return@withContext
+                            openTutorialDialog(toolWindow)
+                        }
+                    }
                 }
             }
         }

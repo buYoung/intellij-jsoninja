@@ -1,12 +1,15 @@
 package com.livteam.jsoninja.ui.dialog.convertType
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
 import com.livteam.jsoninja.model.SupportedLanguage
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.typeConversion.TypeToJsonGenerationOptions
 import com.livteam.jsoninja.services.typeConversion.TypeToJsonGenerationService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.utils.ConvertResultUtils
+import kotlinx.coroutines.cancel
 
 class TypeToJsonDialogPresenter(
     private val project: Project,
@@ -15,7 +18,8 @@ class TypeToJsonDialogPresenter(
 ) {
     private val settingsAdapter = TypeToJsonDialogSettingsAdapter(JsoninjaSettingsState.getInstance(project))
     private val generationService = project.getService(TypeToJsonGenerationService::class.java)
-    private val previewExecutor = ConvertPreviewExecutor()
+    private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
+    private val previewExecutor = ConvertPreviewExecutor(coroutineScope)
     private val view = TypeToJsonDialogView(project)
     private var currentConfig = settingsAdapter.load()
     private var currentPreviewText: String = ""
@@ -58,6 +62,7 @@ class TypeToJsonDialogPresenter(
 
     fun dispose() {
         previewExecutor.dispose()
+        coroutineScope.cancel()
         view.dispose()
     }
 
@@ -97,19 +102,21 @@ class TypeToJsonDialogPresenter(
             return
         }
 
+        val inputText = view.getInputText()
+        val previewConfig = currentConfig
         previewExecutor.submit(
             delayMs = 500,
             onLoading = { view.showLoadingPreview() },
             computePreview = {
                 generationService.generate(
-                    sourceCode = view.getInputText(),
-                    language = currentConfig.language,
+                    sourceCode = inputText,
+                    language = previewConfig.language,
                     options = TypeToJsonGenerationOptions(
-                        propertyGenerationMode = currentConfig.propertyGenerationMode,
-                        includesNullableFieldWithNullValue = currentConfig.includesNullableFieldWithNullValue,
-                        usesRealisticSampleData = currentConfig.usesRealisticSampleData,
-                        outputCount = currentConfig.outputCount,
-                        formatState = currentConfig.formatState,
+                        propertyGenerationMode = previewConfig.propertyGenerationMode,
+                        includesNullableFieldWithNullValue = previewConfig.includesNullableFieldWithNullValue,
+                        usesRealisticSampleData = previewConfig.usesRealisticSampleData,
+                        outputCount = previewConfig.outputCount,
+                        formatState = previewConfig.formatState,
                     ),
                 )
             },

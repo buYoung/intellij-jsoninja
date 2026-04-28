@@ -1,13 +1,18 @@
 package com.livteam.jsoninja.ui.component.editor
 
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.TemplatePlaceholderSupport
-import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class JsonEditorTextPresenter(
     private val project: Project,
@@ -15,6 +20,7 @@ class JsonEditorTextPresenter(
 ) {
     private var onContentChangeCallback: ((String) -> Unit)? = null
     private var isSettingText = false
+    private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
 
     fun setupContentChangeListener() {
         val contentChangeListener = object : DocumentListener {
@@ -40,6 +46,7 @@ class JsonEditorTextPresenter(
         view.editor.addDocumentListener(contentChangeListener)
 
         Disposer.register(view) {
+            coroutineScope.cancel()
             view.editor.removeDocumentListener(contentChangeListener)
         }
     }
@@ -67,14 +74,16 @@ class JsonEditorTextPresenter(
         normalizedContent: String,
         expectedModificationStamp: Long
     ) {
-        invokeLater {
-            if (project.isDisposed) return@invokeLater
+        coroutineScope.launch {
+            withContext(Dispatchers.EDT) {
+                if (project.isDisposed) return@withContext
 
-            val document = view.editor.document
-            if (document.modificationStamp != expectedModificationStamp) return@invokeLater
+                val document = view.editor.document
+                if (document.modificationStamp != expectedModificationStamp) return@withContext
 
-            setText(normalizedContent)
-            onContentChangeCallback?.invoke(normalizedContent)
+                setText(normalizedContent)
+                onContentChangeCallback?.invoke(normalizedContent)
+            }
         }
     }
 }

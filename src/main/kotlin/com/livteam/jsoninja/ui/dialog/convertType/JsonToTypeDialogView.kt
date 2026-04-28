@@ -2,9 +2,9 @@ package com.livteam.jsoninja.ui.dialog.convertType
 
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.components.JBCheckBox
-import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBTextField
+import com.intellij.ui.dsl.builder.panel
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.services.typeConversion.JsonToTypeAnnotationStyle
@@ -14,12 +14,10 @@ import com.livteam.jsoninja.ui.component.convertType.LanguageSelectorComponent
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import com.livteam.jsoninja.ui.dialog.convertType.model.JsonToTypeDialogConfig
 import java.awt.BorderLayout
-import java.awt.FlowLayout
 import javax.swing.JComponent
 import javax.swing.JSplitPane
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
-import com.intellij.ui.dsl.builder.panel
 
 class JsonToTypeDialogView(
     project: com.intellij.openapi.project.Project,
@@ -29,11 +27,11 @@ class JsonToTypeDialogView(
     private val nullableCheckBox = JBCheckBox(LocalizationBundle.message("dialog.json.to.type.nullable"))
     private val namingConventionComboBox = ComboBox(NamingConvention.entries.toTypedArray())
     private val annotationStyleComboBox = ComboBox(JsonToTypeAnnotationStyle.entries.toTypedArray())
-    private val goUnionCheckBox = JBCheckBox("Go union types")
     private val inputEditorView = JsonEditorView(project, "json5")
     private val previewPanel = CodePreviewPanel(project)
     private val rootPanel = JBPanel<JBPanel<*>>(BorderLayout())
     private var onStateChanged: (() -> Unit)? = null
+    private var isUpdatingLanguageOptions = false
 
     val component: JComponent
         get() = rootPanel
@@ -52,7 +50,6 @@ class JsonToTypeDialogView(
                 cell(namingConventionComboBox)
                 label(LocalizationBundle.message("dialog.json.to.type.annotation")).gap(com.intellij.ui.dsl.builder.RightGap.SMALL)
                 cell(annotationStyleComboBox)
-                cell(goUnionCheckBox)
             }
         }.apply {
             border = com.intellij.util.ui.JBUI.Borders.empty(4, 8)
@@ -65,7 +62,7 @@ class JsonToTypeDialogView(
         rootPanel.add(splitPane, BorderLayout.CENTER)
 
         languageSelector.setOnLanguageChanged {
-            updateGoUnionAvailability(it)
+            updateLanguageOptions(it)
             onStateChanged?.invoke()
         }
         rootTypeNameTextField.document.addDocumentListener(object : DocumentListener {
@@ -76,9 +73,8 @@ class JsonToTypeDialogView(
             override fun changedUpdate(event: DocumentEvent?) = onStateChanged?.invoke() ?: Unit
         })
         nullableCheckBox.addActionListener { onStateChanged?.invoke() }
-        namingConventionComboBox.addActionListener { onStateChanged?.invoke() }
-        annotationStyleComboBox.addActionListener { onStateChanged?.invoke() }
-        goUnionCheckBox.addActionListener { onStateChanged?.invoke() }
+        namingConventionComboBox.addActionListener { notifyStateChanged() }
+        annotationStyleComboBox.addActionListener { notifyStateChanged() }
         inputEditorView.setOnContentChangeCallback { onStateChanged?.invoke() }
     }
 
@@ -86,10 +82,11 @@ class JsonToTypeDialogView(
         languageSelector.setSelectedLanguage(config.language)
         rootTypeNameTextField.text = config.rootTypeName
         nullableCheckBox.isSelected = config.allowsNullableFields
-        namingConventionComboBox.selectedItem = config.namingConvention
-        annotationStyleComboBox.selectedItem = config.annotationStyle
-        goUnionCheckBox.isSelected = config.usesExperimentalGoUnionTypes
-        updateGoUnionAvailability(config.language)
+        updateLanguageOptions(
+            language = config.language,
+            selectedNamingConvention = config.namingConvention,
+            selectedAnnotationStyle = config.annotationStyle,
+        )
     }
 
     fun collectConfig(): JsonToTypeDialogConfig {
@@ -97,10 +94,14 @@ class JsonToTypeDialogView(
         return JsonToTypeDialogConfig(
             rootTypeName = rootTypeNameTextField.text.trim().ifBlank { "Root" },
             language = selectedLanguage,
-            namingConvention = namingConventionComboBox.selectedItem as? NamingConvention ?: selectedLanguage.defaultNamingConvention,
-            annotationStyle = annotationStyleComboBox.selectedItem as? JsonToTypeAnnotationStyle ?: selectedLanguage.defaultAnnotationStyle,
+            namingConvention = selectedLanguage.getSupportedNamingConvention(
+                namingConventionComboBox.selectedItem as? NamingConvention,
+            ),
+            annotationStyle = selectedLanguage.getSupportedAnnotationStyle(
+                annotationStyleComboBox.selectedItem as? JsonToTypeAnnotationStyle,
+            ),
             allowsNullableFields = nullableCheckBox.isSelected,
-            usesExperimentalGoUnionTypes = goUnionCheckBox.isSelected,
+            usesExperimentalGoUnionTypes = false,
         )
     }
 
@@ -141,10 +142,30 @@ class JsonToTypeDialogView(
         previewPanel.dispose()
     }
 
-    private fun updateGoUnionAvailability(language: SupportedLanguage) {
-        goUnionCheckBox.isEnabled = language == SupportedLanguage.GO
-        if (language != SupportedLanguage.GO) {
-            goUnionCheckBox.isSelected = false
+    private fun updateLanguageOptions(
+        language: SupportedLanguage,
+        selectedNamingConvention: NamingConvention = language.defaultNamingConvention,
+        selectedAnnotationStyle: JsonToTypeAnnotationStyle = language.defaultAnnotationStyle,
+    ) {
+        isUpdatingLanguageOptions = true
+        try {
+            namingConventionComboBox.removeAllItems()
+            language.availableNamingConventions.forEach(namingConventionComboBox::addItem)
+            namingConventionComboBox.selectedItem = language.getSupportedNamingConvention(selectedNamingConvention)
+            namingConventionComboBox.isEnabled = language.availableNamingConventions.size > 1
+
+            annotationStyleComboBox.removeAllItems()
+            language.availableAnnotationStyles.forEach(annotationStyleComboBox::addItem)
+            annotationStyleComboBox.selectedItem = language.getSupportedAnnotationStyle(selectedAnnotationStyle)
+            annotationStyleComboBox.isEnabled = language.availableAnnotationStyles.size > 1
+        } finally {
+            isUpdatingLanguageOptions = false
+        }
+    }
+
+    private fun notifyStateChanged() {
+        if (!isUpdatingLanguageOptions) {
+            onStateChanged?.invoke()
         }
     }
 }

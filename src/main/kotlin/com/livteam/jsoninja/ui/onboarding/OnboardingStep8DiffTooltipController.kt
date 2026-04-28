@@ -2,19 +2,25 @@ package com.livteam.jsoninja.ui.onboarding
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.Balloon
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.GotItTooltip
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.actions.ShowJsonDiffAction
 import com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import java.awt.Component
 import java.awt.Container
 import java.awt.Window
 import javax.swing.JComponent
 import javax.swing.Timer
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class OnboardingStep8DiffTooltipController(
     private val project: Project,
@@ -30,6 +36,13 @@ class OnboardingStep8DiffTooltipController(
     private val tooltipSessionId = System.nanoTime()
     private var tooltipSequence = 0
     private var openedDiffWindow: Window? = null
+    private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
+
+    init {
+        Disposer.register(tooltipParent) {
+            coroutineScope.cancel()
+        }
+    }
 
     fun maybeOpenDiff(
         showTooltip: Boolean,
@@ -44,17 +57,19 @@ class OnboardingStep8DiffTooltipController(
         val actionTooltipId = "com.livteam.jsoninja.onboarding.step8.action.$tooltipSessionId.$sequence"
         val sortTooltipId = "com.livteam.jsoninja.onboarding.step8.sort.$tooltipSessionId.$sequence"
 
-        invokeLater(ModalityState.any()) {
-            if (isDisposed() || project.isDisposed || !isStep8Active()) return@invokeLater
-            ShowJsonDiffAction.openDiffForCurrentJson(project, forceWindow = true)
-            showTooltips(
-                stepTitleKey = stepTitleKey,
-                stepBodyKey = stepBodyKey,
-                anchorTargetName = anchorTargetName,
-                actionTooltipId = actionTooltipId,
-                sortTooltipId = sortTooltipId
-            )
-            notifyUiUpdated()
+        coroutineScope.launch {
+            withContext(Dispatchers.EDT) {
+                if (isDisposed() || project.isDisposed || !isStep8Active()) return@withContext
+                ShowJsonDiffAction.openDiffForCurrentJson(project, forceWindow = true)
+                showTooltips(
+                    stepTitleKey = stepTitleKey,
+                    stepBodyKey = stepBodyKey,
+                    anchorTargetName = anchorTargetName,
+                    actionTooltipId = actionTooltipId,
+                    sortTooltipId = sortTooltipId
+                )
+                notifyUiUpdated()
+            }
         }
     }
 
@@ -75,6 +90,7 @@ class OnboardingStep8DiffTooltipController(
     }
 
     fun dispose() {
+        coroutineScope.cancel()
         clearTooltips()
         closeDiffWindow()
     }
