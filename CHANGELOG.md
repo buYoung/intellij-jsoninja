@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.11.3] - 2026-04-28
+
 ### Fixed
 
 - **Code Folding**: Fixed an issue where code folding did not work in JSONinja editors.
