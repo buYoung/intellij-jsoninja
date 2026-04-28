@@ -86,6 +86,10 @@ function getChangelogReference() {
   return changelog.slice(0, referenceEndIndex).trim();
 }
 
+function getChangelogText() {
+  return fs.readFileSync(path.join(rootDirectory, "CHANGELOG.md"), "utf8");
+}
+
 function buildPrompt(baseTag, commitSummary, changelogReference) {
   return [
     "Update only CHANGELOG.md for JSONinja.",
@@ -93,6 +97,7 @@ function buildPrompt(baseTag, commitSummary, changelogReference) {
     "Goal:",
     "- Write a user-facing changelog entry that makes a product user immediately understand what was added, changed, or fixed.",
     "- Do not describe implementation work. Explain the visible behavior or workflow impact.",
+    "- If there are no user-facing changes, leave CHANGELOG.md exactly unchanged.",
     "",
     "Editing constraints:",
     '- Modify only the section below "## [Unreleased]".',
@@ -103,8 +108,10 @@ function buildPrompt(baseTag, commitSummary, changelogReference) {
     "- If an existing Unreleased bullet already describes the same change, refine it instead of duplicating it.",
     "- Do not edit code, release configuration, package metadata, or any file other than CHANGELOG.md.",
     "- Do not run tests, linting, or formatting commands.",
+    "- Do not add a placeholder, summary, or note saying there are no user-facing changes.",
     "",
     "Writing rules:",
+    "- Skip release automation, version bumps, dependency updates, CI changes, tests, formatting, refactoring, and internal cleanup when they do not change the product behavior users experience.",
     "- Do not include source file paths, package names, class names, function names, commit hashes, branch names, or test/build details.",
     "- Do not mention refactoring, presenter/service internals, dependency changes, or implementation mechanics unless they directly changed user-visible behavior.",
     '- Prefer the existing pattern: "- **Feature Area**: Clear user-facing sentence."',
@@ -124,6 +131,19 @@ function buildPrompt(baseTag, commitSummary, changelogReference) {
     commitSummary,
     "",
   ].join("\n");
+}
+
+function restoreChangelogIfOnlyNoUserFacingNote(previousChangelog) {
+  const changelogPath = path.join(rootDirectory, "CHANGELOG.md");
+  const nextChangelog = fs.readFileSync(changelogPath, "utf8");
+  const addedNoUserFacingNote =
+    !/no user[- ]facing changes|no user[- ]visible changes|behaves? as before/i.test(previousChangelog) &&
+    /no user[- ]facing changes|no user[- ]visible changes|behaves? as before/i.test(nextChangelog);
+
+  if (addedNoUserFacingNote) {
+    fs.writeFileSync(changelogPath, previousChangelog);
+    console.log("Skipped CHANGELOG.md update because no user-facing changes were found.");
+  }
 }
 
 function getCodexExecHelp() {
@@ -216,5 +236,7 @@ if (!commitSummary) {
   process.exit(0);
 }
 
+const previousChangelog = getChangelogText();
 runCodex(buildPrompt(baseTag, commitSummary, getChangelogReference()));
+restoreChangelogIfOnlyNoUserFacingNote(previousChangelog);
 assertExpectedFilesOnly();
