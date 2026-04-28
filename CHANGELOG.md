@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Code Folding**: Fixed an issue where code folding did not work in JSONinja editors.
+
 ## [1.11.2] - 2026-04-08
 
 ### Added
@@ -351,7 +355,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.2...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.3...HEAD
+[1.11.3]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.2...v1.11.3
 [1.11.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.1...v1.11.0
