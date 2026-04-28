@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/release-it@20/schema/release-it.json",
+  "npm": false,
+  "git": {
+    "commitMessage": "chore: release v${version}",
+    "requireBranch": "main",
+    "tagName": "v${version}",
+    "tagAnnotation": "Release v${version}"
+  },
+  "hooks": {
+    "after:bump": "node scripts/update-changelog-with-codex.cjs ${latestTag} ${version}"
+  },
+  "plugins": {
+    "@release-it/bumper": {
+      "in": {
+        "file": "gradle.properties",
+        "type": "text/x-properties",
+        "path": "pluginVersion"
+      },
+      "out": {
+        "file": "gradle.properties",
+        "type": "text/x-properties",
+        "path": "pluginVersion"
+      }
+    }
+  }
+}

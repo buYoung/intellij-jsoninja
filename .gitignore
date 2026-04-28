@@ -3,6 +3,7 @@
 .intellijPlatform
 .qodana
 build
+node_modules/
 .kotlin
 out
 
