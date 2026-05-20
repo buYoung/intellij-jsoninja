@@ -21,9 +21,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class GenerateRandomJsonAction : AnAction(
-    LocalizationBundle.message("action.generate.random.json.text"),
-    LocalizationBundle.message("action.generate.random.json.text"),
-    null
+    LocalizationBundle.messagePointer("action.generate.random.json.text"),
+    LocalizationBundle.messagePointer("action.generate.random.json.text"),
+    null as javax.swing.Icon?
 ) {
     private val LOG = logger<GenerateRandomJsonAction>()
 

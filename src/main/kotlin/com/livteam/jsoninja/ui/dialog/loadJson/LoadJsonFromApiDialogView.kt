@@ -33,6 +33,7 @@ import java.awt.BorderLayout
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JLabel
+import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 
@@ -116,19 +117,23 @@ class LoadJsonFromApiDialogView(
 
     private fun createComponent(): JComponent {
         requestMethodComboBox = ComboBox(ApiRequestMethod.entries.toTypedArray()).apply {
-            renderer = SimpleListCellRenderer.create { label, value, _ ->
-                label.text = value?.name ?: ""
+            renderer = object : SimpleListCellRenderer<ApiRequestMethod>() {
+                override fun customize(list: JList<out ApiRequestMethod>, value: ApiRequestMethod?, index: Int, selected: Boolean, hasFocus: Boolean) {
+                    text = value?.name ?: ""
+                }
             }
         }
         requestUrlTextField = JBTextField()
         sendButton = JButton(LocalizationBundle.message("dialog.load.json.api.send"))
         authorizationTypeComboBox = ComboBox(ApiAuthorizationType.entries.toTypedArray()).apply {
-            renderer = SimpleListCellRenderer.create { label, value, _ ->
-                label.text = when (value) {
-                    ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
-                    ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
-                    ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
-                    null -> ""
+            renderer = object : SimpleListCellRenderer<ApiAuthorizationType>() {
+                override fun customize(list: JList<out ApiAuthorizationType>, value: ApiAuthorizationType?, index: Int, selected: Boolean, hasFocus: Boolean) {
+                    text = when (value) {
+                        ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
+                        ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
+                        ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
+                        null -> ""
+                    }
                 }
             }
         }

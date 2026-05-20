@@ -9,8 +9,8 @@ import com.livteam.jsoninja.LocalizationBundle
  * 새 탭을 추가하는 액션 클래스입니다.
  */
 class AddTabAction : AnAction(
-    LocalizationBundle.message("addTab"),
-    LocalizationBundle.message("addTabDescription"),
+    LocalizationBundle.messagePointer("addTab"),
+    LocalizationBundle.messagePointer("addTabDescription"),
     AllIcons.General.Add
 ) {
     override fun actionPerformed(e: AnActionEvent) {

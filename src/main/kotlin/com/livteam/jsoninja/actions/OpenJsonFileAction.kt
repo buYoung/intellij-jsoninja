@@ -16,9 +16,9 @@ import kotlinx.coroutines.withContext
  * JSON 파일을 열어 새 탭에 로드하는 액션 클래스입니다.
  */
 class OpenJsonFileAction : AnAction(
-    LocalizationBundle.message("openJsonFile"),
-    LocalizationBundle.message("openJsonFileDescription"),
-    AllIcons.Actions.MenuOpen
+    LocalizationBundle.messagePointer("openJsonFile"),
+    LocalizationBundle.messagePointer("openJsonFileDescription"),
+    AllIcons.Actions.MenuOpen as javax.swing.Icon?
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return

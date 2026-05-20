@@ -10,9 +10,9 @@ import com.livteam.jsoninja.model.JsonFormatState
  * JSON을 압축하는 액션 클래스입니다.
  */
 class UglifyJsonAction : AnAction(
-    LocalizationBundle.message("uglify"),
-    LocalizationBundle.message("uglifyDescription"),
-    null
+    LocalizationBundle.messagePointer("uglify"),
+    LocalizationBundle.messagePointer("uglifyDescription"),
+    null as javax.swing.Icon?
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return

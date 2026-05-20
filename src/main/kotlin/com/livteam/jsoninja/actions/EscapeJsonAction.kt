@@ -9,9 +9,9 @@ import com.livteam.jsoninja.icons.JsoninjaIcons
  * JSON을 이스케이프 처리하는 액션 클래스입니다.
  */
 class EscapeJsonAction : AnAction(
-    LocalizationBundle.message("escape"),
-    LocalizationBundle.message("escapeDescription"),
-    null
+    LocalizationBundle.messagePointer("escape"),
+    LocalizationBundle.messagePointer("escapeDescription"),
+    null as javax.swing.Icon?
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return

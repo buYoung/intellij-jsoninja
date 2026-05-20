@@ -16,9 +16,9 @@ open class TypeConversionAction(
     actionDescriptionKey: String = "action.type.conversion.description",
     private val forcedTabIndex: Int? = null,
 ) : AnAction(
-    LocalizationBundle.message(actionTextKey),
-    LocalizationBundle.message(actionDescriptionKey),
-    null,
+    LocalizationBundle.messagePointer(actionTextKey),
+    LocalizationBundle.messagePointer(actionDescriptionKey),
+    null as javax.swing.Icon?,
 ) {
     private data class ConvertActionContext(
         val project: Project,

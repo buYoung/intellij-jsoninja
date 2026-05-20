@@ -9,9 +9,9 @@ import com.livteam.jsoninja.icons.JsoninjaIcons
  * JSON의 이스케이프를 해제하는 액션 클래스입니다.
  */
 class UnescapeJsonAction : AnAction(
-    LocalizationBundle.message("unescape"),
-    LocalizationBundle.message("unescapeDescription"),
-    null
+    LocalizationBundle.messagePointer("unescape"),
+    LocalizationBundle.messagePointer("unescapeDescription"),
+    null as javax.swing.Icon?
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val panel = JsonHelperActionUtils.getPanel(e) ?: return

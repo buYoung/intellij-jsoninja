@@ -109,11 +109,11 @@ class OnboardingService(
     }
 
     private fun isOnboardingSeen(): Boolean {
-        return PropertiesComponent.getInstance().getBoolean(ONBOARDING_SEEN_KEY, false)
+        return PropertiesComponent.getInstance(project).getBoolean(ONBOARDING_SEEN_KEY, false)
     }
 
     private fun markOnboardingSeen() {
-        PropertiesComponent.getInstance().setValue(ONBOARDING_SEEN_KEY, true)
+        PropertiesComponent.getInstance(project).setValue(ONBOARDING_SEEN_KEY, true)
     }
 
     companion object {

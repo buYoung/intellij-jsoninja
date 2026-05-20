@@ -15,6 +15,8 @@ import com.intellij.ui.EditorTextField
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.intellij.openapi.application.readAction
+
 
 internal class FoldingAwareEditorTextField(
     document: Document,
@@ -62,21 +64,22 @@ private fun refreshFoldRegions(
         return
     }
 
-    val application = ApplicationManager.getApplication()
     project.service<JsoninjaCoroutineScopeService>().launch {
-        withContext(Dispatchers.EDT) {
-            if (project.isDisposed || editor.isDisposed) {
-                return@withContext
-            }
-
-            val foldRegions = application.runReadAction<List<ManualFoldRegion>> {
+        val foldRegions = try {
+            readAction {
                 if (project.isDisposed || editor.isDisposed) {
-                    return@runReadAction emptyList()
+                    emptyList()
+                } else {
+                    collectFoldRegions(project, editor)
                 }
-
-                collectFoldRegions(project, editor)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            emptyList()
+        }
 
+        withContext(Dispatchers.EDT) {
             if (project.isDisposed || editor.isDisposed) {
                 return@withContext
             }

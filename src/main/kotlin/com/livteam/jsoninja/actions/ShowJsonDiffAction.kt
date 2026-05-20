@@ -17,9 +17,9 @@ import com.livteam.jsoninja.utils.JsonHelperUtils
  * Editor Tab 또는 Window 방식으로 diff를 표시합니다.
  */
 class ShowJsonDiffAction : AnAction(
-    LocalizationBundle.message("action.show.json.diff"),
-    LocalizationBundle.message("action.show.json.diff.description"),
-    null
+    LocalizationBundle.messagePointer("action.show.json.diff"),
+    LocalizationBundle.messagePointer("action.show.json.diff.description"),
+    null as javax.swing.Icon?
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
