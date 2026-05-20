@@ -252,21 +252,21 @@ class TypeConversionWasmIntegrationTest : BasePlatformTestCase() {
 
     private fun expectedNameFieldSourceName(language: SupportedLanguage): String {
         return when (language) {
-            SupportedLanguage.GO -> "Name"
+            SupportedLanguage.GO -> "name"
             else -> "name"
         }
     }
 
     private fun expectedTagsFieldSourceName(language: SupportedLanguage): String {
         return when (language) {
-            SupportedLanguage.GO -> "Tags"
+            SupportedLanguage.GO -> "tags"
             else -> "tags"
         }
     }
 
     private fun expectedMetadataFieldSourceName(language: SupportedLanguage): String {
         return when (language) {
-            SupportedLanguage.GO -> "Metadata"
+            SupportedLanguage.GO -> "metadata"
             else -> "metadata"
         }
     }

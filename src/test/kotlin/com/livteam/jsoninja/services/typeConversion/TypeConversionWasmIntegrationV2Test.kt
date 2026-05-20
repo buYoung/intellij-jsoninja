@@ -306,11 +306,11 @@ class TypeConversionWasmIntegrationV2Test : BasePlatformTestCase() {
                 rootTypeName = "UserResponse",
                 assertJson = { generatedJsonNode, successCase ->
                     assertTrue(
-                        "성공 케이스 `${successCase.caseName}`는 ${successCase.successReason} 때문에 Tags를 배열로 생성해야 합니다.",
-                        generatedJsonNode.path("Tags").isArray,
+                        "성공 케이스 `${successCase.caseName}`는 ${successCase.successReason} 때문에 tags를 배열로 생성해야 합니다.",
+                        generatedJsonNode.path("tags").isArray,
                     )
-                    assertTrue(generatedJsonNode.path("Metadata").isObject)
-                    assertTrue(generatedJsonNode.path("Metadata").path("key").isBoolean)
+                    assertTrue(generatedJsonNode.path("metadata").isObject)
+                    assertTrue(generatedJsonNode.path("metadata").path("key").isBoolean)
                 },
             ),
             TypeToJsonSuccessCase(

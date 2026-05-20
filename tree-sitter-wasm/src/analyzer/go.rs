@@ -212,9 +212,12 @@ fn parse_struct_members(
 
         for field_name_node in field_name_nodes {
             let source_name = text(field_name_node, source_bytes);
+            let Some(json_source_name) = type_parser::go_json_field_source_name(source_name, &tag_annotations) else {
+                continue;
+            };
             fields.push(Field {
                 name: clean_member_name(source_name),
-                source_name: source_name.to_string(),
+                source_name: json_source_name,
                 optional: false,
                 span: span(field_declaration_node),
                 annotations: tag_annotations.clone(),

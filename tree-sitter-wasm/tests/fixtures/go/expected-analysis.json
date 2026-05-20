@@ -38,7 +38,7 @@
       "fields": [
         {
           "name": "Name",
-          "source_name": "Name",
+          "source_name": "name",
           "optional": false,
           "span": {
             "start_row": 2,
@@ -49,7 +49,7 @@
           "annotations": [
             {
               "name": "json",
-              "text": "json:\"name",
+              "text": "json:\"name\"",
               "span": {
                 "start_row": 2,
                 "start_col": 24,
@@ -71,7 +71,7 @@
         },
         {
           "name": "Scores",
-          "source_name": "Scores",
+          "source_name": "scores",
           "optional": false,
           "span": {
             "start_row": 3,
@@ -102,7 +102,7 @@
         },
         {
           "name": "Meta",
-          "source_name": "Meta",
+          "source_name": "meta",
           "optional": false,
           "span": {
             "start_row": 4,

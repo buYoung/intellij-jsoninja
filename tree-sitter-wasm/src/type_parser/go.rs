@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use crate::diagnostics::Diagnostic;
-use crate::ir::{Field, PrimitiveKind, TypeReference};
+use crate::ir::{Annotation, Field, PrimitiveKind, TypeReference};
 use crate::source::{clean_member_name, last_path_segment, named_children, named_children_of_kind, span, text, text_owned};
 
 use super::{
@@ -182,9 +182,12 @@ fn parse_inline_struct(
 
         for field_name_node in field_name_nodes {
             let field_source_name = text(field_name_node, source_bytes);
+            let Some(json_source_name) = go_json_field_source_name(field_source_name, &tag_annotations) else {
+                continue;
+            };
             fields.push(Field {
                 name: clean_member_name(field_source_name),
-                source_name: field_source_name.to_string(),
+                source_name: json_source_name,
                 optional: false,
                 span: span(field_declaration_node),
                 annotations: tag_annotations.clone(),
@@ -277,9 +280,7 @@ pub(crate) fn extract_go_tag_annotations(
     let Some(tag_node) = node.child_by_field_name("tag") else {
         return Vec::new();
     };
-    let tag_text = text(tag_node, source_bytes)
-        .trim_matches('`')
-        .trim_matches('"');
+    let tag_text = normalize_go_tag_text(text(tag_node, source_bytes));
     let tag_span = span(tag_node);
     let mut annotations = Vec::new();
 
@@ -293,4 +294,68 @@ pub(crate) fn extract_go_tag_annotations(
     }
 
     annotations
+}
+
+pub(crate) fn go_json_field_source_name(
+    default_source_name: &str,
+    annotations: &[Annotation],
+) -> Option<String> {
+    let Some(json_annotation) = annotations.iter().find(|annotation| annotation.name == "json") else {
+        return Some(default_go_json_field_name(default_source_name));
+    };
+    let tag_value = json_annotation
+        .text
+        .strip_prefix("json:")
+        .unwrap_or("")
+        .trim()
+        .trim_matches('"');
+    let json_name = tag_value.split(',').next().unwrap_or("").trim();
+
+    if json_name == "-" {
+        return None;
+    }
+    if json_name.is_empty() {
+        return Some(default_go_json_field_name(default_source_name));
+    }
+    Some(json_name.to_string())
+}
+
+fn default_go_json_field_name(field_name: &str) -> String {
+    let mut characters = field_name.chars().collect::<Vec<_>>();
+    let leading_uppercase_count = characters
+        .iter()
+        .take_while(|character| character.is_ascii_uppercase())
+        .count();
+
+    if leading_uppercase_count == 0 {
+        return field_name.to_string();
+    }
+
+    let lowercase_count = if leading_uppercase_count > 1 &&
+        leading_uppercase_count < characters.len() &&
+        characters[leading_uppercase_count].is_ascii_lowercase()
+    {
+        leading_uppercase_count - 1
+    } else {
+        leading_uppercase_count
+    };
+
+    characters
+        .iter_mut()
+        .take(lowercase_count)
+        .for_each(|character| character.make_ascii_lowercase());
+    characters.into_iter().collect()
+}
+
+fn normalize_go_tag_text(raw_text: &str) -> String {
+    let trimmed = raw_text.trim();
+    if trimmed.len() >= 2 && trimmed.starts_with('`') && trimmed.ends_with('`') {
+        return trimmed[1..trimmed.len() - 1].to_string();
+    }
+    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
+        return trimmed[1..trimmed.len() - 1]
+            .replace("\\\"", "\"")
+            .replace("\\\\", "\\");
+    }
+    trimmed.to_string()
 }

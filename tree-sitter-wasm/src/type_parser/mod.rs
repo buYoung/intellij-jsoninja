@@ -52,7 +52,7 @@ pub(crate) fn parse_type_reference(
     }
 }
 
-pub(crate) use go::extract_go_tag_annotations;
+pub(crate) use go::{extract_go_tag_annotations, go_json_field_source_name};
 
 pub(crate) fn unknown_type(
     node: Node<'_>,
