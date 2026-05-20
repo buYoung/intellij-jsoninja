@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### Improved
+
+- Fixed a bug that caused jsoninja to slow down.
+
+### Fixed
+
+- **JSON Type Conversion**: Go type conversion now respects JSON tag names and Go's default JSON field names, so generated JSON uses the expected property names instead of exported struct field names.
+- **JSON Type Conversion**: Complex nested objects, maps, arrays, aliases, and enums now convert more reliably in both directions, including cases where supporting type declarations appear before the main type.
+
 ## [1.11.3] - 2026-04-28
 
 ### Fixed
