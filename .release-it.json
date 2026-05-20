@@ -8,6 +8,7 @@
     "tagAnnotation": "Release v${version}"
   },
   "hooks": {
-    "after:bump": "node scripts/update-changelog-with-codex.cjs ${latestTag} ${version}"
+    "after:bump": "node scripts/update-changelog-with-codex.cjs ${latestTag} ${version}",
+    "before:git:commit": "git add CHANGELOG.md gradle.properties src/main/resources/META-INF/plugin.xml"
   }
 }
