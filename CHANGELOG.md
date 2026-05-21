@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.11.4] - 2026-05-21
+
 ### Improved
 
 - Fixed a bug that caused jsoninja to slow down.
@@ -366,7 +368,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.3...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.4...HEAD
+[1.11.4]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.3...v1.11.4
 [1.11.3]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.2...v1.11.3
 [1.11.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.0...v1.11.1
