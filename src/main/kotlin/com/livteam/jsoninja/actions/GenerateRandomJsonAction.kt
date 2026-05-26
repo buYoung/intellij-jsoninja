@@ -8,6 +8,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.ui.Messages
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
+import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.RandomJsonDataCreator
 import com.livteam.jsoninja.services.schema.JsonSchemaDataGenerationService
@@ -34,11 +35,12 @@ class GenerateRandomJsonAction : AnAction(
         val dialog = GenerateJsonDialog(project)
         if (dialog.showAndGet()) {
             val config = dialog.getConfig()
+            val jsonFormatState = panel.presenter.getJsonFormatState()
 
             project.service<JsoninjaCoroutineScopeService>().launch {
                 try {
                     val generatedJson = withContext(Dispatchers.Default) {
-                        when (config.generationMode) {
+                        val rawGeneratedJson = when (config.generationMode) {
                             JsonGenerationMode.RANDOM -> {
                                 val creator = RandomJsonDataCreator()
                                 val prettyPrint = config.isJson5
@@ -51,13 +53,22 @@ class GenerateRandomJsonAction : AnAction(
                                 schemaDataGenerationService.generateFromSchema(config)
                             }
                         }
+
+                        if (shouldSkipFormatting(config)) {
+                            rawGeneratedJson
+                        } else {
+                            project.service<JsonFormatterService>().formatJson(
+                                rawGeneratedJson,
+                                jsonFormatState
+                            )
+                        }
                     }
 
                     withContext(Dispatchers.EDT) {
                         if (project.isDisposed) return@withContext
                         panel.presenter.setRandomJsonData(
                             generatedJson,
-                            skipFormatting = shouldSkipFormatting(config)
+                            skipFormatting = true
                         )
                     }
                 } catch (cancellationException: CancellationException) {

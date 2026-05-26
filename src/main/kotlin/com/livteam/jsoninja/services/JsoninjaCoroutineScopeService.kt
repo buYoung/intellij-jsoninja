@@ -1,6 +1,7 @@
 package com.livteam.jsoninja.services
 
 import com.intellij.openapi.components.Service
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -10,8 +11,11 @@ import kotlinx.coroutines.launch
 class JsoninjaCoroutineScopeService(
     private val coroutineScope: CoroutineScope,
 ) {
-    fun launch(block: suspend CoroutineScope.() -> Unit): Job {
-        return coroutineScope.launch(block = block)
+    fun launch(
+        start: CoroutineStart = CoroutineStart.DEFAULT,
+        block: suspend CoroutineScope.() -> Unit
+    ): Job {
+        return coroutineScope.launch(start = start, block = block)
     }
 
     fun createChildScope(): CoroutineScope {

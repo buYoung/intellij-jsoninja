@@ -5,6 +5,7 @@ import com.intellij.diff.editor.DiffEditorTabFilesManager
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.json.JsonFileType
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -22,11 +23,16 @@ import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.ui.diff.JsonDiffVirtualFile
 import com.livteam.jsoninja.ui.diff.JsonDiffWindowDialog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Service(Service.Level.PROJECT)
 class JsonDiffService(private val project: Project) {
 
     private val formatterService = project.service<JsonFormatterService>()
+    private val coroutineScopeService = project.service<JsoninjaCoroutineScopeService>()
 
     private data class ActiveDiffContext(
         var displayMode: JsonDiffDisplayMode,
@@ -45,15 +51,39 @@ class JsonDiffService(private val project: Project) {
         defaultSortKeys: Boolean
     ) {
         val leftJson = currentJson ?: "{}"
-        val diffContext = getOrCreateContext(leftJson, displayMode, defaultSortKeys)
-        val currentDisplayMode = getCurrentDisplayMode(diffContext)
+        val existingContext = activeDiffContext
+        val hasExistingOpenHost = existingContext != null && hasOpenHost(existingContext)
+        val sortKeys = if (hasExistingOpenHost) existingContext.sortKeys else defaultSortKeys
 
-        if (currentDisplayMode != displayMode) {
-            closeOpenHosts(diffContext)
-            diffContext.displayMode = displayMode
+        coroutineScopeService.launch {
+            try {
+                val leftDiffText = withContext(Dispatchers.Default) {
+                    prepareDiffText(leftJson, sortKeys)
+                }
+                val rightDiffText = if (hasExistingOpenHost) {
+                    null
+                } else {
+                    withContext(Dispatchers.Default) {
+                        prepareDiffText("{}", defaultSortKeys)
+                    }
+                }
+
+                withContext(Dispatchers.EDT) {
+                    if (project.isDisposed) return@withContext
+                    val diffContext = getOrCreateContext(leftDiffText, rightDiffText, displayMode, defaultSortKeys)
+                    val currentDisplayMode = getCurrentDisplayMode(diffContext)
+
+                    if (currentDisplayMode != displayMode) {
+                        closeOpenHosts(diffContext)
+                        diffContext.displayMode = displayMode
+                    }
+
+                    openCurrentHost(diffContext)
+                }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            }
         }
-
-        openCurrentHost(diffContext)
     }
 
     /**
@@ -124,22 +154,23 @@ class JsonDiffService(private val project: Project) {
     }
 
     private fun getOrCreateContext(
-        leftJson: String,
+        preparedLeftJson: String,
+        preparedRightJson: String?,
         displayMode: JsonDiffDisplayMode,
         defaultSortKeys: Boolean
     ): ActiveDiffContext {
         val existingContext = activeDiffContext
 
         if (existingContext != null && hasOpenHost(existingContext)) {
-            replaceDocumentText(existingContext.leftDocument, prepareDiffText(leftJson, existingContext.sortKeys))
+            replaceDocumentText(existingContext.leftDocument, preparedLeftJson)
             return existingContext
         }
 
         return ActiveDiffContext(
             displayMode = displayMode,
             sortKeys = defaultSortKeys,
-            leftDocument = createDiffDocument(prepareDiffText(leftJson, defaultSortKeys)),
-            rightDocument = createDiffDocument(prepareDiffText("{}", defaultSortKeys))
+            leftDocument = createDiffDocument(preparedLeftJson),
+            rightDocument = createDiffDocument(preparedRightJson ?: "{}")
         ).also { activeDiffContext = it }
     }
 

@@ -50,7 +50,7 @@ class JsonEditorView(
     private val jsonEditorTreeView = JsonEditorTreeView()
     private lateinit var textModeLabel: JBLabel
     private lateinit var treeModeLabel: JBLabel
-    private val treePresenter = JsonEditorTreePresenter(jsonEditorTreeView)
+    private val treePresenter = JsonEditorTreePresenter(project, jsonEditorTreeView)
     private var currentDisplayMode = EditorDisplayMode.TEXT
 
     init {
@@ -163,6 +163,7 @@ class JsonEditorView(
     }
 
     private fun switchToTextMode() {
+        treePresenter.cancelRefresh()
         currentDisplayMode = EditorDisplayMode.TEXT
         (contentContainer.layout as CardLayout).show(contentContainer, TEXT_CARD)
         updateToggleLabelStyles()
@@ -190,6 +191,7 @@ class JsonEditorView(
     fun setOnContentChangeCallback(callback: (String) -> Unit) = presenter.setOnContentChangeCallback(callback)
 
     override fun dispose() {
+        treePresenter.dispose()
         Disposer.dispose(jsonEditorTextView)
         Disposer.dispose(jsonEditorTreeView)
         removeAll()

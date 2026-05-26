@@ -117,58 +117,67 @@ class JsonDiffExtension : DiffExtension() {
         val diffSortKeys = request.getUserData(JsonDiffKeys.JSON_DIFF_SORT_KEYS) ?: settings.diffSortKeys
         val projectName = project.name
 
-        // 양쪽 모두 JSON인지 판단; 최종 검증은 JsonFormatterService.isValidJson을 통해 진행
-        val startTime = System.currentTimeMillis()
-        val jsonContentResults = editors.map { editor ->
-            isJsonContent(editor, formatterService, projectName, settings) to editor
-        }
-        val detectionTime = System.currentTimeMillis() - startTime
+        project.service<JsoninjaCoroutineScopeService>().launch {
+            if (project.isDisposed) return@launch
 
-        if (LOG.isDebugEnabled) {
-            LOG.debug("JSON detection completed in ${detectionTime}ms for project '$projectName'")
-        }
-
-        val isJsonDiff = jsonContentResults.all { it.first }
-        if (!isJsonDiff) {
-            LOG.debug("Not all editors contain JSON content, skipping JSON diff extension")
-            return
-        }
-
-        // 대용량 파일 확인 및 필요시 경고 표시 (warning이 활성된 경우에만)
-        if (settings.showLargeFileWarning) {
-            val thresholdBytes = settings.largeFileThresholdMB * 1024 * 1024L
-            val largeFileDetected = jsonContentResults.any { (_, editor) ->
-                editor.document.textLength.toLong() >= thresholdBytes
+            val startTime = System.currentTimeMillis()
+            val jsonContentResults = withContext(Dispatchers.Default) {
+                editors.map { editor ->
+                    isJsonContent(editor, formatterService, projectName, settings) to editor
+                }
             }
+            val detectionTime = System.currentTimeMillis() - startTime
 
-            if (largeFileDetected) {
-                val largestFile = jsonContentResults.maxByOrNull { (_, editor) -> editor.document.textLength }
-                val largestEditor = largestFile?.second
-                val largestFileSize = largestEditor?.document?.textLength?.toLong() ?: 0L
-                val fileName = largestEditor?.virtualFile?.name
+            withContext(Dispatchers.EDT) {
+                if (project.isDisposed) return@withContext
 
-                // 경고 dialog를 표시하고 사용자의 선택을 존중
-                val shouldProceed = LargeFileWarningDialog.showWarningIfNeeded(
-                    project,
-                    largestFileSize,
-                    fileName
-                )
-
-                if (!shouldProceed) {
-                    LOG.debug("User cancelled large file JSON diff processing for '$fileName'")
-                    return
+                if (LOG.isDebugEnabled) {
+                    LOG.debug("JSON detection completed in ${detectionTime}ms for project '$projectName'")
                 }
 
-                LOG.debug("User confirmed large file JSON diff processing for '$fileName' (${largestFileSize / (1024 * 1024)} MB)")
+                val isJsonDiff = jsonContentResults.all { it.first }
+                if (!isJsonDiff) {
+                    LOG.debug("Not all editors contain JSON content, skipping JSON diff extension")
+                    return@withContext
+                }
+
+                // 대용량 파일 확인 및 필요시 경고 표시 (warning이 활성된 경우에만)
+                if (settings.showLargeFileWarning) {
+                    val thresholdBytes = settings.largeFileThresholdMB * 1024 * 1024L
+                    val largeFileDetected = jsonContentResults.any { (_, editor) ->
+                        editor.document.textLength.toLong() >= thresholdBytes
+                    }
+
+                    if (largeFileDetected) {
+                        val largestFile = jsonContentResults.maxByOrNull { (_, editor) -> editor.document.textLength }
+                        val largestEditor = largestFile?.second
+                        val largestFileSize = largestEditor?.document?.textLength?.toLong() ?: 0L
+                        val fileName = largestEditor?.virtualFile?.name
+
+                        // 경고 dialog를 표시하고 사용자의 선택을 존중
+                        val shouldProceed = LargeFileWarningDialog.showWarningIfNeeded(
+                            project,
+                            largestFileSize,
+                            fileName
+                        )
+
+                        if (!shouldProceed) {
+                            LOG.debug("User cancelled large file JSON diff processing for '$fileName'")
+                            return@withContext
+                        }
+
+                        LOG.debug("User confirmed large file JSON diff processing for '$fileName' (${largestFileSize / (1024 * 1024)} MB)")
+                    }
+                }
+
+                // 양쪽 editor에 listener 설치
+                editors.forEach { editor ->
+                    installAutoFormatter(project, editor, viewer, formatterService, settings, diffSortKeys)
+                }
+
+                LOG.debug("JSON diff extension activated for project '$projectName' with ${editors.size} editors")
             }
         }
-
-        // 양쪽 editor에 listener 설치
-        editors.forEach { editor ->
-            installAutoFormatter(project, editor, viewer, formatterService, settings, diffSortKeys)
-        }
-
-        LOG.debug("JSON diff extension activated for project '$projectName' with ${editors.size} editors")
     }
 
     /**
