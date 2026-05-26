@@ -45,7 +45,7 @@ import javax.swing.event.DocumentListener
 import com.intellij.ui.awt.RelativePoint
 
 class GenerateSchemaJsonTabView(
-    private val project: Project?,
+    private val project: Project,
     private val initialConfig: JsonGenerationConfig
 ) {
     private lateinit var schemaEditor: EditorTextField

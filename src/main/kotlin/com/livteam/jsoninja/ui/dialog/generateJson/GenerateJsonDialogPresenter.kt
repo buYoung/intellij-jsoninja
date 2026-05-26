@@ -9,7 +9,7 @@ import com.livteam.jsoninja.ui.dialog.generateJson.schema.GenerateSchemaJsonTabP
 import javax.swing.JComponent
 
 class GenerateJsonDialogPresenter(
-    project: Project?,
+    project: Project,
     onLayoutChanged: () -> Unit
 ) {
     private val randomTabPresenter = GenerateRandomJsonTabPresenter(onLayoutChanged)

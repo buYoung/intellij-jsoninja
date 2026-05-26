@@ -23,24 +23,21 @@ import java.net.HttpURLConnection
 import java.net.URI
 import javax.swing.JComponent
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 
 class GenerateSchemaJsonTabPresenter(
-    private val project: Project?
+    private val project: Project
 ) {
     private val LOG = logger<GenerateSchemaJsonTabPresenter>()
     private val initialConfig = JsonGenerationConfig()
     private val view = GenerateSchemaJsonTabView(project, initialConfig)
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
     private val jmesPathRuntime = JacksonRuntime()
-    private val schemaDataGenerationService = project?.getService(JsonSchemaDataGenerationService::class.java)
-    private val coroutineScope = project?.service<JsoninjaCoroutineScopeService>()?.createChildScope()
-        ?: CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val schemaDataGenerationService = project.getService(JsonSchemaDataGenerationService::class.java)
+    private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
 
     @Volatile
     private var isDisposed = false
@@ -451,11 +448,6 @@ class GenerateSchemaJsonTabPresenter(
     }
 
     private fun setSchemaEditorText(schemaText: String) {
-        if (project == null) {
-            view.setSchemaEditorText(schemaText)
-            return
-        }
-
         WriteCommandAction.runWriteCommandAction(project) {
             view.setSchemaEditorText(schemaText)
         }

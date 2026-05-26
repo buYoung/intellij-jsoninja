@@ -8,7 +8,7 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import javax.swing.JComponent
 
 class GenerateJsonDialog(
-    project: Project?
+    project: Project
 ) : DialogWrapper(project) {
 
     private val presenter = GenerateJsonDialogPresenter(project) { pack() }

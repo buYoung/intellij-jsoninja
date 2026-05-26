@@ -18,7 +18,6 @@ import javax.swing.JComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @Service(Service.Level.PROJECT)
 class OnboardingService(
@@ -47,19 +46,13 @@ class OnboardingService(
     fun startTutorial() {
         if (project.isDisposed) return
 
-        coroutineScope.launch {
-            withContext(Dispatchers.EDT) {
-                if (project.isDisposed) return@withContext
+        coroutineScope.launch(Dispatchers.EDT) {
+            if (project.isDisposed) return@launch
 
-                val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID) ?: return@withContext
-                toolWindow.show {
-                    coroutineScope.launch {
-                        withContext(Dispatchers.EDT) {
-                            if (project.isDisposed) return@withContext
-                            openTutorialDialog(toolWindow)
-                        }
-                    }
-                }
+            val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID) ?: return@launch
+            toolWindow.show {
+                if (project.isDisposed) return@show
+                openTutorialDialog(toolWindow)
             }
         }
     }
