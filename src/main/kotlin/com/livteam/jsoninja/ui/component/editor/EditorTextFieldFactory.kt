@@ -272,8 +272,4 @@ internal fun setEditorTextAndRefreshCodeFolding(
 ) {
     val currentEditorTextField = editorTextField ?: return
     currentEditorTextField.text = text
-
-    if (currentEditorTextField is FoldingAwareEditorTextField) {
-        refreshFoldRegionsIfAvailable(project, currentEditorTextField)
-    }
 }
