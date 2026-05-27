@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **JSON Editing**: Formatting, escaping, unescaping, and query result updates now keep the editor responsive while processing larger JSON content.
+- **JSON Diff**: Opening a diff and sorting diff keys now keeps the diff view responsive on larger inputs and avoids applying outdated results if the content changes during processing.
+- **Schema-Based JSON Generation**: Schema URL suggestions now wait briefly while you type and only show results for the latest input, reducing freezes when searching the schema catalog.
+
+### Fixed
+
+- **Code Folding**: Folding regions now refresh more reliably after edits without interrupting typing, while preserving expanded and collapsed states where possible.
+
 ## [1.11.4] - 2026-05-21
 
 ### Improved
