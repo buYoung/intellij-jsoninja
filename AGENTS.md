@@ -78,9 +78,14 @@ This repository implements JSONinja, a JetBrains IDE plugin for editing, formatt
 
 ## Threading Rules
 
-| Scenario | Pattern |
-|----------|---------|
-| Background → UI update | `executeOnPooledThread { compute(); invokeLater(ModalityState.any()) { updateUI() } }` |
-| Background → Write + Undo | `executeOnPooledThread { compute(); WriteCommandAction.runWriteCommandAction(project) { } }` |
-| Write + Undo (EDT) | `WriteCommandAction.runWriteCommandAction(project) { }` |
-| Write Only (EDT) | `runWriteAction { }` |
+> Canonical source: [`docs/coroutine-threading-standard.md`](docs/coroutine-threading-standard.md). The table below is a summary; follow the canonical doc for the full pattern, scope-selection rules, staleness guards, and known issues. This codebase has migrated to Kotlin coroutines, so the legacy `executeOnPooledThread { ... invokeLater(...) }` pattern is **no longer the standard**.
+
+| Intent | Pattern |
+|--------|---------|
+| Lifecycle-bound async work | `service<JsoninjaCoroutineScopeService>().createChildScope()` owned by the component; `cancel()` in `dispose` |
+| One-shot project-lifetime async (e.g. actions) | `service<JsoninjaCoroutineScopeService>().launch { }` (add a sequence/stamp staleness guard if needed) |
+| CPU compute (parse/format/sort/tree build) | `withContext(Dispatchers.Default) { }` |
+| I/O (file, network) | `withContext(Dispatchers.IO) { }` |
+| UI update | `withContext(Dispatchers.EDT) { }` (add `+ ModalityState.any().asContextElement()` inside modal dialogs) |
+| Write + Undo | `WriteCommandAction.runWriteCommandAction(project) { }` (on EDT) |
+| PSI / Document read (off-EDT) | `readAction { }` / `runReadAction { }` |

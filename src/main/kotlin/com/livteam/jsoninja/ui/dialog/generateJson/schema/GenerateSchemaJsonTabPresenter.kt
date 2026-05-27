@@ -218,12 +218,16 @@ class GenerateSchemaJsonTabPresenter(
         schemaStoreFilterJob = coroutineScope.launch {
             delay(SCHEMA_STORE_FILTER_DEBOUNCE_MS)
 
+            // 무거운 필터링(토큰 분해 + Levenshtein + 정렬)은 Default에서 계산하고, EDT에는 UI 반영만 남긴다.
+            val filteredSchemaStoreCatalogItems = withContext(Dispatchers.Default) {
+                filterSchemaStoreCatalogItems(catalogItems, editorText)
+            }
+
             withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
                 if (isDisposed) return@withContext
                 if (schemaStoreCatalogState != SchemaStoreCatalogState.READY) return@withContext
                 if (view.getSchemaUrlEditorText() != editorText) return@withContext
 
-                val filteredSchemaStoreCatalogItems = filterSchemaStoreCatalogItems(catalogItems, editorText)
                 if (filteredSchemaStoreCatalogItems.isEmpty()) {
                     view.updateSchemaUrlSuggestions(
                         schemaUrlSuggestionItems = listOf(

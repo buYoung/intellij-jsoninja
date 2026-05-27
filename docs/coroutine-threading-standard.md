@@ -125,7 +125,7 @@ class SomePresenter(
 | C4 | 랜덤/스키마 생성 후 재포맷 | ✅ 해결 | `GenerateRandomJsonAction`이 `Default` 안에서 포맷 후 `skipFormatting = true`로 전달 |
 | C5 | diff 최초 열기 시 포맷/검증 | ✅ 해결 | `JsonDiffService.openDiff`: `prepareDiffText`를 `Default`로, 문서 생성/host 오픈을 `EDT`로 |
 | C6 | diff viewer 생성 시 JSON 판별 | ✅ 해결 | `JsonDiffExtension.onViewerCreated`: `isJsonContent`를 `Default`로 이동. off-EDT read는 안전한 편 — 7.③ 참고 |
-| C7 | SchemaStore fuzzy filtering | ⚠️ 부분 | `delay(250ms)` debounce만 적용. 무거운 연산은 여전히 EDT에서 실행 — 7.④ |
+| C7 | SchemaStore fuzzy filtering | ✅ 해결 | `delay(250ms)` debounce + 무거운 연산(`filterSchemaStoreCatalogItems`)을 `Dispatchers.Default`로 이동, EDT 블록엔 staleness 가드 + UI 반영만 |
 | C8 | diff Sort once | ✅ 해결 | `SortJsonDiffKeysOnceAction`: `Default` 포맷 + `modificationStamp` 가드 + `WriteCommandAction` |
 | C9 | paste 시 소형 입력 동기 포맷 | ➖ 의도적 제외 | `JsoninjaPastePreProcessor`는 미변경. 임계값(`SYNC_PROCESSING_THRESHOLD`) 튜닝 후보 |
 | C10 | query 시작 전 원본 검증 | ✅ 해결 | `JsonQueryPresenter.performSearch`: 검증을 launch 본문(암시적 Default)으로 이동 — 7.⑤ |
@@ -138,20 +138,23 @@ class SomePresenter(
 - 이미 background로 분리되어 있던 경로: `JsonQueryService.query` 실행 본체, `GenerateRandomJsonAction` 생성 본체, `ConvertPreviewExecutor` 기반 type conversion preview, schema generation 본체.
 
 ## 7. Known issues
-이 문서를 만드는 시점에 발견됐으나 **이번 작업 범위에서는 기록만** 하는 항목입니다. (수정은 별도 작업)
+이 문서를 만드는 시점에 발견된 항목들입니다. 후속 작업에서 #1·#4·#6은 **해결**되어 ✅로 표시했고, 나머지 #2·#3·#5는 **기록만** 합니다.
 
-1. **인라인 `withContext(Default)` vs 전용 suspend 메서드 혼용 + 미사용 메서드.**
-   `JsonFormatterService`에 `formatJsonOnDefault` / `isValidJsonOnDefault` / `escapeJsonOnDefault` / `unescapeJsonOnDefault`를 추가했지만, 실제 사용되는 것은 `formatJsonOnDefault`(그것도 `JsonTabContextFactory` 한 곳)뿐입니다. 나머지 3개는 **dead code**입니다. 반면 `JsoninjaPanelPresenter`는 이 메서드를 쓰지 않고 인라인 `withContext(Dispatchers.Default) { processor(...) }`를 씁니다. → "전용 메서드" 또는 "인라인" 중 한쪽으로 통일하고 미사용 메서드는 제거 권장.
-2. **무의미한 `try/catch (CancellationException)`.**
-   `try { ... } catch (e: CancellationException) { throw e }`가 여러 파일(`BaseEditorJsonAction`, `JsoninjaPanelPresenter`, `JsonEditorTreePresenter`, `JsonDiffService`, `JsonTabContextFactory`, `SortJsonDiffKeysOnceAction`, `JsonQueryPresenter` 등)에 반복됩니다. 다른 catch/finally가 없어 **실효가 없는 no-op**(잡아서 그대로 재던짐)입니다. → 제거하거나, 의도가 "그 외 예외 로깅"이었다면 실제 핸들링을 추가.
+1. **✅ 해결됨 — 미사용 `*OnDefault` 메서드 제거.**
+   `JsonFormatterService`의 dead code였던 `isValidJsonOnDefault` / `escapeJsonOnDefault` / `unescapeJsonOnDefault` 3개를 제거했습니다. 실제 사용되는 `formatJsonOnDefault`(`JsonTabContextFactory` 한 곳)만 남았습니다. (참고: `JsoninjaPanelPresenter`는 여전히 인라인 `withContext(Dispatchers.Default) { processor(...) }`를 쓰므로 "전용 메서드 vs 인라인" 스타일 혼재는 남아 있으나, dead code가 사라져 영향은 경미합니다.)
+2. **`try/catch (CancellationException) { throw }`의 두 부류 — 일괄 제거 금지.**
+   `try { ... } catch (cancellationException: CancellationException) { throw cancellationException }` 패턴이 코드 전반(약 16곳)에 반복됩니다. **같은 텍스트라도 두 부류로 나뉘며, 한쪽을 제거하면 버그가 됩니다.** 판별 기준은 **"같은 `try`에 뒤따르는 광범위 catch(`Exception` / `Throwable` / `RuntimeException`)가 있는가"** 입니다. (`CancellationException`은 `Exception`/`Throwable`의 하위 타입이므로, 뒤에 광범위 catch가 있으면 그게 취소까지 삼킨다.)
+   - **(a) 진짜 no-op — 제거 가능 (7곳).** 뒤에 다른 catch가 없어 "잡아서 그대로 재던질 뿐", `try/catch`가 없는 것과 동일하다. → `JsonDiffService`, `BaseEditorJsonAction`, `SortJsonDiffKeysOnceAction`, `JsonEditorTreePresenter`, `JsonTabContextFactory`, `JsoninjaPanelPresenter`, `JsonQueryPresenter`(`setOriginalJson`의 빈 쿼리 else 분기).
+   - **(b) 필수 — 절대 제거 금지 (9곳).** 뒤에 `catch (Exception)` 또는 `catch (Throwable)`가 있어, 이 재던짐이 없으면 **그 광범위 catch가 코루틴 취소(`CancellationException`)를 삼켜 cancellation/structured-concurrency가 깨진다.** → `GenerateRandomJsonAction`, `JsonDiffExtension`, `JsonQueryPresenter`(`performSearch`), `GenerateSchemaJsonTabPresenter`(카탈로그 로드 · 스키마 URL fetch 2곳), `JsonEditorTooltipListener`, `LoadJsonFromApiDialogPresenter`, `FoldingAwareEditorTextField`, `ConvertPreviewExecutor`.
+   → 정리한다면 **(a)만** 제거한다. (b)는 유지가 정답이며, 오히려 새 코드에서 `catch (Exception/Throwable)`를 쓸 때는 반드시 그 앞에 `catch (CancellationException) { throw it }`를 두어야 한다(8장 체크리스트 참고). 같은 파일이라도 분류가 다를 수 있으니(예: `JsonQueryPresenter`는 (a)·(b) 둘 다 보유) 파일 단위가 아니라 **각 `try` 단위**로 판단할 것.
 3. **`JsonDiffExtension.isJsonContent`의 off-EDT read (낮은 우선순위).**
    원래 EDT(암시적 read 권한)에서 돌던 `isJsonContent`를 `Dispatchers.Default`로 옮겼습니다. 확인 결과 이 함수는 `editor.virtualFile?.fileType` / `?.extension`(캐시된 메타데이터)과 `document.text`(스레드 안전한 immutable 스냅샷)만 읽고, 실제 무거운 read(`formatJsonInBackground`)는 이미 `readAction { }` 안에 있어 **현재 코드 기준으로는 안전한 편**입니다. 즉 즉시 고칠 버그는 아닙니다. 다만 향후 `isJsonContent`에 PSI 접근이 추가되면 read action이 필요해지므로, 그 경계만 인지하면 됩니다. (불필요하게 `isJsonContent` 전체를 `readAction`으로 감싸지 말 것 — 과잉 래핑.)
-4. **C7 fuzzy filtering이 표준 패턴을 위반.**
-   `GenerateSchemaJsonTabPresenter`는 `delay(250ms)` debounce를 추가했지만, 실제 무거운 연산(`filterSchemaStoreCatalogItems` = 토큰 분해 + Levenshtein + 정렬)이 `withContext(Dispatchers.EDT + ModalityState.any())` **안**에서 실행됩니다. 즉 빈도만 줄였고 CPU 부하는 여전히 EDT에 있습니다. → 표준 패턴("Default 계산 → EDT 반영")으로 정렬 권장.
+4. **✅ 해결됨 — C7 fuzzy filtering을 표준 패턴으로 정렬.**
+   `GenerateSchemaJsonTabPresenter.filterSchemaStoreCatalogItemsByInput`의 무거운 연산(`filterSchemaStoreCatalogItems` = 토큰 분해 + Levenshtein + 정렬)을 `withContext(Dispatchers.Default)`로 옮기고, `withContext(Dispatchers.EDT + ModalityState.any())` 블록에는 staleness 가드(`isDisposed` / catalog state / editorText 일치)와 `view.updateSchemaUrlSuggestions` UI 반영만 남겼습니다. `delay(250ms)` debounce는 유지. 이제 "Default 계산 → EDT 반영" 표준 패턴을 따릅니다.
 5. **암시적 Default 의존의 일관성 부족.**
    `JsonQueryPresenter.performSearch`는 `launch { ... isValidJson(...) }`처럼 `withContext` 없이 검증을 돌립니다(2. 전제에 의해 off-EDT). 그러나 같은 클래스의 `setOriginalJson`은 동일 검증을 `withContext(Dispatchers.Default)`로 명시 래핑합니다. → 명시 래핑으로 통일 권장(전제 1이 깨지면 암시적 경로가 EDT로 새는 위험).
-6. **AGENTS.md `Threading Rules` 표가 구식.**
-   AGENTS.md의 해당 표는 여전히 `executeOnPooledThread { ... invokeLater(...) }` 패턴을 표준으로 명시하여, 본 문서의 coroutine 표준과 모순됩니다. → 이 문서를 정본으로 삼고 AGENTS.md 표를 갱신(또는 이 문서로 링크)하는 후속 작업 필요.
+6. **✅ 해결됨 — AGENTS.md `Threading Rules` 표 갱신.**
+   AGENTS.md의 `Threading Rules` 표를 coroutine 매핑(`JsoninjaCoroutineScopeService`/`createChildScope`, `Dispatchers.Default`/`IO`/`EDT`, `WriteCommandAction`, `readAction`)으로 교체하고, 본 문서를 정본(canonical source)으로 링크했습니다. 레거시 `executeOnPooledThread`/`invokeLater`는 표에서 제거되고 "표준 아님"으로 명시됐습니다. (`src/main` 레거시 primitive 잔존 0개로, AGENTS.md 섹션 3과의 자기모순도 해소.)
 
 ## 8. 새 비동기 코드 리뷰 체크리스트
 PR에서 비동기 코드를 추가/수정할 때 확인할 항목.
@@ -164,4 +167,4 @@ PR에서 비동기 코드를 추가/수정할 때 확인할 항목.
 - [ ] off-EDT에서 PSI/VFS를 읽는다면 `readAction { }`으로 감쌌는가?
 - [ ] 문서 변경은 `WriteCommandAction`을 통하는가?
 - [ ] 새로 추가한 suspend 헬퍼가 실제로 사용되는가? (dead code 금지)
-- [ ] 의미 없는 `catch (CancellationException) { throw it }`를 넣지 않았는가?
+- [ ] `catch (Exception)` / `catch (Throwable)`를 쓴다면, **그 앞에** `catch (CancellationException) { throw it }`를 두어 취소가 삼켜지지 않게 했는가? (반대로, 뒤따르는 광범위 catch가 전혀 없다면 그 재던짐 블록은 no-op이므로 넣지 말 것 — Known issue 2 참고)

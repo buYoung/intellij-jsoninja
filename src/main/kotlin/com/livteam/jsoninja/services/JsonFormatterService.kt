@@ -215,18 +215,6 @@ class JsonFormatterService(private val project: Project) {
         formatJson(json, formatState, sortOverride)
     }
 
-    suspend fun isValidJsonOnDefault(json: String): Boolean = withContext(Dispatchers.Default) {
-        isValidJson(json)
-    }
-
-    suspend fun escapeJsonOnDefault(json: String): String = withContext(Dispatchers.Default) {
-        escapeJson(json)
-    }
-
-    suspend fun unescapeJsonOnDefault(json: String): String = withContext(Dispatchers.Default) {
-        unescapeJson(json)
-    }
-
     /**
      * JSON 문자열이 유효한지 검사
      *
