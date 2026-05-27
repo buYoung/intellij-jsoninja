@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-05-27
+
 ### Changed
 
 - **JSON Editing**: Formatting, escaping, unescaping, and query result updates now keep the editor responsive while processing larger JSON content.
@@ -378,7 +380,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.4...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.4...v1.12.0
 [1.11.4]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.3...v1.11.4
 [1.11.3]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.2...v1.11.3
 [1.11.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.1...v1.11.2
