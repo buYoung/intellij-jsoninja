@@ -37,6 +37,7 @@ internal class FoldingAwareEditorTextField(
     private val editorProject = project
     private var foldingCoroutineScope: CoroutineScope? = null
     private var foldingRefreshAlarm: Alarm? = null
+    private var foldingAlarmDisposable: Disposable? = null
     private var foldingRefreshJob: Job? = null
     private var cleanupRegistrationEditor: Editor? = null
 
@@ -54,18 +55,23 @@ internal class FoldingAwareEditorTextField(
 
     private fun ensureRefreshInfrastructure(editor: Editor) {
         val project = editorProject ?: return
+        val editorDisposable = editor as? Disposable ?: return
+
         val currentScope = foldingCoroutineScope
         if (currentScope == null || currentScope.coroutineContext[Job]?.isCancelled == true) {
             val newScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
             foldingCoroutineScope = newScope
-            foldingRefreshAlarm = Alarm(newScope, Alarm.ThreadToUse.SWING_THREAD)
+
+            val alarmDisposable = Disposer.newDisposable("JSONinja folding alarm")
+            Disposer.register(editorDisposable, alarmDisposable)
+            foldingAlarmDisposable = alarmDisposable
+            foldingRefreshAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, alarmDisposable)
         }
 
         if (cleanupRegistrationEditor === editor) {
             return
         }
 
-        val editorDisposable = editor as? Disposable ?: return
         cleanupRegistrationEditor = editor
         Disposer.register(editorDisposable) {
             clearRefreshInfrastructure()
@@ -148,7 +154,9 @@ internal class FoldingAwareEditorTextField(
         foldingRefreshAlarm?.cancelAllRequests()
         foldingRefreshJob?.cancel()
         foldingCoroutineScope?.cancel()
+        foldingAlarmDisposable?.let { Disposer.dispose(it) }
         foldingRefreshAlarm = null
+        foldingAlarmDisposable = null
         foldingRefreshJob = null
         foldingCoroutineScope = null
         cleanupRegistrationEditor = null
