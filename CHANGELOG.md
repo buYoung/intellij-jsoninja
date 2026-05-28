@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Code Folding**: JSONinja editors now keep folding refreshes compatible with newer IDE builds, avoiding failures caused by unsupported IDE APIs.
+
 ## [1.12.0] - 2026-05-27
 
 ### Changed
