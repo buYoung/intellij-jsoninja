@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-05-28
+
 ### Fixed
 
 - **Code Folding**: JSONinja editors now keep folding refreshes compatible with newer IDE builds, avoiding failures caused by unsupported IDE APIs.
@@ -384,7 +386,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.1...HEAD
+[1.12.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.4...v1.12.0
 [1.11.4]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.3...v1.11.4
 [1.11.3]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.2...v1.11.3
