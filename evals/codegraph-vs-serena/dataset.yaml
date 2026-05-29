@@ -1,0 +1,198 @@
+# =============================================================================
+# 코드 수정 시나리오 기반 벤치마크 데이터셋 (whole-repo scope, 2 cases)
+# -----------------------------------------------------------------------------
+# 목적: "실제로 코드를 수정하기 직전 엔지니어가 던지는 질문" 2가지를 리포 전체 범위에서
+#       5개 탐색 백엔드(codegraph / serena / zoekt / rg+sg / bare)에 동일 프롬프트로 묻고,
+#       소스에서 독립 산출한 gold 와 대조해 recall / precision 을 측정한다.
+# 설계 근거:
+#   - 기존 services/schema(6파일·2,759줄) 한정 파일럿은 대상이 너무 작아 brute-force(통독)로
+#     풀려 도구 간 변별이 사라졌다. 그래서 본 데이터셋은 리포 전체(prod 146파일 + test)를 무대로 한다.
+#   - 케이스는 2개만 둔다. 케이스 수보다 "수정 시나리오로서의 현실성 + 변별력"을 우선한다.
+#   - M1 = 시그니처 변경 영향(blast radius): 역호출 + 타입 동명 구분 + DI 수신자.
+#   - M2 = 동작 변경 전파(transitive impact closure): 다중 홉 역호출 폐포 + DI 홉 + 람다 간접.
+#   - enum 분기 갱신 케이스는 의도적으로 배제했다: 모든 암이 enum 참조 ~15개를 비슷하게 노출하고,
+#     "어떤 부분집합이 갱신 대상인가"는 도구가 결과를 돌려준 뒤 에이전트가 코드를 읽고 판단하는 몫이라
+#     도구 능력이 아니라 에이전트 추론을 측정하게 된다(precision 이 채점 판단에 휘둘리는 메커니즘).
+# =============================================================================
+
+meta:
+  provenance:
+    git_commit: 1daf879beae6ecc853be6a7e496a240568bddea5
+    git_tag: v1.12.1
+    branch: main
+    tracked_source_dirty: false      # gold 는 이 커밋 소스와 정확히 일치
+    codegraph_db_sha256: 54e743b63439404afefbe033affabd5d4abe158e6686ca40942cbe808d7a333b
+    db_freshness_verified: true
+  scope: whole-repo (src/main/kotlin + src/test/kotlin)
+  gold_provenance: 측정 대상 5개 도구 중 어느 것도 gold 산출에 사용하지 않음. rg 로 전수 추출 후 소스 직접 판독으로 수신자 타입·호출 체인을 손으로 검증함. codegraph CTE 는 "타깃 후보 탐색"에만 사용했고 정답 출처가 아님.
+  matching_key: "M1 = 호출지점(file:line). M2 = (qualified_name) 함수 단위. 라인 ±1 정규화(codegraph 1-based vs serena 0-based)는 채점기에서 흡수."
+
+  # ---------------------------------------------------------------------------
+  # 실행 전 선결조건 (공정성 — 인덱스 범위 정렬)
+  # ---------------------------------------------------------------------------
+  prerequisites:
+    zoekt_reindex_required: true
+    reason: >-
+      M1·M2 gold 에 src/test 의 호출지점이 포함된다. 현재 zoekt 인덱스(kotlin_v16.00000.zoekt)는
+      src/main(146파일)만 커버하므로, 테스트 호출지점을 구조적으로 찾을 수 없다. 이는 도구 능력 차이가
+      아니라 인덱스 범위 아티팩트이므로 zoekt 암을 부당하게 깎는다. 실행 전 src/test 까지 포함해
+      재인덱싱하고, 전 암의 검색 가능 범위(src/main + src/test)를 동일하게 맞춘다.
+    action: "zoekt-index 로 src/main/kotlin + src/test/kotlin 을 함께 인덱싱한 뒤 sha 와 파일수를 기록한다."
+
+  # ---------------------------------------------------------------------------
+  # 5개 암 (기존 benchmark-design.md §3.0 의 동일 베이스 프롬프트를 그대로 재사용)
+  # {{ALLOWED_TOOLS_BLOCK}} 한 곳만 차등, 읽기전용·출력스키마·금지사항은 전 암 동일.
+  # ---------------------------------------------------------------------------
+  arms:
+    A_codegraph: 'Bash 로 ''sqlite3 .codegraph/codegraph.db "..."'' 만. 소스 파일 Read/grep 금지.'
+    B_serena:    'mcp__serena__* 읽기전용 도구만 (find_symbol, find_referencing_symbols, get_symbols_overview, search_for_pattern 등).'
+    C_zoekt:     'Bash 로 zoekt 검색 CLI 만 (src/main + src/test 재인덱싱본 대상). 소스 직접 Read 금지.'
+    D_rg_sg:     'Bash 로 rg(ripgrep), sg(ast-grep) 만. 그 외 명령/도구 금지. (이전 파일럿에서 D 가 sg 를 한 번도 안 썼으므로, 이번엔 구조 패턴 1회 이상 sg 사용을 권장하되 강제는 아님.)'
+    E_bare:      'Claude Code 내장 Grep + Glob + Read 만. Bash 전면 금지(이전 파일럿에서 E 가 Bash grep/find 를 써 격리를 위반했으므로, 이번엔 Bash 를 차단해 순수 내장도구 베이스라인을 측정).'
+
+  output_schema: |
+    JSON 한 개만 출력:
+    {
+      "answers": [ { "qualified_name": "...", "kind": "method|class|function|callsite", "file": "...", "line": <int|null> } ],
+      "reasoning_brief": "1~3문장",
+      "tool_calls_count": <int>
+    }
+
+  metrics:
+    accuracy: [recall, precision, f1]
+    efficiency: [tool_calls_count, output_tokens, cache_read_tokens, wall_clock_seconds, estimated_cost_usd]
+    robustness: [hallucination_count, trap_inclusion_count]   # 함정(동명·반대방향) 포함 수
+
+# =============================================================================
+cases:
+
+  # ---------------------------------------------------------------------------
+  - id: M1
+    title: "시그니처 변경 영향 범위 (blast radius)"
+    category: reverse-call + type-disambiguation + DI-receiver
+    modification_scenario: >-
+      JsonFormatterService.formatJson(json, formatState, sortOverride) 의 시그니처를 바꾸려 한다
+      (예: 파라미터 추가). 컴파일 에러 없이 안전하게 바꾸려면 이 '서비스 메서드'를 호출하는 모든 지점을
+      찾아 함께 수정해야 한다. 테스트도 시그니처 변경에 깨지므로 수정 대상에 포함된다.
+    question: >-
+      JsonFormatterService 클래스에 정의된 formatJson(json, formatState, sortOverride) 메서드를
+      '직접 호출하는' 모든 호출지점(파일과 라인)을 나열하라. 프로덕션(src/main)과 테스트(src/test) 모두 포함한다.
+      주의: 같은 이름 formatJson 을 가진 다른 메서드(JsoninjaPanelPresenter.formatJson)의 호출은 제외한다.
+
+    discriminators:
+      - "동명 메서드 2개: JsonFormatterService.formatJson(서비스, line 127) vs JsoninjaPanelPresenter.formatJson(프레젠터, line 66). 이름만 매칭하면 프레젠터 호출 2건을 오탐으로 포함하게 됨(타입 구분 필요)."
+      - "DI 수신자: GenerateRandomJsonAction.kt:60 은 project.service<JsonFormatterService>().formatJson(...) 형태. serena 의 IntelliJ DI 수신자 미해소가 드러나는 지점."
+      - "테스트 꼬리: src/test 의 21개 호출지점. 인덱스 범위(zoekt) 와 수동 BFS 종료(텍스트 암)의 변별축."
+      - "스코프 정렬 필수: 테스트 포함이 gold 이므로 zoekt 재인덱싱 전엔 zoekt 가 구조적으로 불리."
+
+    gold:
+      unit: callsite (file:line)
+      production_sites:        # JsonFormatterService.formatJson 직접 호출 (12)
+        - "src/main/kotlin/com/livteam/jsoninja/services/JsonFormatterService.kt:215"   # formatJsonOnDefault 내부 자기호출(this)
+        - "src/main/kotlin/com/livteam/jsoninja/services/JsonDiffService.kt:102"
+        - "src/main/kotlin/com/livteam/jsoninja/extensions/JsoninjaPastePreProcessor.kt:48"
+        - "src/main/kotlin/com/livteam/jsoninja/services/typeConversion/TypeToJsonGenerationService.kt:43"
+        - "src/main/kotlin/com/livteam/jsoninja/diff/JsonDiffExtension.kt:412"
+        - "src/main/kotlin/com/livteam/jsoninja/actions/GenerateRandomJsonAction.kt:60"   # DI 수신자
+        - "src/main/kotlin/com/livteam/jsoninja/actions/editor/EditorPrettifyJsonAction.kt:13"  # service:JsonFormatterService 파라미터
+        - "src/main/kotlin/com/livteam/jsoninja/actions/editor/EditorUglifyJsonAction.kt:13"
+        - "src/main/kotlin/com/livteam/jsoninja/actions/SortJsonDiffKeysOnceAction.kt:45"
+        - "src/main/kotlin/com/livteam/jsoninja/actions/SortJsonDiffKeysOnceAction.kt:46"
+        - "src/main/kotlin/com/livteam/jsoninja/ui/component/main/JsoninjaPanelPresenter.kt:74"
+        - "src/main/kotlin/com/livteam/jsoninja/ui/component/main/JsoninjaPanelPresenter.kt:92"
+      test_sites:              # JsonFormatterServiceTest.kt 의 직접 호출 (21)
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:18"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:32"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:38"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:43"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:108"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:119"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:120"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:139"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:149"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:162"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:169"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:181"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:189"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:201"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:204"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:217"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:229"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:246"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:257"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:270"
+        - "src/test/kotlin/com/livteam/jsoninja/services/JsonFormatterServiceTest.kt:285"
+      total_gold_sites: 33
+      traps_must_exclude:    # 동명 프레젠터 메서드 호출 — 포함하면 precision 하락
+        - "src/main/kotlin/com/livteam/jsoninja/actions/PrettifyJsonAction.kt:18"   # panel.presenter.formatJson()
+        - "src/main/kotlin/com/livteam/jsoninja/actions/UglifyJsonAction.kt:20"     # panel.presenter.formatJson(UGLIFY)
+      notes:
+        - "formatJsonOnDefault(:210) 와 JsonDiffExtension.formatJsonInBackground(:376) 는 '정의'이지 호출이 아니므로 제외(이름 부분일치 함정)."
+        - "채점은 라인 단위. 도구가 호출지점 대신 '둘러싼 함수'로 답하면 enclosing-function 매핑표(아래)로 동치 처리 가능."
+
+  # ---------------------------------------------------------------------------
+  - id: M2
+    title: "동작 변경 전파 범위 (transitive impact closure)"
+    category: transitive reverse-call + DI-hop + lambda-indirection
+    modification_scenario: >-
+      TreeSitterWasmRuntime.getOrCreate() 의 동작(WASM 런타임 핸들의 재사용/생성 정책)을 바꾸려 한다.
+      이 변경이 직접·간접적으로 영향을 미치는 프로덕션 함수 전부를 알아야 회귀 위험을 가늠할 수 있다.
+    question: >-
+      TreeSitterWasmRuntime.getOrCreate() 가 (직접 또는 다른 함수를 거쳐 간접적으로) 호출되는,
+      프로덕션 코드(src/main)의 모든 함수를 호출 깊이와 함께 나열하라. 즉 getOrCreate 의 transitive
+      역호출 폐포다. IntelliJ 진입점(AnAction.actionPerformed / DialogWrapper 생성) 위쪽은 제외한다.
+
+    discriminators:
+      - "DI 수신자 홉 2개: (d2) TypeToJsonGenerationService 가 project.getService(TypeDeclarationAnalyzerService) 로 받은 수신자에 analyzeSource 호출 / (d3) TypeToJsonDialogPresenter 가 project.getService(TypeToJsonGenerationService) 로 받은 수신자에 generate 호출. serena 는 이 두 홉(명시적 타입 없는 DI 수신자)에서 체인이 끊길 것으로 예측."
+      - "람다 간접: (d3) generate 호출이 schedulePreview 안의 computePreview = { ... } 람다(previewExecutor.submit 에 전달) 내부에 있음. 정적 귀속 난이도."
+      - "다중 홉 깊이 5: 텍스트/LSP 암은 수동 BFS 로 한 단계씩 올라가야 하며 중간에 조기 종료할 위험. codegraph 는 재귀 CTE 로 one-shot."
+      - "동명/유사 함정: getOrCreateContext(JsonDiffService) 는 이름만 비슷한 다른 메서드. TypeToJsonDialogView.updateLanguage(:148) 는 inputPanel 에 대한 다른 updateLanguage. JsonToType 방향(JsonToTypeConversionService / JsonToTypeDialogPresenter)은 tree-sitter 를 안 거쳐 폐포에 없음."
+
+    gold:
+      unit: function (qualified_name)
+      production_closure:      # getOrCreate 의 transitive 역호출 폐포 (8 함수)
+        - depth: 1
+          qualified_name: "com.livteam.jsoninja.services.typeConversion.TypeDeclarationAnalyzerService.analyzeSource"
+          reached_via: "TreeSitterWasmRuntime.getOrCreate() 직접 호출 (object, TypeDeclarationAnalyzerService.kt:27)"
+        - depth: 2
+          qualified_name: "com.livteam.jsoninja.services.typeConversion.TypeToJsonGenerationService.generate"
+          reached_via: "analyzerService.analyzeSource — DI 수신자 project.getService (TypeToJsonGenerationService.kt:13,27)"
+        - depth: 3
+          qualified_name: "com.livteam.jsoninja.ui.dialog.convertType.TypeToJsonDialogPresenter.schedulePreview"
+          reached_via: "generationService.generate — DI 수신자 + computePreview 람다 내부 (TypeToJsonDialogPresenter.kt:20,111)"
+        - depth: 4
+          qualified_name: "com.livteam.jsoninja.ui.dialog.convertType.TypeToJsonDialogPresenter.<init>"
+          reached_via: "schedulePreview() (TypeToJsonDialogPresenter.kt:32)"
+        - depth: 4
+          qualified_name: "com.livteam.jsoninja.ui.dialog.convertType.TypeToJsonDialogPresenter.updateLanguage"
+          reached_via: "schedulePreview() (TypeToJsonDialogPresenter.kt:42)"
+        - depth: 4
+          qualified_name: "com.livteam.jsoninja.ui.dialog.convertType.TypeToJsonDialogPresenter.bindView"
+          reached_via: "setOnStateChanged { ... schedulePreview() } 람다 (TypeToJsonDialogPresenter.kt:81)"
+        - depth: 5
+          qualified_name: "com.livteam.jsoninja.ui.dialog.convertType.ConvertTypeDialogPresenter.<init>"
+          reached_via: "TypeToJsonDialogPresenter(...) 생성 (ConvertTypeDialogPresenter.kt:22)"
+        - depth: 5
+          qualified_name: "com.livteam.jsoninja.ui.dialog.convertType.ConvertTypeDialogPresenter.syncLanguage"
+          reached_via: "typeToJsonPresenter.updateLanguage(language) (ConvertTypeDialogPresenter.kt:79)"
+      total_gold_functions: 8
+      cut_boundary: "ConvertTypeDialogPresenter 위(=DialogWrapper/AnAction 진입점)는 폐포에서 제외. 명시적 컷."
+      traps_must_exclude:
+        - "com.livteam.jsoninja.services.JsonDiffService.getOrCreateContext  (이름 유사, 무관 메서드)"
+        - "com.livteam.jsoninja.ui.dialog.convertType.TypeToJsonDialogView.updateLanguage  (inputPanel 대상 동명 메서드, :148)"
+        - "com.livteam.jsoninja.ui.dialog.convertType.JsonToTypeDialogPresenter.schedulePreview  (반대 방향, getOrCreate 미도달)"
+        - "ConvertTypeDialogPresenter.syncLanguage 내 jsonToTypePresenter.updateLanguage 분기  (반대 방향)"
+      test_tail:             # 별도 sub-score (transitive 말단 회수 변별축). 폐포 상의 analyzeSource/generate 를 호출하는 통합테스트.
+        - "src/test/.../typeConversion/TypeConversionWasmIntegrationTest.kt  (analyzeSource/generate 경유)"
+        - "src/test/.../typeConversion/TypeConversionWasmIntegrationV2Test.kt"
+        - "src/test/.../typeConversion/TypeConversionWasmIntegrationV3Test.kt"
+
+# =============================================================================
+# 채점
+#   recall(M1)    = 맞춘 gold callsite / 33
+#   precision(M1) = 맞춘 gold callsite / 제출 callsite (함정 2건 포함 시 하락)
+#   recall(M2)    = 맞춘 폐포 함수 / 8
+#   precision(M2) = 맞춘 폐포 함수 / 제출 함수 (함정 4종 포함 시 하락)
+#   test_tail(M2) = 통합테스트 3종 회수 여부(가/감점 별도 표기)
+#   라인 ±1 정규화, blind 채점(에이전트에 gold 비공개).
+# =============================================================================
