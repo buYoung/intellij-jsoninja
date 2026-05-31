@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>코드 수정 시나리오 벤치마크 — codegraph vs serena vs zoekt vs rg vs bare vs cocoindex</title>
+<title>코드 수정 시나리오 벤치마크 — codegraph vs serena vs zoekt vs rg vs bare vs cocoindex vs zoekt+ctags</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -86,15 +86,72 @@
 <div class="wrap">
   <header class="page">
     <h1>코드 수정 시나리오 벤치마크</h1>
-    <div class="sub">whole-repo 범위 · 2 케이스 × 6 암 · sonnet 서브에이전트 12개 · blind 채점</div>
+    <div class="sub">코드를 고치기 직전 던지는 질문 4가지를 코드 검색 도구 7개에 똑같이 물어 정확도·효율을 잰 실험 · whole-repo 범위 · 4 케이스 × 7 도구 · sonnet 서브에이전트(28회 측정) · 정답 비공개(blind) 채점</div>
     <div class="meta-line">
       git <span>v1.12.1</span> · commit <span>1daf879</span> · codegraph db <span>54e743b6…</span> ·
-      zoekt 재인덱싱 <span>296 files (main+test)</span>
+      zoekt 재인덱싱 <span>296 files (main+test)</span> · M3 인덱스 <span>+Rust (183 files)</span>
     </div>
   </header>
 
+  <!-- PLAIN INTRO -->
+  <h2>이 벤치마크가 뭔가요?</h2>
+  <p>코드를 고치기 직전 개발자가 흔히 던지는 질문 — 예를 들어 <i>"이 함수의 인자를 바꾸면 어디어디를 같이 고쳐야 하지?"</i> —
+  을 <b>코드 검색 도구 7개</b>에게 똑같이 물어보고, 사람이 소스를 직접 읽어 만든 <b>정답 목록(gold)</b>과 대조해
+  <b>누가 더 빠짐없이(재현율), 헛다리 없이(정밀도)</b> 찾는지를 잰 실험입니다.</p>
+  <p class="muted" style="font-size:0.9rem;">도구마다 "코드를 이해하는 방식"이 다릅니다(그래프 / 심볼 / 텍스트 / 의미 임베딩).
+  그래서 질문 유형이 바뀌면 잘하던 도구가 갑자기 무너지기도 합니다 — 이 실험의 핵심 결과가 바로 그 <b>"만능 도구는 없다"</b>는 점입니다.</p>
+
+  <!-- TL;DR -->
+  <div class="alert" style="border-left-color:var(--green);border-color:#1f5132;">
+    <h3 style="color:var(--green)">⏱️ 30초 결론</h3>
+    <ul>
+      <li><b>만능 도구는 없다.</b> 4개 질문 평균 재현율은 텍스트 계열(rg · zoekt+ctags 0.93)이 가장 높았지만, 질문마다 1등이 계속 바뀐다.</li>
+      <li><b>그래프 도구(codegraph)는 "빠짐없이 전수 조회"엔 최강이지만 "언어 경계"에서 무너진다.</b> M1·M2 는 최상위였다가 Kotlin↔Rust 경계(M3-W 0.50)·enum 참조(M3-L 0.00)에서 급락 → 평균 0.56.</li>
+      <li><b>의미 검색(cocoindex)은 "다 찾기"에 약하다.</b> 비슷한 코드는 잘 찾지만 전수 열거가 안 돼 평균 재현율 최저(0.40).</li>
+      <li><b>승부의 진짜 축은 "정밀하냐 vs 텍스트냐"가 아니라 "그 도구가 무엇을 색인했느냐"</b>(문자열 / enum 참조 / 언어 간 링크 / 정확한 줄 위치)다.</li>
+    </ul>
+  </div>
+
+  <!-- GLOSSARY -->
+  <h2>먼저 알아둘 용어</h2>
+  <table>
+    <thead><tr><th>용어</th><th>쉽게 말하면</th></tr></thead>
+    <tbody>
+      <tr><td class="arm">정답(gold)</td><td>사람이 소스를 직접 읽어 만든 정답 목록. 측정 대상 도구를 하나도 쓰지 않고 만들어 채점이 공정하다.</td></tr>
+      <tr><td class="arm">재현율(recall)</td><td>찾아야 할 정답 N개 중 실제로 찾아낸 비율. <b>1.00 = 하나도 안 놓침.</b></td></tr>
+      <tr><td class="arm">정밀도(precision)</td><td>도구가 "이게 답"이라고 낸 것 중 진짜 정답인 비율. <b>1.00 = 헛다리 0.</b></td></tr>
+      <tr><td class="arm">함정(trap)</td><td>이름은 비슷하지만 정답이 아닌 코드. 도구가 잘 거르는지(정밀도) 보려고 일부러 섞어 둔 것.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin:22px 0 8px;">측정한 도구 7개</h3>
+  <table>
+    <thead><tr><th>도구</th><th>한 줄 설명</th></tr></thead>
+    <tbody>
+      <tr><td class="arm">A codegraph</td><td>코드의 호출 관계를 미리 그래프 DB 로 만들어 두고 "누가 이걸 부르나"를 한 번에 질의.</td></tr>
+      <tr><td class="arm">B serena</td><td>IDE 의 "사용처 찾기 / 정의로 이동"과 같은 LSP 기반 심볼 분석(MCP).</td></tr>
+      <tr><td class="arm">C zoekt</td><td>구글식 코드 검색 엔진(트라이그램 인덱스). 빠른 텍스트 검색.</td></tr>
+      <tr><td class="arm">D rg + sg</td><td><code>ripgrep</code>(초고속 grep) + <code>ast-grep</code>(구문 구조 검색).</td></tr>
+      <tr><td class="arm">E bare</td><td>추가 도구 없이 기본 검색(grep) + 파일 읽기만. 비교 기준선(baseline).</td></tr>
+      <tr><td class="arm">F cocoindex</td><td>코드를 임베딩 벡터로 바꿔 "의미가 비슷한" 코드를 찾는 시맨틱 검색.</td></tr>
+      <tr><td class="arm">H zoekt + ctags</td><td>zoekt 에 ctags 심볼 정보를 더해 함수·심볼 단위(<code>sym:</code>) 검색까지 가능.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin:22px 0 8px;">물어본 질문 4개</h3>
+  <table>
+    <thead><tr><th>질문</th><th>실제 상황</th><th class="mono">정답 수</th></tr></thead>
+    <tbody>
+      <tr><td class="arm">M1 시그니처 영향</td><td>"이 함수의 인자를 바꾸면 같이 고쳐야 할 호출지점이 어디?"</td><td class="mono">33</td></tr>
+      <tr><td class="arm">M2 동작 전파</td><td>"이 함수의 동작을 바꾸면 결국 어떤 기능들이 영향받나?" (호출 사슬을 거슬러 올라간 전 범위)</td><td class="mono">8</td></tr>
+      <tr><td class="arm">M3-W 언어 간 경계</td><td>"Kotlin 이 Rust(WASM) 함수를 <b>문자열 이름</b>으로 부르는 지점과, 그에 대응하는 Rust 정의는?"</td><td class="mono">8</td></tr>
+      <tr><td class="arm">M3-L enum 참조</td><td>"<code>SupportedLanguage.KOTLIN</code> 이라는 enum 상수를 실제로 쓰는 곳은 모두 어디?"</td><td class="mono">29</td></tr>
+    </tbody>
+  </table>
+  <p class="muted" style="font-size:0.85rem;">M1·M2 는 일반적인 한 언어(Kotlin) 안의 질문, M3-W·M3-L 은 Rust 가 섞인 <b>여러 언어(polyglot) 경계</b> 질문이다. 도구의 진짜 실력은 이 경계에서 갈렸다.</p>
+
   <!-- KEY RESULTS (objective, per-tool) -->
-  <h2>핵심 결과 (도구별)</h2>
+  <h2>도구별 강점·약점 한눈에</h2>
   <table>
     <thead><tr><th>도구</th><th>강점</th><th>약점</th></tr></thead>
     <tbody>
@@ -103,25 +160,36 @@
       <tr><td class="arm">zoekt</td><td>단순 전수 조회 최소 비용(M1 1콜·37s)</td><td>다중홉 폐포 말단 회수 최저(M2 0.625) — 람다/생성자 귀속 약함</td></tr>
       <tr><td class="arm">rg(+sg)</td><td>텍스트 컨텍스트로 높은 정확도(재현율 0.875, 정밀도 0.985)</td><td>다중홉은 수동 BFS — 호출수 증가. sg 미사용(rg-only)</td></tr>
       <tr><td class="arm">bare</td><td>텍스트+읽기. 단순 역호출 강(M1 0.97, DI 수신자도 회수)</td><td>깊은 transitive 최약체(M2 0.625). rg 와 동일 능력군</td></tr>
-      <tr><td class="arm">cocoindex</td><td>시맨틱 임베딩. 함정·환각 0, DI 호출지점 회수, M2 추론보완(0.75)</td><td><b>전수 회수 부적합(M1 recall 0.67 최저)</b>, 청크 라인추정 오차, 호출수 최다(M1 17·M2 30)</td></tr>
+      <tr><td class="arm">cocoindex</td><td>시맨틱 임베딩. 함정·환각 0, DI 호출지점 회수, M2 추론보완(0.75)</td><td><b>전수·정확 회수 부적합(평균 recall 0.40 최저)</b>, 청크 라인추정 오차, M3 polyglot 양쪽 최약</td></tr>
+      <tr><td class="arm">zoekt+ctags</td><td>plain zoekt + ctags 심볼 메타(<code>sym:</code>). M2 람다·DI홉 회수 개선(0.625→0.75), M3 텍스트강점 유지</td><td>생성자(<code>&lt;init&gt;</code>) 누락은 plain 과 동일. 심볼 필드선언 과보고로 일부 precision 하락</td></tr>
     </tbody>
   </table>
-  <p class="muted" style="font-size:0.9rem;">단일 지배 도구 없음 — codegraph=전수성·효율, serena=타입 정밀, 텍스트(rg/bare)=경계·컨텍스트, cocoindex=시맨틱(전수 약·반복질의로 보완). 다중홉 폐포 말단(생성자)은 6개 암 공통 취약.</p>
+  <p class="muted" style="font-size:0.9rem;">단일 지배 도구 없음 — codegraph=전수성·효율(단 polyglot 취약), serena=타입+텍스트 겸비, 텍스트(zoekt/rg/bare/ctags)=경계·언어 간 seam 강, cocoindex=시맨틱(전수 약). 다중홉 말단(생성자)·polyglot 경계는 도구마다 다른 이유로 샌다.</p>
+
+  <div class="alert" style="border-left-color:var(--violet);border-color:#3b2a6b;margin:20px 0">
+    <h3 style="color:var(--violet)">M3 polyglot 확장 — 7암 × 4케이스 = 28셀 (정본: results.md)</h3>
+    <ul>
+      <li>신규 암 <b>H zoekt+ctags</b> + polyglot 케이스 <b>M3-W</b>(언어 간 WASM ABI seam, gold 8)·<b>M3-L</b>(다중언어 enum 참조, gold 29). 전 암 인덱스를 v1.12.1+Rust(<code>tree-sitter-wasm/</code>) 포함 재인덱싱(A안).</li>
+      <li><b>비단조 발견</b> — M3-W: 텍스트군(C/D/E/H)·serena <b>1.00</b>, codegraph <b>0.50</b>(Kotlin 문자열 바인딩 맹점), cocoindex 0.125. M3-L: serena <b>1.00</b>·텍스트군 0.966, codegraph <b>0.00</b>(graph 가 enum 참조 미색인), cocoindex ~0.07. H 는 M2 에서 0.625→<b>0.75</b>(ctags 효과).</li>
+      <li>갈림의 축은 "정밀 vs 텍스트"가 아니라 <b>백엔드가 무엇을 색인 가능한가</b>(문자열 리터럴·enum 참조·cross-language 링크·라인 정밀도). 아래 스코어보드·차트는 7암 × 4케이스 전체를 반영한다. 상세 근거는 <code>results.md</code>.</li>
+    </ul>
+  </div>
 
   <!-- KPI -->
   <h2>요약 지표</h2>
   <div class="kpis">
-    <div class="kpi"><div class="label">재현율 공동 1위</div><div class="val blue">0.875</div><div class="note">codegraph · rg(+sg)</div></div>
-    <div class="kpi"><div class="label">정밀도 최저</div><div class="val amber">0.94</div><div class="note">codegraph (타입 맹점)</div></div>
-    <div class="kpi"><div class="label">최소 호출/시간</div><div class="val">1콜 · 37s</div><div class="note">zoekt · M1 전수질의</div></div>
-    <div class="kpi"><div class="label">M2 폐포 최저재현율</div><div class="val amber">0.625</div><div class="note">zoekt · bare (말단 누락)</div></div>
-    <div class="kpi"><div class="label">M1 전수회수 최저</div><div class="val amber">0.67</div><div class="note">cocoindex (임베딩 비전수)</div></div>
+    <div class="kpi"><div class="label">평균 재현율 1위</div><div class="val blue">0.93</div><div class="note">rg(+sg) · zoekt+ctags (4케이스)</div></div>
+    <div class="kpi"><div class="label">codegraph 급락</div><div class="val amber">0.56</div><div class="note">polyglot(M3) 취약 → 평균 추락</div></div>
+    <div class="kpi"><div class="label">M3-W 정밀도구 역전</div><div class="val amber">0.50</div><div class="note">codegraph (Kotlin 문자열 바인딩 맹점)</div></div>
+    <div class="kpi"><div class="label">M3-L codegraph</div><div class="val" style="color:var(--red)">0.00</div><div class="note">graph 가 enum 참조 미색인</div></div>
+    <div class="kpi"><div class="label">평균 재현율 최저</div><div class="val amber">0.40</div><div class="note">cocoindex (임베딩 비전수)</div></div>
   </div>
 
   <!-- SCOREBOARD -->
-  <h2>스코어보드 (recall / precision)</h2>
+  <h2>스코어보드 — 도구 × 질문 점수표 (재현율 / 정밀도)</h2>
+  <p class="muted" style="font-size:0.88rem;">각 칸은 <b>재현율 / 정밀도</b>. 초록=잘함, 노랑·빨강=약점. 맨 아래 두 줄은 4개 질문 평균이다.</p>
   <table>
-    <thead><tr><th>케이스 (gold)</th><th class="mono">A codegraph</th><th class="mono">B serena</th><th class="mono">C zoekt</th><th class="mono">D rg(+sg)</th><th class="mono">E bare</th><th class="mono">F cocoindex</th></tr></thead>
+    <thead><tr><th>질문 (정답 수)</th><th class="mono">A codegraph</th><th class="mono">B serena</th><th class="mono">C zoekt</th><th class="mono">D rg(+sg)</th><th class="mono">E bare</th><th class="mono">F cocoindex</th><th class="mono">H zoekt+ctags</th></tr></thead>
     <tbody>
       <tr>
         <td><b>M1</b> 시그니처 영향 <span class="muted">(33)</span></td>
@@ -131,6 +199,7 @@
         <td class="mono">1.00 / 0.97</td>
         <td class="mono">0.97 / 1.00</td>
         <td class="mono"><span class="cell-bad">0.67</span> / 0.81†</td>
+        <td class="mono">1.00 / 1.00</td>
       </tr>
       <tr>
         <td><b>M2</b> transitive 폐포 <span class="muted">(8)</span></td>
@@ -140,14 +209,35 @@
         <td class="mono">0.75 / 1.00</td>
         <td class="mono"><span class="cell-bad">0.625</span> / 1.00</td>
         <td class="mono">0.75 / 1.00</td>
+        <td class="mono">0.75 / 1.00</td>
+      </tr>
+      <tr>
+        <td><b>M3-W</b> 언어 간 ABI seam <span class="muted">(8)</span></td>
+        <td class="mono"><span class="cell-bad">0.50</span> / <span class="cell-bad">0.44</span></td>
+        <td class="mono"><span class="cell-best">1.00</span> / 1.00</td>
+        <td class="mono"><span class="cell-best">1.00</span> / 1.00</td>
+        <td class="mono"><span class="cell-best">1.00</span> / 1.00</td>
+        <td class="mono"><span class="cell-best">1.00</span> / 1.00</td>
+        <td class="mono"><span class="cell-bad">0.125</span> / 0.10</td>
+        <td class="mono"><span class="cell-best">1.00</span> / <span class="cell-weak">0.67</span></td>
+      </tr>
+      <tr>
+        <td><b>M3-L</b> enum 참조 <span class="muted">(29)</span></td>
+        <td class="mono"><span class="cell-bad">0.00</span> / <span class="muted">–</span></td>
+        <td class="mono"><span class="cell-best">1.00</span> / 1.00</td>
+        <td class="mono">0.97 / 1.00</td>
+        <td class="mono">0.97 / 1.00</td>
+        <td class="mono">0.97 / 1.00</td>
+        <td class="mono"><span class="cell-bad">0.07</span> / 0.15</td>
+        <td class="mono">0.97 / <span class="cell-weak">0.76</span></td>
       </tr>
       <tr style="border-top:2px solid var(--border);">
         <td><b>평균 recall</b></td>
-        <td class="mono cell-best">0.875</td><td class="mono">0.755</td><td class="mono">0.81</td><td class="mono cell-best">0.875</td><td class="mono">0.80</td><td class="mono cell-bad">0.71</td>
+        <td class="mono cell-bad">0.56</td><td class="mono">0.88</td><td class="mono">0.90</td><td class="mono cell-best">0.93</td><td class="mono">0.89</td><td class="mono cell-bad">0.40</td><td class="mono cell-best">0.93</td>
       </tr>
       <tr>
         <td><b>평균 precision</b></td>
-        <td class="mono cell-weak">0.94</td><td class="mono">0.97</td><td class="mono">0.985</td><td class="mono">0.985</td><td class="mono cell-best">1.00</td><td class="mono">0.905†</td>
+        <td class="mono cell-weak">0.79‡</td><td class="mono">0.99</td><td class="mono">0.99</td><td class="mono">0.99</td><td class="mono cell-best">1.00</td><td class="mono">0.51†</td><td class="mono">0.86</td>
       </tr>
       <tr>
         <td><b>격리</b></td>
@@ -157,13 +247,33 @@
         <td><span class="badge warn">rg-only</span></td>
         <td><span class="badge ok">오염제거</span></td>
         <td><span class="badge ok">준수</span></td>
+        <td><span class="badge ok">준수</span></td>
       </tr>
     </tbody>
   </table>
-  <p class="muted" style="font-size:0.85rem;">bare = 텍스트검색(grep)+읽기. M1 은 DI 수신자도 텍스트로 회수해 0.97(serena 0.76 과 대조), M2 깊은 폐포는 0.625 로 최약체. 독립적 우수성 없음 — rg 와 같은 능력군. <b>† cocoindex M1 precision 0.81 하락은 함정·환각이 아니라 청크 라인추정 오차</b>(트랩 0·환각 0). 호출지점 식별은 모두 실재이며 위치 정밀도만 ±2 수준으로 빗나감. cocoindex M1 recall 0.67 은 임베딩 top-k 의 전수 회수 한계.</p>
+  <p class="muted" style="font-size:0.85rem;">M1·M2 는 기존 6암 결과 재사용 + H 신규. M3-W·M3-L 은 7암 신규 측정. <b>비단조</b>: M1·M2 강세였던 codegraph 가 polyglot(M3-W 0.50·M3-L 0.00)에서 무너지고, M3-W 에선 텍스트군(zoekt/rg/bare/ctags)·serena 가 1.00 으로 역전. <b>† cocoindex precision 하락은 함정·환각이 아니라 청크 라인추정 오차</b>(트랩 0·환각 0). <b>‡ codegraph 평균 precision 은 M3-L 0제출(분모 0)을 빼고 정의된 3케이스 평균</b>. M3-L 0.00 은 graph 가 enum 상수 참조를 엣지로 색인하지 않은 결과. serena 0-based·cocoindex 청크추정 라인은 ±1 정규화로 흡수.</p>
+
+  <!-- RECALL CHART -->
+  <h2>질문별 재현율 차트 — 막대가 길수록 빠짐없이 찾음</h2>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--blue)"></span>M1 시그니처</span>
+    <span><span class="dot" style="background:var(--violet)"></span>M2 transitive 폐포</span>
+    <span><span class="dot" style="background:var(--amber)"></span>M3-W 언어 간 ABI seam</span>
+    <span><span class="dot" style="background:var(--green)"></span>M3-L 다중언어 enum 참조</span>
+  </div>
+  <div class="grid2">
+    <div class="chart"><div class="ctitle">M1 시그니처 영향 (gold 33)</div><div id="rM1"></div></div>
+    <div class="chart"><div class="ctitle">M2 transitive 폐포 (gold 8)</div><div id="rM2"></div></div>
+  </div>
+  <div class="grid2">
+    <div class="chart"><div class="ctitle">M3-W 언어 간 ABI seam (gold 8) — <span style="color:var(--amber)">텍스트군 승·codegraph 역전</span></div><div id="rM3W"></div></div>
+    <div class="chart"><div class="ctitle">M3-L 다중언어 enum 참조 (gold 29) — <span style="color:var(--green)">정밀·텍스트 강·codegraph 전멸</span></div><div id="rM3L"></div></div>
+  </div>
+  <p class="muted" style="font-size:0.82rem;">"정밀 vs 텍스트" 단일 축이 아니라 <b>백엔드가 무엇을 색인 가능한가</b>(문자열 리터럴·enum 참조·cross-language 링크·라인 정밀도)가 케이스마다 우열을 가른다. 단일 지배 도구 없음.</p>
 
   <!-- CHARTS -->
-  <h2>효율</h2>
+  <h2>효율 — 도구 호출 수와 걸린 시간</h2>
+  <p class="muted" style="font-size:0.88rem;">정확도가 같아도 "몇 번 검색하고 얼마나 걸렸나"는 다르다. 막대가 짧을수록 적은 비용으로 답에 도달했다는 뜻(아래는 M1+M2 기준).</p>
   <div class="legend">
     <span><span class="dot" style="background:var(--blue)"></span>도구 호출 수 (합계)</span>
     <span><span class="dot" style="background:var(--amber)"></span>소요 시간 (초, 합계)</span>
@@ -202,12 +312,14 @@
       <tr><td class="arm">rg(+sg)</td><td class="mono">4,435 / 287.0k / 14 / 69s</td><td class="mono">5,243 / 670.8k / 26 / 113s</td><td class="mono">9.7k / 958k / 40 / 182s</td></tr>
       <tr><td class="arm">bare</td><td class="mono">3,188 / 77.5k / 4 / 42s</td><td class="mono">3,154 / 478.0k / 15 / 72s</td><td class="mono cell-best">6.3k / 555k / 19 / 114s</td></tr>
       <tr><td class="arm">cocoindex</td><td class="mono">tot 73.9k‡ / 17 / 274s</td><td class="mono">tot 62.2k‡ / <span class="cell-bad">30</span> / 428s</td><td class="mono">tot 136.1k‡ / 47 / <span class="cell-bad">702s</span></td></tr>
+      <tr><td class="arm">zoekt+ctags</td><td class="mono">tot 17.5k‡ / 2 / 33s</td><td class="mono">tot 36.3k‡ / 50 / 259s</td><td class="mono">tot 53.8k‡ / 52 / 292s</td></tr>
     </tbody>
   </table>
-  <p class="muted" style="font-size:0.85rem;">bare 합계 토큰·시간 최소(6.3k·114s)는 "우수"가 아니라 <b>얕게 탐색하고 일찍 멈춘</b>(M2 0.625) 트레이드오프. serena M2 캐시읽기 1.42M 은 다중홉마다 컨텍스트를 반복 재독한 비용. <b>‡ cocoindex 토큰은 Agent usage 의 subagent_tokens 총량</b>(out/cacheR 분리 불가, 입도가 달라 토큰 직접비교 주의). 호출수·시간은 비교 유효 — cocoindex 가 M1·M2 모두 호출수 최다(17·30), 시간 최장(702s): 시맨틱 top-k 의 'near' 결과를 반복질의로 좁힌 비용.</p>
+  <p class="muted" style="font-size:0.85rem;">bare 합계 토큰·시간 최소(6.3k·114s)는 "우수"가 아니라 <b>얕게 탐색하고 일찍 멈춘</b>(M2 0.625) 트레이드오프. serena M2 캐시읽기 1.42M 은 다중홉마다 컨텍스트를 반복 재독한 비용. <b>‡ cocoindex·zoekt+ctags 토큰은 Agent usage 의 subagent_tokens 총량</b>(out/cacheR 분리 불가, 입도가 달라 토큰 직접비교 주의). 호출수·시간은 비교 유효 — cocoindex 가 호출수 최다(17·30), 시간 최장(702s). 위 표는 M1·M2 기준이며 <b>M3 질문의 효율 수치는 <code>results.md</code></b> 참조. H 는 M2 에서 <code>sym:</code> 검증을 반복하느라 호출수가 많았다(50콜).</p>
 
   <!-- RESULT VALUES (hit/miss) -->
-  <h2>결과값 상세 — 실제 hit / miss</h2>
+  <h2>질문별 적중 / 누락 상세</h2>
+  <p class="muted" style="font-size:0.88rem;">각 도구가 정답을 몇 개 맞히고(hit) 무엇을 놓쳤는지(miss). 점수만으로 안 보이는 "왜"가 여기 있다.</p>
   <h3 style="margin:18px 0 8px;color:var(--muted);">M1 · gold 33 (prod 12 + test 21, 함정 2)</h3>
   <table>
     <thead><tr><th>암</th><th class="mono">prod</th><th class="mono">test</th><th class="mono">recall</th><th>오탐 / 누락 상세</th></tr></thead>
@@ -218,6 +330,7 @@
       <tr><td class="arm">rg(+sg)</td><td class="mono">12/12</td><td class="mono">21/21</td><td class="mono">1.00</td><td>함정 정확 배제</td></tr>
       <tr><td class="arm">bare</td><td class="mono">11/12</td><td class="mono">21/21</td><td class="mono">0.97</td><td>누락 1: <code>formatJsonOnDefault</code> 내부 자기호출(:215). <b>DI 수신자(:60)는 텍스트로 회수</b></td></tr>
       <tr><td class="arm">cocoindex</td><td class="mono cell-weak">9/12</td><td class="mono cell-weak">13/21</td><td class="mono cell-bad">0.67</td><td>누락: prod 3 + test 8(임베딩 top-k 미회수). <b>DI 수신자(:60) 회수, 함정 2 배제, 환각 0</b> — 전수 열거 불가가 한계</td></tr>
+      <tr><td class="arm">zoekt+ctags</td><td class="mono">12/12</td><td class="mono">21/21</td><td class="mono">1.00</td><td>plain zoekt 와 동일(함정 정확 배제). M1 은 ctags 없이도 텍스트 전수로 충분</td></tr>
     </tbody>
   </table>
   <h3 style="margin:18px 0 8px;color:var(--muted);">M2 · gold 8 함수</h3>
@@ -230,6 +343,29 @@
       <tr><td class="arm">rg(+sg)</td><td class="mono">6/8</td><td class="mono">0.75</td><td>ConvertTypeDialogPresenter 상단 1개</td></tr>
       <tr><td class="arm">bare</td><td class="mono cell-bad">5/8</td><td class="mono cell-bad">0.625</td><td>두 <code>&lt;init&gt;</code> + <code>bindView</code></td></tr>
       <tr><td class="arm">cocoindex</td><td class="mono">6/8</td><td class="mono">0.75</td><td>생성자 2개 <code>&lt;init&gt;</code> (람다·DI홉은 반복 시맨틱 질의+full-text 로 회수, 함정 4종 배제)</td></tr>
+      <tr><td class="arm">zoekt+ctags</td><td class="mono">6/8</td><td class="mono">0.75</td><td>생성자 2개 <code>&lt;init&gt;</code>. <b>plain zoekt(0.625) 대비 개선</b> — <code>sym:</code> 심볼검색이 람다·DI홉(bindView/syncLanguage) 회수</td></tr>
+    </tbody>
+  </table>
+  <h3 style="margin:18px 0 8px;color:var(--muted);">M3-W · gold 8 (Kotlin export 4 + Rust 정의 4), 트랩 2</h3>
+  <table>
+    <thead><tr><th>암</th><th class="mono">recall</th><th class="mono">precision</th><th>판정</th></tr></thead>
+    <tbody>
+      <tr><td class="arm">codegraph</td><td class="mono cell-bad">0.50</td><td class="mono cell-bad">0.44</td><td>Rust 정의 4/4 회수, <b>Kotlin export 문자열 바인딩 0/4 맹점</b>(문자열=비심볼) + 2차사용 트랩 2 포함</td></tr>
+      <tr><td class="arm">serena</td><td class="mono cell-best">1.00</td><td class="mono">1.00</td><td>Rust=<code>find_symbol</code>, Kotlin=<code>search_for_pattern</code>(내장 텍스트툴)으로 회수</td></tr>
+      <tr><td class="arm">zoekt / rg / bare</td><td class="mono cell-best">1.00</td><td class="mono">1.00</td><td>텍스트로 Kotlin·Rust 양측 정확 매칭</td></tr>
+      <tr><td class="arm">cocoindex</td><td class="mono cell-bad">0.125</td><td class="mono cell-bad">0.10</td><td>청크 라인추정 大편차 — 필드/<code>.apply()</code>만, ABI 바인딩 미회수</td></tr>
+      <tr><td class="arm">zoekt+ctags</td><td class="mono cell-best">1.00</td><td class="mono cell-weak">0.67</td><td>gold 8 정확 + ExportFunction 필드선언 4 과보고(precision 하락)</td></tr>
+    </tbody>
+  </table>
+  <h3 style="margin:18px 0 8px;color:var(--muted);">M3-L · gold 29 (main 13 + test 16), enum 선언 분모제외</h3>
+  <table>
+    <thead><tr><th>암</th><th class="mono">recall</th><th class="mono">precision</th><th>판정</th></tr></thead>
+    <tbody>
+      <tr><td class="arm">codegraph</td><td class="mono cell-bad">0.00</td><td class="mono"><span class="muted">–</span></td><td><b>그래프에 enum 상수 참조 엣지 부재 → 전멸</b>(스키마 한계). 가설(고정밀) 반증</td></tr>
+      <tr><td class="arm">serena</td><td class="mono cell-best">1.00</td><td class="mono">1.00</td><td><code>find_referencing_symbols</code> 정밀 회수(0-based ±1 흡수)</td></tr>
+      <tr><td class="arm">zoekt / rg / bare</td><td class="mono">0.97</td><td class="mono">1.00</td><td>"SupportedLanguage.KOTLIN" 정확검색 → bare <code>KOTLIN</code>(:77)만 누락</td></tr>
+      <tr><td class="arm">cocoindex</td><td class="mono cell-bad">0.07</td><td class="mono cell-bad">0.15</td><td>청크 라인추정 편차로 ±1 매칭 거의 실패</td></tr>
+      <tr><td class="arm">zoekt+ctags</td><td class="mono">0.97</td><td class="mono cell-weak">0.76</td><td>:77 누락 + Rust <code>SupportedLanguage::Kotlin</code> 9 범위외 과보고</td></tr>
     </tbody>
   </table>
 
@@ -255,10 +391,22 @@
     <h3><span class="tag">5</span> 효율: 인덱스/그래프는 전수 조회에 압도적, 다중홉엔 호출 폭증</h3>
     <p>M1(전수 역호출)은 zoekt 1콜·37s, codegraph 3콜 로 종료. M2(다중홉 BFS)는 serena 29콜·203s, zoekt 33콜·197s 로 호출수·시간이 급증.</p>
   </div>
+  <div class="finding amber">
+    <h3><span class="tag">6</span> (M3-W) 언어 간 ABI seam — 정밀도구가 텍스트에 역전당함</h3>
+    <p>Kotlin 호스트가 Rust WASM export 를 <b>문자열 이름</b>으로 바인딩(<code>instance.export("analyze_source")</code>)하는 seam 에서, 텍스트군(zoekt/rg/bare/ctags)·serena 는 1.00 인데 순수 그래프 <b>codegraph 만 0.50</b>(Kotlin 문자열 바인딩은 심볼이 아니라 미색인; Rust 정의 4 만 회수). serena 는 <code>search_for_pattern</code>(내장 텍스트툴) 겸비로 만점 → "정밀도구 전멸"은 codegraph 한정. M1·M2 의 "정밀&gt;텍스트" 서열이 여기서 <b>역전</b>.</p>
+  </div>
+  <div class="finding">
+    <h3><span class="tag">7</span> (M3-L) enum 참조 — codegraph 0.00, 텍스트도 정밀에 근접</h3>
+    <p><code>SupportedLanguage.KOTLIN</code> enum 상수 참조(gold 29)에서 serena 는 <code>find_referencing_symbols</code> 로 1.00. 그러나 <b>codegraph 0.00</b> — 그래프 스키마가 enum 상수 참조를 엣지로 색인하지 않아 전멸(가설이던 "정밀 우위" 반증). 텍스트군도 qualified 토큰 검색으로 0.97/1.00 → 정밀 우위는 약했다(<code>'kotlin'</code> 트랩 표면 173L/42F 는 정확 토큰으로 회피).</p>
+  </div>
+  <div class="finding">
+    <h3><span class="tag">8</span> 비단조성의 실체 = "정밀 vs 텍스트"가 아니라 "무엇을 색인하는가"</h3>
+    <p>4케이스를 가로지르면 단일 지배 도구가 없다(평균 recall: rg·ctags 0.93, zoekt 0.90, bare 0.89, serena 0.88, <b>codegraph 0.56</b>, <b>cocoindex 0.40</b>). 갈림의 축은 타입 정밀도가 아니라 <b>백엔드가 색인 가능한 대상</b>(문자열 리터럴·enum 참조·cross-language 링크·라인 정밀도)이다. codegraph 는 M1/M2 전수성은 최강이나 polyglot 경계에서 무너지고, ctags 는 plain zoekt 의 M2 약점(0.625→0.75)만 보완한다.</p>
+  </div>
 
   <footer>
-    데이터: sonnet 서브에이전트 usage 기준 추정치. N=1(케이스당 1회). 격리는 프롬프트+transcript 사후 감사 기반(하드 샌드박스 아님).
-    gold 는 소스에서 독립 산출(측정 대상 6개 도구 미사용). 상세: <code>dataset.yaml</code>, <code>results.md</code>, <code>cocoindex/README.md</code>.
+    데이터: sonnet 서브에이전트 usage 기준 추정치. 7암 × 4케이스 (12 재사용 + 16 신규 = 28셀). N=1(케이스당 1회). 격리는 프롬프트+transcript 사후 감사 기반(하드 샌드박스 아님; M3 16셀 src 직접판독 0 확인).
+    gold 는 소스에서 독립 산출(측정 대상 도구 미사용). provenance: git v1.12.1 / 1daf879 · M1/M2 codegraph db 54e743b6… · M3 인덱스 +Rust(183파일, <code>PROVENANCE-m3.txt</code>). 상세: <code>dataset.yaml</code>, <code>results.md</code>, <code>cocoindex/README.md</code>.
   </footer>
 </div>
 
@@ -270,10 +418,35 @@
     zoekt:     { calls: 34, time: 234, m2calls: 33, out: 7833, cache: 945 },
     "rg(+sg)": { calls: 40, time: 182, m2calls: 26, out: 9678, cache: 958 },
     "bare":    { calls: 19, time: 114, m2calls: 15, out: 6342, cache: 555 },
-    // cocoindex 토큰(out/cache)은 subagent_tokens 총량이라 out/cacheR 분리 불가 → null(차트에서 n/a). 호출수·시간만 비교.
+    // cocoindex·zoekt+ctags 토큰(out/cache)은 subagent_tokens 총량이라 out/cacheR 분리 불가 → null(차트에서 n/a). 호출수·시간만 비교.
     "cocoindex": { calls: 47, time: 702, m2calls: 30, out: null, cache: null },
+    "zoekt+ctags": { calls: 52, time: 292, m2calls: 50, out: null, cache: null },
   };
   const ARMS = Object.keys(AGG);
+
+  // 케이스별 recall (7암 × 4케이스). codegraph M3-L 0 은 막대 0.
+  const RECALL = {
+    M1:   { codegraph:1.00, serena:0.76, zoekt:1.00, "rg(+sg)":1.00, bare:0.97, cocoindex:0.67, "zoekt+ctags":1.00 },
+    M2:   { codegraph:0.75, serena:0.75, zoekt:0.625, "rg(+sg)":0.75, bare:0.625, cocoindex:0.75, "zoekt+ctags":0.75 },
+    "M3-W": { codegraph:0.50, serena:1.00, zoekt:1.00, "rg(+sg)":1.00, bare:1.00, cocoindex:0.125, "zoekt+ctags":1.00 },
+    "M3-L": { codegraph:0.00, serena:1.00, zoekt:0.966, "rg(+sg)":0.966, bare:0.966, cocoindex:0.07, "zoekt+ctags":0.966 },
+  };
+  function renderRecall(elId, caseKey, color) {
+    const m = RECALL[caseKey];
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.innerHTML = ARMS.map(a => {
+      const v = m[a];
+      const pct = (v * 100).toFixed(1);
+      return `<div class="bar-row"><div class="name">${a}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:0%;background:${color}" data-w="${pct}"></div></div>
+        <div class="num">${v.toFixed(v===1||v===0?2:3).replace(/0+$/,'').replace(/\.$/,'.00')}</div></div>`;
+    }).join('');
+  }
+  renderRecall('rM1','M1','linear-gradient(90deg,var(--blue-soft),var(--blue))');
+  renderRecall('rM2','M2','linear-gradient(90deg,#6d28d9,var(--violet))');
+  renderRecall('rM3W','M3-W','linear-gradient(90deg,#b45309,var(--amber))');
+  renderRecall('rM3L','M3-L','linear-gradient(90deg,#15803d,var(--green))');
   function renderBars(elId, key, color, suffix, fmt) {
     const vals = ARMS.map(a => AGG[a][key]).filter(v => v != null);
     const max = Math.max(...vals);

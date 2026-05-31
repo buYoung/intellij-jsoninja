@@ -36,7 +36,7 @@ def iter_kotlin_files(src_root: Path, subdirs: list[str]):
         base = src_root / sub
         if not base.is_dir():
             continue
-        for path in sorted(base.rglob("*.kt")):
+        for path in sorted([q for ext in ("*.kt","*.rs") for q in base.rglob(ext)]):
             yield path
 
 

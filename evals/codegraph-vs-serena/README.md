@@ -1,20 +1,22 @@
-# 코드 탐색 백엔드 벤치마크 (codegraph · serena · zoekt · rg+sg · bare · cocoindex)
+# 코드 탐색 백엔드 벤치마크 (codegraph · serena · zoekt · rg+sg · bare · cocoindex · zoekt+ctags)
 
-JSONinja 리포에서 "실제 코드 수정 직전 엔지니어가 던지는 질문"을 6개 코드탐색 백엔드에 동일 프롬프트로 묻고,
+JSONinja 리포에서 "실제 코드 수정 직전 엔지니어가 던지는 질문"을 7개 코드탐색 백엔드에 동일 프롬프트로 묻고,
 소스에서 독립 산출한 정답(gold)과 대조해 정확도·효율을 측정한 벤치마크다. 각 백엔드는 sonnet 서브에이전트가
 구동하며, 차이는 오직 **허용 도구**뿐이다.
 
 | 암 | 백엔드 |
 |----|--------|
-| A. codegraph | `.codegraph/codegraph.db` 정적 코드그래프(SQLite) |
-| B. serena | LSP 기반 심볼 탐색 MCP |
-| C. zoekt | 트라이그램 코드검색 인덱스 |
+| A. codegraph | `.codegraph/codegraph.db` 정적 코드그래프(SQLite, @colbymchenry/codegraph) |
+| B. serena | LSP 기반 심볼 탐색 MCP (kotlin+rust) |
+| C. zoekt | 트라이그램 코드검색 인덱스 (**ctags 없음**) |
 | D. rg+sg | ripgrep(텍스트) + ast-grep(구조) |
 | E. bare | 내장 텍스트검색(grep) + 파일읽기 (추가 도구 없음) |
 | F. cocoindex | tree-sitter 청킹 + 임베딩 시맨틱 벡터검색 ([cocoindex/](./cocoindex/)) |
+| H. zoekt+ctags | 트라이그램 + **ctags 심볼 메타**(`sym:` 검색) |
 
-> A~E 는 *정확-매칭형*, F(cocoindex) 만 *시맨틱 임베딩 top-k* 다. F 는 5-way 확정 후 추가된 6번째 암으로,
-> 동일 케이스(M1·M2)에서 "임베딩 검색이 전수·정확 회수 과제에 얼마나 적합한가"를 대조한다.
+> A~E·H 는 *정확-매칭형*, F(cocoindex) 만 *시맨틱 임베딩 top-k* 다.
+> **C(plain) 와 H(ctags) 를 둘 다 둬** ctags 메타데이터의 순효과를 비교한다(H 는 C 를 덮어쓰지 않는 신규 암).
+> M1·M2 외 **polyglot 경계 케이스 M3-W·M3-L** 을 추가했다(아래). 전 암 인덱스는 v1.12.1+Rust 포함으로 재인덱싱(A안).
 
 ## 문서
 
@@ -31,9 +33,15 @@ JSONinja 리포에서 "실제 코드 수정 직전 엔지니어가 던지는 질
   모든 호출지점. gold 33(prod 12 + test 21), 함정 = 동명 `JsoninjaPanelPresenter.formatJson` 호출 2건.
 - **M2 — 동작 변경 전파(transitive 폐포)**: `TreeSitterWasmRuntime.getOrCreate()` 동작을 바꿀 때 영향받는
   프로덕션 함수 전부. gold 8함수(treesitter→typeConversion→ui/dialog 3모듈 종단, DI 홉 2개 포함).
+- **M3-W — 언어 간 WASM ABI seam**: Kotlin 호스트가 Rust WASM export 를 **문자열 이름으로** 바인딩하는 지점과
+  대응 Rust `#[no_mangle] pub extern "C"` 정의. gold 8(Kotlin `TreeSitterWasmRuntime.kt:61-64` + Rust `lib.rs:25/30/92/121`).
+- **M3-L — 다중 타깃언어 enum 참조**: `SupportedLanguage.KOTLIN` enum 상수를 **심볼로서** 참조하는 모든 지점(when 분기 포함).
+  gold 29(main 13 + test 16). 함정 = 문자열 'kotlin'·`KOTLIN_` 접두·리소스 경로(텍스트 'kotlin' 표면 173L/42F).
 
 ## 핵심 결론
 
+- **(M3 polyglot) "정밀>텍스트" 단순 서열은 성립하지 않는다 — 비단조.** 언어 간 seam(M3-W)에선 텍스트군(C/D/E/H)이 1.00, 순수 그래프 **codegraph 만 0.50**(Kotlin 문자열 바인딩 맹점); serena 는 내장 텍스트툴(`search_for_pattern`)로 1.00. 언어 내 enum 참조(M3-L)에선 serena 1.00 정밀이지만 텍스트군도 qualified 토큰 검색으로 0.966, 반대로 **codegraph 0.00**(graph 가 enum 상수 참조를 색인 안 함). → 갈림의 축은 "정밀 vs 텍스트"가 아니라 **백엔드가 무엇을 색인 가능한가**(문자열 리터럴/enum 참조/cross-language 링크/라인 정밀도). 상세 [`results.md`](./results.md).
+- **(M3) ctags 효과**: H(zoekt+ctags)는 plain C 대비 M2 transitive 에서 0.625→**0.75** 개선(`sym:` 심볼검색이 람다·DI홉 회수). M1·M3-W·M3-L 은 C 와 동급.
 - **단일 지배 도구 없음.** codegraph=전수성·효율 강점이나 동명 매칭 오탐(타입 맹점, M1 precision 0.94).
   serena=타입 정밀하나 **명시적 타입 없는 DI 수신자(`service<T>()`/`getService(class.java)`) 호출을 일관 누락**
   (M1 재현율 0.76, raw 출력 직접 검증). 텍스트(rg/bare)=경계·컨텍스트 강점이나 다중홉 폐포 말단(생성자·람다 콜백)에서 누락.
@@ -70,6 +78,13 @@ cd cocoindex && uv venv -p 3.13 .venv && . .venv/bin/activate && uv pip install 
 git archive v1.12.1 src/main/kotlin src/test/kotlin | tar -x -C .src-v1.12.1
 python build_index.py --src-root .src-v1.12.1 --out index.sqlite --git-commit 1daf879beae6ecc853be6a7e496a240568bddea5
 ```
+
+**M3 확장 재현(7암×4케이스, A안 = Rust 포함)**: 도구 설치 — codegraph `npm i -g @colbymchenry/codegraph@latest`,
+zoekt `go install github.com/sourcegraph/zoekt/cmd/{zoekt-index,zoekt}@latest`, `universal-ctags`(brew; zoekt 가
+`universal-ctags` 이름을 찾으므로 `ln -sf $(command -v ctags) $HOME/go/bin/universal-ctags`). 인덱싱 입력은
+`git archive v1.12.1 src/main/kotlin src/test/kotlin tree-sitter-wasm/src` 추출본(`.codegraph/src-v1.12.1`). 그 추출본에
+codegraph(`codegraph init . && codegraph index .`), `zoekt-index -disable_ctags`(C), `zoekt-index -require_ctags`(H),
+cocoindex(`--subdirs ... tree-sitter-wasm/src`)를 각각 빌드한다. sha·파일수는 `PROVENANCE-m3.txt`. (`.codegraph/` 는 gitignore.)
 
 이후 `benchmark-design.md` 의 베이스 프롬프트에 `dataset.yaml` 의 각 케이스 질문과 암별 도구 블록을 끼워
 sonnet 서브에이전트로 실행하고, 산출물을 gold 와 `(qualified_name)`/`(file:line)` 키로 대조해 채점한다.

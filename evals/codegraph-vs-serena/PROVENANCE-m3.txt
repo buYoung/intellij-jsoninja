@@ -1,0 +1,26 @@
+# M3 재인덱싱 provenance (git v1.12.1 / 1daf879beae6ecc853be6a7e496a240568bddea5, Rust 포함 = A안)
+# M3 확장은 전 암 인덱스를 v1.12.1 + tree-sitter-wasm(Rust) 포함으로 다시 만들었다.
+# 그 입력(추출본)과 산출물(각 인덱스)의 기록. M1/M2 점수는 기존 인덱스 재사용이고, M3 만 아래 신규 인덱스로 측정했다.
+
+## 인덱싱 입력 — git archive 추출본 (.codegraph/src-v1.12.1)
+extract_kotlin_files=159
+extract_rust_files=24
+extract_total_files=183
+
+## A codegraph  (.codegraph/codegraph.db, @colbymchenry/codegraph 0.9.7)
+A_codegraph_db_sha256=de21ace...   # truncated. M3 신규 빌드 — M1/M2 의 54e743b6... 와는 다른 DB
+A_codegraph_files=183
+A_codegraph_nodes=3379
+A_codegraph_edges=7909
+
+## C zoekt plain  (.codegraph/zoekt-index, zoekt-index -disable_ctags)
+C_zoekt_plain_shards=1
+
+## H zoekt+ctags  (.codegraph/zoekt-ctags-index, zoekt-index -require_ctags)
+H_zoekt_ctags_shards=1
+H_zoekt_ctags_symbols=5059
+
+## F cocoindex  (cocoindex/index.sqlite, tree-sitter 청킹 + all-MiniLM-L6-v2 임베딩)
+F_cocoindex_chunks_total=1249
+F_cocoindex_chunks_kotlin=1053
+F_cocoindex_chunks_rust=196

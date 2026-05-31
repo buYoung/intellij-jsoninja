@@ -23,9 +23,9 @@ meta:
     tracked_source_dirty: false      # gold 는 이 커밋 소스와 정확히 일치
     codegraph_db_sha256: 54e743b63439404afefbe033affabd5d4abe158e6686ca40942cbe808d7a333b
     db_freshness_verified: true
-  scope: whole-repo (src/main/kotlin + src/test/kotlin)
-  gold_provenance: 측정 대상 6개 도구(codegraph/serena/zoekt/rg+sg/bare/cocoindex) 중 어느 것도 gold 산출에 사용하지 않음. rg 로 전수 추출 후 소스 직접 판독으로 수신자 타입·호출 체인을 손으로 검증함. codegraph CTE 는 "타깃 후보 탐색"에만 사용했고 정답 출처가 아님.
-  matching_key: "M1 = 호출지점(file:line). M2 = (qualified_name) 함수 단위. 라인 ±1 정규화(codegraph 1-based vs serena 0-based)는 채점기에서 흡수."
+  scope: whole-repo (src/main/kotlin + src/test/kotlin). M3-W 한정 tree-sitter-wasm/src(Rust) 포함 — 전 암(A~F+H) 동일 범위로 재인덱싱(A안 확정).
+  gold_provenance: 측정 대상 7개 도구(codegraph/serena/zoekt/rg+sg/bare/cocoindex/zoekt+ctags) 중 어느 것도 gold 산출에 사용하지 않음. M1/M2 는 rg 전수 추출 후 소스 직접 판독. M3-W/M3-L 은 git show v1.12.1 로 소스 직접 판독해 (file:line) 손산출(측정도구 무사용). codegraph CTE/그래프는 "후보 탐색"에만 쓰였고 정답 출처가 아님.
+  matching_key: "M1 = 호출지점(file:line). M2 = (qualified_name) 함수 단위. M3-W = Kotlin 측+Rust 측 (file:line) 분리채점 후 합산. M3-L = (file:line). 라인 ±1 정규화(codegraph 1-based vs serena 0-based)는 채점기에서 흡수."
 
   # ---------------------------------------------------------------------------
   # 실행 전 선결조건 (공정성 — 인덱스 범위 정렬)
@@ -38,9 +38,14 @@ meta:
       아니라 인덱스 범위 아티팩트이므로 zoekt 암을 부당하게 깎는다. 실행 전 src/test 까지 포함해
       재인덱싱하고, 전 암의 검색 가능 범위(src/main + src/test)를 동일하게 맞춘다.
     action: "zoekt-index 로 src/main/kotlin + src/test/kotlin 을 함께 인덱싱한 뒤 sha 와 파일수를 기록한다."
+    m3_reindex: >-
+      M3 추가(7암×4케이스)에 맞춰 전 암을 v1.12.1+Rust(A안)로 재인덱싱: 추출본 .codegraph/src-v1.12.1
+      (kt 159 + rs 24 = 183파일). codegraph(.codegraph/codegraph.db, 183파일·3379 nodes·7909 edges),
+      zoekt plain(.codegraph/zoekt-index), zoekt+ctags(.codegraph/zoekt-ctags-index, 5059 심볼),
+      cocoindex(cocoindex/index.sqlite, 1249청크 = kt 1053 + rs 196). 상세 sha·파일수는 PROVENANCE-m3.txt.
 
   # ---------------------------------------------------------------------------
-  # 5개 암 (기존 benchmark-design.md §3.0 의 동일 베이스 프롬프트를 그대로 재사용)
+  # 7개 암 (A~F + H_zoekt_ctags) — 기존 benchmark-design.md §3.0 의 동일 베이스 프롬프트를 그대로 재사용
   # {{ALLOWED_TOOLS_BLOCK}} 한 곳만 차등, 읽기전용·출력스키마·금지사항은 전 암 동일.
   # ---------------------------------------------------------------------------
   arms:
@@ -50,6 +55,7 @@ meta:
     D_rg_sg:     'Bash 로 rg(ripgrep), sg(ast-grep) 만. 그 외 명령/도구 금지. (이전 파일럿에서 D 가 sg 를 한 번도 안 썼으므로, 이번엔 구조 패턴 1회 이상 sg 사용을 권장하되 강제는 아님.)'
     E_bare:      'Claude Code 내장 Grep + Glob + Read 만. Bash 전면 금지(이전 파일럿에서 E 가 Bash grep/find 를 써 격리를 위반했으므로, 이번엔 Bash 를 차단해 순수 내장도구 베이스라인을 측정).'
     F_cocoindex: 'Bash 로 cocoindex 벡터검색 스크립트(``python query.py "..." --top-k N``)만. 소스 직접 Read/grep/sqlite3 금지. 시맨틱 임베딩 top-k 청크 검색만으로 답을 도출. 인덱스/스크립트는 cocoindex/ 디렉터리 참조.'
+    H_zoekt_ctags: 'Bash 로 zoekt 검색 CLI 만 (ctags 활성 재인덱싱본 대상, sym: 검색 권장). 소스 직접 Read 금지.'
 
   # F(cocoindex) 암 메모: 다른 5개 암은 정확-매칭형(graph/LSP/trigram/text)이나 cocoindex 는
   # tree-sitter 청킹 + 트랜스포머 임베딩 + 벡터 top-k 의 *시맨틱* 패러다임이다. 동일 케이스(M1·M2)에
@@ -194,6 +200,106 @@ cases:
         - "src/test/.../typeConversion/TypeConversionWasmIntegrationTest.kt  (analyzeSource/generate 경유)"
         - "src/test/.../typeConversion/TypeConversionWasmIntegrationV2Test.kt"
         - "src/test/.../typeConversion/TypeConversionWasmIntegrationV3Test.kt"
+
+  # ---------------------------------------------------------------------------
+  - id: M3-W
+    title: "언어 간 WASM ABI seam (cross-language binding)"
+    category: cross-language-binding + string-literal-export + rust-fn-def
+    modification_scenario: >-
+      Kotlin 호스트가 Rust WASM 모듈의 export 를 이름(문자열)으로 바인딩하는 ABI 경계를 바꾸려 한다.
+      변경하려면 Kotlin 측 바인딩 지점과 그에 대응하는 Rust 측 #[no_mangle] 정의를 모두 찾아야 한다.
+    question: >-
+      Kotlin 호스트가 Rust WASM 모듈의 export 를 이름으로 바인딩하는 모든 지점과, 그에 대응하는 Rust 측
+      #[no_mangle] pub extern "C" 정의를 모두 나열하라. 대상 ABI: analyze_source, get_last_error, alloc, dealloc.
+    scope: "whole-repo (src/main/kotlin + src/test/kotlin + tree-sitter-wasm/src)"
+    discriminators:
+      - "Kotlin 측 export 인자는 문자열 리터럴(\"alloc\" 등)이라 심볼이 아님 → 단일언어 정밀 인덱서(serena-kotlin 등)의 맹점."
+      - "Rust 측은 #[no_mangle] pub extern \"C\" fn 정의 → rust-analyzer/codegraph(.rs 지원 시)는 포착 가능."
+      - "generic 토큰: alloc/dealloc 은 텍스트 오탐 큼 → 변별 핵심은 distinctive 한 analyze_source/get_last_error."
+      - "2차 사용 함정: WasmMemoryBridge.kt 의 runtimeHandle.alloc/.dealloc 은 ABI 바인딩 지점이 아니라 사용처."
+
+    gold:
+      unit: binding/definition (file:line)
+      matching_key: "Kotlin 측 (file:line) + Rust 측 (file:line), 분리 채점 후 합산. 라인 ±1 정규화."
+      kotlin_sites:          # instance.export("...") 바인딩 (4)
+        - "src/main/kotlin/com/livteam/jsoninja/services/treesitter/TreeSitterWasmRuntime.kt:61"   # export("alloc")
+        - "src/main/kotlin/com/livteam/jsoninja/services/treesitter/TreeSitterWasmRuntime.kt:62"   # export("dealloc")
+        - "src/main/kotlin/com/livteam/jsoninja/services/treesitter/TreeSitterWasmRuntime.kt:63"   # export("analyze_source")
+        - "src/main/kotlin/com/livteam/jsoninja/services/treesitter/TreeSitterWasmRuntime.kt:64"   # export("get_last_error")
+      rust_sites:            # #[no_mangle] pub extern "C" fn 정의 (4)
+        - "tree-sitter-wasm/src/lib.rs:25"    # pub extern "C" fn alloc
+        - "tree-sitter-wasm/src/lib.rs:30"    # pub extern "C" fn dealloc
+        - "tree-sitter-wasm/src/lib.rs:92"    # pub extern "C" fn analyze_source
+        - "tree-sitter-wasm/src/lib.rs:121"   # pub extern "C" fn get_last_error
+      total_gold_sites: 8
+      traps_must_exclude:
+        - "src/main/kotlin/com/livteam/jsoninja/services/treesitter/WasmMemoryBridge.kt:19"   # runtimeHandle.alloc 2차 사용 (ABI 바인딩 아님)
+        - "src/main/kotlin/com/livteam/jsoninja/services/treesitter/WasmMemoryBridge.kt:36"   # runtimeHandle.dealloc 2차 사용 (ABI 바인딩 아님)
+      notes:
+        - "lib.rs 의 #[no_mangle] pub extern \"C\" export 는 총 12개이나 Kotlin instance.export() 바인딩이 있는 것은 4종뿐. 나머지 8개(parser_create:35/parser_destroy:40/tree_parse:45/parse:57/tree_query:66/query_execute:81/tree_destroy:111/get_supported_languages:116)는 gold 스코프 밖."
+        - "가설: 텍스트 암(C/D/E/H)은 Kotlin·Rust 양측 텍스트 매칭 → 승리 / 단일언어 정밀 암은 Kotlin 측 문자열 바인딩 미포착 → 서열 역전."
+
+  # ---------------------------------------------------------------------------
+  - id: M3-L
+    title: "언어 내 다중 타깃언어 enum 정밀 (SupportedLanguage.KOTLIN)"
+    category: enum-constant-reference + string-overmatch
+    modification_scenario: >-
+      SupportedLanguage.KOTLIN 분기의 동작을 바꾸려 한다. enum 상수를 심볼로서 참조하는 지점만 정확히
+      찾아야 하며, 문자열 'kotlin'/'kt' 과대매칭에 휘둘리면 안 된다.
+    question: >-
+      SupportedLanguage.KOTLIN enum 상수를 심볼로서 참조하는 모든 지점(when 분기 포함)을 나열하라.
+      단순 문자열 "kotlin"/"kt", 리소스 경로(tree-sitter/queries/kotlin/…), Kotlin* 식별자(KOTLIN_SERIAL_NAME 등),
+      코루틴/플랫폼 문맥의 kotlin 은 제외한다.
+    scope: "whole-repo (src/main/kotlin + src/test/kotlin)"
+    discriminators:
+      - "텍스트 'kotlin'(대소문자무시)은 main+test 에서 173라인/42파일 → 텍스트 암 과대매칭(저정밀)."
+      - "정밀 암(B serena / A codegraph)은 enum 상수 참조만 해소 → 고정밀."
+      - "KOTLIN_SERIAL_NAME(JsonToTypeAnnotationStyle) 은 다른 enum 의 KOTLIN_ 접두 상수 → 함정."
+      - "enum 선언(SupportedLanguage.kt:16 KOTLIN()) 은 정의이지 참조가 아님(별도 표기)."
+
+    gold:
+      unit: reference (file:line)
+      matching_key: "(file:line). 라인 ±1 정규화."
+      use_sites:             # SupportedLanguage.KOTLIN enum 상수 참조 (29 = main 13 + test 16)
+        # --- main (13) ---
+        - "src/main/kotlin/com/livteam/jsoninja/model/SupportedLanguage.kt:77"                                  # fromValue fallback ?: KOTLIN
+        - "src/main/kotlin/com/livteam/jsoninja/services/typeConversion/JsonToTypeNamingSupport.kt:11"          # KOTLIN to setOf(...)
+        - "src/main/kotlin/com/livteam/jsoninja/services/typeConversion/JsonToTypeRenderer.kt:53"               # when KOTLIN -> annotationStyle
+        - "src/main/kotlin/com/livteam/jsoninja/services/typeConversion/JsonToTypeRenderer.kt:86"               # when KOTLIN -> Unit
+        - "src/main/kotlin/com/livteam/jsoninja/services/typeConversion/JsonToTypeRenderer.kt:116"              # when KOTLIN -> renderKotlinDeclaration
+        - "src/main/kotlin/com/livteam/jsoninja/settings/JsoninjaSettingsState.kt:27"                           # KOTLIN.name
+        - "src/main/kotlin/com/livteam/jsoninja/settings/JsoninjaSettingsState.kt:32"                           # KOTLIN.name
+        - "src/main/kotlin/com/livteam/jsoninja/ui/dialog/convertType/JsonToTypeDialogView.kt:93"              # ?: KOTLIN
+        - "src/main/kotlin/com/livteam/jsoninja/ui/dialog/convertType/TypeToJsonDialogView.kt:79"              # updateInputLanguage(KOTLIN)
+        - "src/main/kotlin/com/livteam/jsoninja/ui/dialog/convertType/TypeToJsonDialogView.kt:94"              # ?: KOTLIN
+        - "src/main/kotlin/com/livteam/jsoninja/ui/dialog/convertType/TypeToJsonDialogView.kt:144"             # when KOTLIN -> placeholder
+        - "src/main/kotlin/com/livteam/jsoninja/ui/dialog/convertType/model/JsonToTypeDialogConfig.kt:9"       # default = KOTLIN
+        - "src/main/kotlin/com/livteam/jsoninja/ui/dialog/convertType/model/TypeToJsonDialogConfig.kt:8"       # default = KOTLIN
+        # --- test (16) ---
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationTest.kt:94"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationTest.kt:171"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationTest.kt:182"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationTest.kt:249"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationTest.kt:279"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationTest.kt:396"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV2Test.kt:217"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV2Test.kt:258"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV2Test.kt:275"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV2Test.kt:338"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV2Test.kt:373"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV2Test.kt:382"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV3Test.kt:188"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV3Test.kt:306"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV3Test.kt:367"
+        - "src/test/kotlin/com/livteam/jsoninja/services/typeConversion/TypeConversionWasmIntegrationV3Test.kt:610"
+      definition_site: "src/main/kotlin/com/livteam/jsoninja/model/SupportedLanguage.kt:16"   # enum 상수 선언(참조 아님, recall 분모 제외)
+      total_gold_sites: 29
+      traps_must_exclude:
+        - note: "문자열 \"kotlin\"/\"kt\" 리터럴, 리소스 경로(tree-sitter/queries/kotlin/…), Kotlin* 식별자(KOTLIN_SERIAL_NAME·KOTLIN_ROOT_DECLARATION_SOURCE 등 KOTLIN_ 접두), kotlin.* stdlib/코루틴 import. 텍스트 'kotlin'(대소문자무시) 표면 = 173라인/42파일(main+test)."
+      notes:
+        - "gold 29 = main 13 + test 16(TypeConversionWasmIntegration{,V2,V3}Test). enum 선언 :16 은 분모 제외. NEXT-ADDITIONS 정찰추정 ≈28(main 12 + test 16)과 합치 — 세션 실측 29 로 확정."
+        - "변별 핵심은 정밀도가 아니라 '심볼 vs 문자열' 구분: word \"KOTLIN\" 검색이면 텍스트 암도 recall 높음. 단 'kotlin' 소문자 과대매칭(173라인)·KOTLIN_ 접두 함정을 거르는 능력이 precision 을 가른다."
+        - "가설: 정밀 암(B serena / A codegraph) 고정밀 / 텍스트 암(C/D/E/H) 'kotlin' 과대매칭 시 저정밀 → 정상 서열(M3-W 의 역전과 대비)."
 
 # =============================================================================
 # 채점

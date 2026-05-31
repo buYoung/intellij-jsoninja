@@ -1,19 +1,25 @@
-# 6-way 코드탐색 도구 벤치마크 설계 (하니스)
+# 7-way 코드탐색 도구 벤치마크 설계 (하니스)
 
 > 목적: 동일한 코드이해 질문을 **sonnet 서브에이전트**에게 주되, 각 에이전트가 쓸 수 있는 탐색 백엔드를
 > 한 가지로 제한해 "어떤 도구를 가진 코드에이전트가 가장 정확·효율적으로 답하는가"를 측정한다.
-> gold 와 질문은 [`dataset.yaml`](./dataset.yaml)(whole-repo 범위, M1·M2)을 사용. 측정 결과는 [`results.md`](./results.md).
+> gold 와 질문은 [`dataset.yaml`](./dataset.yaml)(whole-repo 범위, M1·M2·M3-W·M3-L)을 사용. 측정 결과는 [`results.md`](./results.md).
+>
+> **확장(7암×4케이스)**: 기존 6암(A~F)에 **H zoekt+ctags** 추가, M1·M2 에 polyglot 케이스 **M3-W**(언어 간 WASM ABI seam)·**M3-L**(다중 타깃언어 enum 참조) 추가. 전 암 인덱스를 v1.12.1+**Rust(`tree-sitter-wasm/`) 포함**으로 재인덱싱(A안 — M3-W 공정성 전제).
 
-## 1. 6개 벤치마크 암(arm)
+## 1. 7개 벤치마크 암(arm)
 
 | 암 | 백엔드 | 서브에이전트 허용 도구 | 설치 |
 |----|--------|------------------------|------|
-| **A. codegraph** | `.codegraph/codegraph.db` (그래프 SQLite) | `Bash(sqlite3)` 만. 소스 Read 금지 | 완료 |
-| **B. serena** | LSP MCP | `mcp__serena__*`(read-only) 만 | 완료 |
-| **C. zoekt** | 트라이그램 코드검색 인덱스 | `zoekt` 검색 CLI 만 | **go install + 인덱싱 필요** |
+| **A. codegraph** | `.codegraph/codegraph.db` (그래프 SQLite, @colbymchenry/codegraph) | `Bash(sqlite3)` 만. 소스 Read 금지 | 완료 |
+| **B. serena** | LSP MCP (kotlin+rust) | `mcp__serena__*`(read-only) 만 | 완료 |
+| **C. zoekt** | 트라이그램 코드검색 인덱스(**ctags 없음**) | `zoekt` 검색 CLI 만 | 완료 |
 | **D. rg + sg** | ripgrep(텍스트) + ast-grep(구조) | `Bash(rg, sg)` 만 | 완료 |
 | **E. bare 코드에이전트** | 추가도구 없음 (기본 파일도구) | 내장 `Grep` + `Glob` + `Read` 만 | 완료 |
 | **F. cocoindex** | tree-sitter 청킹 + 임베딩 벡터검색(SQLite) | `Bash(python query.py)` 만. 소스 Read 금지 | 완료 (cocoindex/) |
+| **H. zoekt+ctags** | 트라이그램 + **ctags 심볼 메타**(`sym:` 검색) | `Bash(zoekt)` 만 (ctags 활성 인덱스). 소스 Read 금지 | 완료 |
+
+> A~E·H 는 *정확-매칭형*(graph/LSP/trigram/text)이고, **F(cocoindex) 만 시맨틱 임베딩 top-k** 패러다임이다.
+> **C(plain) 와 H(ctags) 를 둘 다 둬** ctags 메타데이터의 순효과를 A/B 비교로 측정한다(H 는 C 를 덮어쓰지 않는 신규 암).
 
 > A~E 는 모두 *정확-매칭형*(graph/LSP/trigram/text)이고, **F(cocoindex) 만 시맨틱 임베딩 top-k** 패러다임이다.
 > 따라서 F 는 "전수·정확 회수" 과제(M1·M2)에서 다른 5개 암과 능력 축이 다르며, 이 비대칭 자체가 측정 대상이다.
@@ -44,7 +50,9 @@ serena=타입정밀(단 DI 수신자 일관 누락), 텍스트(rg/bare)=경계·
 | git commit | `1daf879beae6ecc853be6a7e496a240568bddea5` |
 | branch | `main` |
 | 추적 소스 dirty | false (gold = 이 커밋 소스와 정확 일치) |
-| codegraph DB sha256 | `54e743b63439404afefbe033affabd5d4abe158e6686ca40942cbe808d7a333b` |
+| codegraph DB sha256 (M1/M2) | `54e743b63439404afefbe033affabd5d4abe158e6686ca40942cbe808d7a333b` |
+
+> **M3 재인덱싱 provenance**: M3 확장은 전 암을 v1.12.1+Rust 로 재구축했다(A안). codegraph 는 @colbymchenry/codegraph 0.9.7 로 재빌드(M1/M2 의 sha54e743b6 과 다른 새 DB), zoekt plain·zoekt+ctags·cocoindex(1249청크) 모두 Rust 포함. M1/M2 점수는 기존 재사용, M3 만 신규 인덱스로 실행. 상세 sha·파일수는 [`PROVENANCE-m3.txt`](./PROVENANCE-m3.txt).
 
 ## 3. 하니스 (sonnet 서브에이전트 실행)
 
@@ -89,6 +97,7 @@ JSON 한 개만 출력:
 | D rg+sg | `Bash 로 rg(ripgrep), sg(ast-grep) 만. 그 외 명령/도구 금지.` |
 | E bare | `내장 Grep + Glob + Read 만. Bash·MCP·sqlite·zoekt 전면 금지.` |
 | F cocoindex | `Bash 로 cocoindex 벡터검색 'python query.py "..." --top-k N' 만. 소스 Read/grep/sqlite3 금지.` |
+| H zoekt+ctags | `Bash 로 zoekt 검색 CLI 만 (ctags 활성 재인덱싱본 대상, sym: 검색 권장). 소스 직접 Read 금지.` |
 
 > 공정성 주의: 모델은 전 암 sonnet 고정. 온도/시드 등 샘플링 설정도 동일하게. 질문 순서·표현도 동일.
 > 유일한 독립변수는 [ALLOWED TOOLS] 블록뿐이다.
@@ -109,9 +118,19 @@ JSON 한 개만 출력:
 
 ## 4. 실행 (완료)
 
-- 본 신뢰 실행 = 6 암 × 2 케이스(M1·M2) = **12 서브에이전트** + 채점. Agent 도구로 암별 병렬 실행.
+- 1차 실행 = 6 암 × 2 케이스(M1·M2) = **12 서브에이전트** + 채점.
   (F cocoindex 는 5-way 확정 후 추가된 6번째 암 — 동일 베이스 프롬프트·blind 채점 원칙 그대로 적용.)
-- gold 에 테스트 호출지점이 포함되므로, 실행 전 zoekt 를 src(main+test, 296파일)로 재인덱싱해 인덱스 범위를 전 암 정렬.
+- **M3 확장 실행** = 신규 **16 서브에이전트**(H×{M1,M2,M3-W,M3-L}=4 + A~F×{M3-W,M3-L}=12). A~F×{M1,M2}=12 는 재사용.
+  → 총 **12 재사용 + 16 신규 = 28셀 (7암 × 4케이스)**. Agent 도구로 암별 병렬 실행, blind.
+- gold 에 테스트 호출지점이 포함되므로, zoekt 를 src(main+test)로 재인덱싱해 인덱스 범위를 전 암 정렬.
+- **M3 전용(A안)**: 전 암 인덱스를 v1.12.1+`tree-sitter-wasm/src`(Rust) 포함으로 재구축(M3-W 가 Rust 측 정의를 포함하므로 범위 통일이 성립조건). 추출본 `.codegraph/src-v1.12.1`(kt159+rs24), provenance·sha 는 `PROVENANCE-m3.txt`.
+
+### M3 케이스 변별축 (가설 vs 실측 — 상세 [`results.md`](./results.md))
+| 케이스 | 가설 | 실측 핵심 |
+|---|---|---|
+| **M3-W** 언어 간 WASM ABI seam (gold 8) | 텍스트 우위, 정밀도구 역전(서열 역전) | 텍스트군(C/D/E/H)·serena=1.00. **codegraph=0.50**(Kotlin 문자열 바인딩 맹점). cocoindex=0.125. serena 는 search_for_pattern(텍스트툴)로 만점 → "정밀 전멸"은 codegraph 한정 |
+| **M3-L** 다중언어 enum 참조 (gold 29) | 정밀 우위(정상 서열) | serena=1.00. 텍스트군도 qualified 토큰 검색으로 0.966 → 정밀 우위 약함. **codegraph=0.00**(graph 가 enum 참조 미인덱싱) → 가설 반증 |
+→ **비단조성**: "정밀 vs 텍스트" 단순 축이 아니라 **백엔드별 색인 가능 범위**(문자열 리터럴/enum 참조/cross-language 링크/라인 정밀도)가 케이스마다 다르게 갈린다. 단일 지배도구 부재 결론은 유지·보강.
 
 ## 5. 알려진 리스크 / 학습
 - **zoekt 인덱스 범위**: gold 가 테스트까지 포함하면 src(main+test) 재인덱싱 필수(미정렬 시 zoekt 부당하게 불리).
