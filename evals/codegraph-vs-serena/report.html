@@ -157,7 +157,7 @@
     <tbody>
       <tr><td class="arm">codegraph</td><td>전수 역호출·집계 회수율 1위(0.875), 단순 질의 효율 우수</td><td>동명 매칭 오탐(타입 맹점, M1 P 0.94), <code>instantiates</code>/<code>calls</code> 엣지 분리로 생성 경로 누락</td></tr>
       <tr><td class="arm">serena</td><td>타입 정밀(정밀도 0.97~1.00)</td><td>명시적 타입 없는 DI 수신자(<code>service&lt;T&gt;()</code>·<code>getService()</code>) 호출 일관 누락 → M1 재현율 0.76</td></tr>
-      <tr><td class="arm">zoekt</td><td>단순 전수 조회 최소 비용(M1 1콜·37s)</td><td>다중홉 폐포 말단 회수 최저(M2 0.625) — 람다/생성자 귀속 약함</td></tr>
+      <tr><td class="arm">zoekt</td><td>단순 전수 조회를 한 번의 인덱스 질의로 처리</td><td>다중홉 폐포 말단 회수 최저(M2 0.625) — 람다/생성자 귀속 약함</td></tr>
       <tr><td class="arm">rg(+sg)</td><td>텍스트 컨텍스트로 높은 정확도(재현율 0.875, 정밀도 0.985)</td><td>다중홉은 수동 BFS — 호출수 증가. sg 미사용(rg-only)</td></tr>
       <tr><td class="arm">bare</td><td>텍스트+읽기. 단순 역호출 강(M1 0.97, DI 수신자도 회수)</td><td>깊은 transitive 최약체(M2 0.625). rg 와 동일 능력군</td></tr>
       <tr><td class="arm">cocoindex</td><td>시맨틱 임베딩. 함정·환각 0, DI 호출지점 회수, M2 추론보완(0.75)</td><td><b>전수·정확 회수 부적합(평균 recall 0.40 최저)</b>, 청크 라인추정 오차, M3 polyglot 양쪽 최약</td></tr>
@@ -272,8 +272,8 @@
   <p class="muted" style="font-size:0.82rem;">"정밀 vs 텍스트" 단일 축이 아니라 <b>백엔드가 무엇을 색인 가능한가</b>(문자열 리터럴·enum 참조·cross-language 링크·라인 정밀도)가 케이스마다 우열을 가른다. 단일 지배 도구 없음.</p>
 
   <!-- CHARTS -->
-  <h2>효율 — 도구 호출 수와 걸린 시간</h2>
-  <p class="muted" style="font-size:0.88rem;">정확도가 같아도 "몇 번 검색하고 얼마나 걸렸나"는 다르다. 막대가 짧을수록 적은 비용으로 답에 도달했다는 뜻(아래는 M1+M2 기준).</p>
+  <h2>효율 — 도구 호출 수와 걸린 시간 <span style="font-size:0.7em;color:var(--violet);">(2026-06-01 전면 재측정)</span></h2>
+  <p class="muted" style="font-size:0.88rem;">정확도가 같아도 "몇 번 검색하고 얼마나 걸렸나"는 다르다(아래는 M1+M2 합계). <b>⚠️ 이 수치는 이 세션에서 재측정한 것</b>으로 N=1·에이전트가 무겁게 동작해 호출·토큰이 큰 편이다 — 절대값보다 <b>암 간 상대 비교</b>로 읽는다(정확도 스코어보드는 별도 원 측정). <b>cocoindex 시간은 모델 콜드스타트가 지배 — 아래 ⚠️ 박스.</b></p>
   <div class="legend">
     <span><span class="dot" style="background:var(--blue)"></span>도구 호출 수 (합계)</span>
     <span><span class="dot" style="background:var(--amber)"></span>소요 시간 (초, 합계)</span>
@@ -293,8 +293,17 @@
     <div id="m2calls"></div>
   </div>
 
+  <div class="alert" style="border-left-color:var(--amber);">
+    <h3>⚠️ cocoindex 가 느린 건 "검색이 느려서"가 아니다 — 모델 콜드스타트</h3>
+    <ul>
+      <li>인덱스는 <b>사전에 한 번</b> 빌드해 둔 것(측정 셀 밖)이고, 측정된 <code>python query.py</code> 는 호출할 때마다 torch + 임베딩 모델을 <b>새로 로드</b>한다.</li>
+      <li>실측(1회 호출 <b>7.5~9.7s</b>) 분해: torch import 2.2s + 모델 로드 4.6s = <b>콜드스타트 약 6.9s(≈90%)</b>, 정작 <b>검색 자체는 1초 미만(0.4~0.8s)</b>.</li>
+      <li>호출이 반복될수록 콜드스타트가 누적된다(나머지는 에이전트의 질의 재구성 사고시간). 모델을 상주시키는 서버/데몬 방식이면 python 측 비용은 크게 줄어든다 → <b>cocoindex 의 시간을 다른 도구와 직접 비교하지 말 것.</b></li>
+    </ul>
+  </div>
+
   <!-- TOKENS -->
-  <h2>토큰 사용량</h2>
+  <h2>토큰 사용량 <span style="font-size:0.7em;color:var(--violet);">(2026-06-01 전면 재측정)</span></h2>
   <div class="legend">
     <span><span class="dot" style="background:var(--blue)"></span>출력 토큰 합계 (실제 생성량)</span>
     <span><span class="dot" style="background:var(--violet)"></span>캐시읽기 합계 (프롬프트+리포 컨텍스트 재독, 입력 비용 대부분)</span>
@@ -306,16 +315,16 @@
   <table>
     <thead><tr><th>암</th><th class="mono">M1 out / cacheR / calls / time</th><th class="mono">M2 out / cacheR / calls / time</th><th class="mono">합계</th></tr></thead>
     <tbody>
-      <tr><td class="arm">codegraph</td><td class="mono">3,388 / 59.6k / 3 / 52s</td><td class="mono">3,809 / 447.6k / 19 / 140s</td><td class="mono">7.2k / 507k / 22 / 192s</td></tr>
-      <tr><td class="arm">serena</td><td class="mono">3,212 / 132.9k / 4 / 49s</td><td class="mono">6,054 / <span class="cell-bad">1,417k</span> / 29 / 203s</td><td class="mono">9.3k / 1,550k / 33 / 252s</td></tr>
-      <tr><td class="arm">zoekt</td><td class="mono"><span class="cell-best">3,103 / 28.7k / 1 / 37s</span></td><td class="mono">4,730 / 916.8k / 33 / 197s</td><td class="mono">7.8k / 945k / 34 / 234s</td></tr>
-      <tr><td class="arm">rg(+sg)</td><td class="mono">4,435 / 287.0k / 14 / 69s</td><td class="mono">5,243 / 670.8k / 26 / 113s</td><td class="mono">9.7k / 958k / 40 / 182s</td></tr>
-      <tr><td class="arm">bare</td><td class="mono">3,188 / 77.5k / 4 / 42s</td><td class="mono">3,154 / 478.0k / 15 / 72s</td><td class="mono cell-best">6.3k / 555k / 19 / 114s</td></tr>
-      <tr><td class="arm">cocoindex</td><td class="mono">tot 73.9k‡ / 17 / 274s</td><td class="mono">tot 62.2k‡ / <span class="cell-bad">30</span> / 428s</td><td class="mono">tot 136.1k‡ / 47 / <span class="cell-bad">702s</span></td></tr>
-      <tr><td class="arm">zoekt+ctags</td><td class="mono">tot 17.5k‡ / 2 / 33s</td><td class="mono">tot 36.3k‡ / 50 / 259s</td><td class="mono">tot 53.8k‡ / 52 / 292s</td></tr>
+      <tr><td class="arm">codegraph</td><td class="mono">28,060 / 270.9k / 46 / 285s</td><td class="mono">15,732 / 838.6k / 173 / 505s</td><td class="mono">43.8k / 1,110k / 219 / 790s</td></tr>
+      <tr><td class="arm">serena</td><td class="mono">1,749 / 100.3k / 26 / 132s</td><td class="mono">29,223 / <span class="cell-bad">34,455k</span> / 546 / 1,012s</td><td class="mono">31.0k / 34,555k / 572 / 1,144s</td></tr>
+      <tr><td class="arm">zoekt</td><td class="mono">24,868 / 969.8k / 46 / 285s</td><td class="mono">18,367 / 3,816k / 149 / 947s</td><td class="mono">43.2k / 4,786k / 195 / 1,232s</td></tr>
+      <tr><td class="arm">rg(+sg)</td><td class="mono">3,225 / 173.3k / 34 / 188s</td><td class="mono">56,841 / 900.7k / 161 / 1,547s</td><td class="mono">60.1k / 1,074k / 195 / <span class="cell-bad">1,735s</span></td></tr>
+      <tr><td class="arm">bare</td><td class="mono">9,109 / 145.2k / 28 / 530s</td><td class="mono">49,024 / 3,117k / 183 / 478s</td><td class="mono">58.1k / 3,262k / 211 / 1,008s</td></tr>
+      <tr><td class="arm">cocoindex</td><td class="mono">20,153 / 313.9k / 64 / 351s</td><td class="mono">35,447 / 712.4k / 145 / 656s</td><td class="mono">55.6k / 1,026k / 209 / 1,007s</td></tr>
+      <tr><td class="arm">zoekt+ctags</td><td class="mono">4,129 / 120.1k / 17 / 161s</td><td class="mono">37,740 / 1,322k / 231 / 515s</td><td class="mono">41.9k / 1,442k / 248 / 676s</td></tr>
     </tbody>
   </table>
-  <p class="muted" style="font-size:0.85rem;">bare 합계 토큰·시간 최소(6.3k·114s)는 "우수"가 아니라 <b>얕게 탐색하고 일찍 멈춘</b>(M2 0.625) 트레이드오프. serena M2 캐시읽기 1.42M 은 다중홉마다 컨텍스트를 반복 재독한 비용. <b>‡ cocoindex·zoekt+ctags 토큰은 Agent usage 의 subagent_tokens 총량</b>(out/cacheR 분리 불가, 입도가 달라 토큰 직접비교 주의). 호출수·시간은 비교 유효 — cocoindex 가 호출수 최다(17·30), 시간 최장(702s). 위 표는 M1·M2 기준이며 <b>M3 질문의 효율 수치는 <code>results.md</code></b> 참조. H 는 M2 에서 <code>sym:</code> 검증을 반복하느라 호출수가 많았다(50콜).</p>
+  <p class="muted" style="font-size:0.85rem;"><b>전면 재측정으로 cocoindex·ctags 포함 7암 모두 out/cacheR 분리값</b>이 생겨 차트에 n/a 가 사라졌다. <b>serena M2 의 cacheR(34.5M)가 압도적</b> — 다중홉 역참조를 546콜로 반복하며 컨텍스트를 매 턴 재독한 결과(원 측정의 "serena M2 cacheR 최대" 방향과 일치). <b>⚠️ 원 측정 대비 호출수·토큰이 ~10~20배 척도</b>(이 세션 하니스가 무겁게 동작)라 절대값 비교는 금물 — 암 간 상대 비교로만. 첫 캐싱(cacheCreate)·셀별 상세·콜드스타트 분석은 <code>results.md</code> §6 참조.</p>
 
   <!-- RESULT VALUES (hit/miss) -->
   <h2>질문별 적중 / 누락 상세</h2>
@@ -388,8 +397,8 @@
     <p>폐포 8함수의 깊이 4~5 말단에서 도구별로 다른 이유로 누락: codegraph=<code>&lt;init&gt;</code>(생성은 <code>instantiates</code> 엣지라 calls-CTE 미순회) + 람다 콜백, serena/bare=생성자, zoekt=bindView+생성자, rg=ConvertType 상단. 어떤 도구도 8/8 을 못 했다.</p>
   </div>
   <div class="finding">
-    <h3><span class="tag">5</span> 효율: 인덱스/그래프는 전수 조회에 압도적, 다중홉엔 호출 폭증</h3>
-    <p>M1(전수 역호출)은 zoekt 1콜·37s, codegraph 3콜 로 종료. M2(다중홉 BFS)는 serena 29콜·203s, zoekt 33콜·197s 로 호출수·시간이 급증.</p>
+    <h3><span class="tag">5</span> 효율: 다중홉(M2)이 단일 전수조회(M1)보다 호출·시간 폭증</h3>
+    <p>전 암 공통으로 M2(다중홉 BFS)가 M1(단일 조회)보다 호출수·시간이 크게 늘어난다. 2026-06-01 전면 재측정에서도 <b>serena M2 가 cacheR 34.5M·546콜로 가장 비쌌고</b>, cocoindex 시간은 모델 콜드스타트가 지배한다. 절대값은 N=1·세션 하니스 의존이라 암 간 상대 윤곽으로 읽는다(상세 <code>results.md</code> §6).</p>
   </div>
   <div class="finding amber">
     <h3><span class="tag">6</span> (M3-W) 언어 간 ABI seam — 정밀도구가 텍스트에 역전당함</h3>
@@ -412,15 +421,15 @@
 
 <script>
   // out = 출력토큰 합계, cache = 캐시읽기(입력 대부분) 합계(k), calls/time 합계
+  // 2026-06-01 전면 재측정(동일 세션 14셀). cache = cacheR(캐시읽기) k 단위. 원 측정 대비 ~10~20배 척도(절대비교 금지, 상대용).
   const AGG = {
-    codegraph: { calls: 22, time: 192, m2calls: 19, out: 7197, cache: 507 },
-    serena:    { calls: 33, time: 252, m2calls: 29, out: 9266, cache: 1550 },
-    zoekt:     { calls: 34, time: 234, m2calls: 33, out: 7833, cache: 945 },
-    "rg(+sg)": { calls: 40, time: 182, m2calls: 26, out: 9678, cache: 958 },
-    "bare":    { calls: 19, time: 114, m2calls: 15, out: 6342, cache: 555 },
-    // cocoindex·zoekt+ctags 토큰(out/cache)은 subagent_tokens 총량이라 out/cacheR 분리 불가 → null(차트에서 n/a). 호출수·시간만 비교.
-    "cocoindex": { calls: 47, time: 702, m2calls: 30, out: null, cache: null },
-    "zoekt+ctags": { calls: 52, time: 292, m2calls: 50, out: null, cache: null },
+    codegraph: { calls: 219, time: 790, m2calls: 173, out: 43792, cache: 1110 },
+    serena:    { calls: 572, time: 1144, m2calls: 546, out: 30972, cache: 34555 },
+    zoekt:     { calls: 195, time: 1232, m2calls: 149, out: 43235, cache: 4786 },
+    "rg(+sg)": { calls: 195, time: 1735, m2calls: 161, out: 60066, cache: 1074 },
+    "bare":    { calls: 211, time: 1008, m2calls: 183, out: 58133, cache: 3262 },
+    "cocoindex": { calls: 209, time: 1007, m2calls: 145, out: 55600, cache: 1026 },
+    "zoekt+ctags": { calls: 248, time: 676, m2calls: 231, out: 41869, cache: 1442 },
   };
   const ARMS = Object.keys(AGG);
 
