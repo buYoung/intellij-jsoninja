@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>코드 수정 시나리오 벤치마크 — codegraph vs serena vs zoekt vs rg vs bare</title>
+<title>코드 수정 시나리오 벤치마크 — codegraph vs serena vs zoekt vs rg vs bare vs cocoindex</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -86,7 +86,7 @@
 <div class="wrap">
   <header class="page">
     <h1>코드 수정 시나리오 벤치마크</h1>
-    <div class="sub">whole-repo 범위 · 2 케이스 × 5 암 · sonnet 서브에이전트 10개 · blind 채점</div>
+    <div class="sub">whole-repo 범위 · 2 케이스 × 6 암 · sonnet 서브에이전트 12개 · blind 채점</div>
     <div class="meta-line">
       git <span>v1.12.1</span> · commit <span>1daf879</span> · codegraph db <span>54e743b6…</span> ·
       zoekt 재인덱싱 <span>296 files (main+test)</span>
@@ -103,9 +103,10 @@
       <tr><td class="arm">zoekt</td><td>단순 전수 조회 최소 비용(M1 1콜·37s)</td><td>다중홉 폐포 말단 회수 최저(M2 0.625) — 람다/생성자 귀속 약함</td></tr>
       <tr><td class="arm">rg(+sg)</td><td>텍스트 컨텍스트로 높은 정확도(재현율 0.875, 정밀도 0.985)</td><td>다중홉은 수동 BFS — 호출수 증가. sg 미사용(rg-only)</td></tr>
       <tr><td class="arm">bare</td><td>텍스트+읽기. 단순 역호출 강(M1 0.97, DI 수신자도 회수)</td><td>깊은 transitive 최약체(M2 0.625). rg 와 동일 능력군</td></tr>
+      <tr><td class="arm">cocoindex</td><td>시맨틱 임베딩. 함정·환각 0, DI 호출지점 회수, M2 추론보완(0.75)</td><td><b>전수 회수 부적합(M1 recall 0.67 최저)</b>, 청크 라인추정 오차, 호출수 최다(M1 17·M2 30)</td></tr>
     </tbody>
   </table>
-  <p class="muted" style="font-size:0.9rem;">단일 지배 도구 없음 — codegraph=전수성·효율, serena=타입 정밀, 텍스트(rg/bare)=경계·컨텍스트. 다중홉 폐포 말단은 공통 취약.</p>
+  <p class="muted" style="font-size:0.9rem;">단일 지배 도구 없음 — codegraph=전수성·효율, serena=타입 정밀, 텍스트(rg/bare)=경계·컨텍스트, cocoindex=시맨틱(전수 약·반복질의로 보완). 다중홉 폐포 말단(생성자)은 6개 암 공통 취약.</p>
 
   <!-- KPI -->
   <h2>요약 지표</h2>
@@ -114,12 +115,13 @@
     <div class="kpi"><div class="label">정밀도 최저</div><div class="val amber">0.94</div><div class="note">codegraph (타입 맹점)</div></div>
     <div class="kpi"><div class="label">최소 호출/시간</div><div class="val">1콜 · 37s</div><div class="note">zoekt · M1 전수질의</div></div>
     <div class="kpi"><div class="label">M2 폐포 최저재현율</div><div class="val amber">0.625</div><div class="note">zoekt · bare (말단 누락)</div></div>
+    <div class="kpi"><div class="label">M1 전수회수 최저</div><div class="val amber">0.67</div><div class="note">cocoindex (임베딩 비전수)</div></div>
   </div>
 
   <!-- SCOREBOARD -->
   <h2>스코어보드 (recall / precision)</h2>
   <table>
-    <thead><tr><th>케이스 (gold)</th><th class="mono">A codegraph</th><th class="mono">B serena</th><th class="mono">C zoekt</th><th class="mono">D rg(+sg)</th><th class="mono">E bare</th></tr></thead>
+    <thead><tr><th>케이스 (gold)</th><th class="mono">A codegraph</th><th class="mono">B serena</th><th class="mono">C zoekt</th><th class="mono">D rg(+sg)</th><th class="mono">E bare</th><th class="mono">F cocoindex</th></tr></thead>
     <tbody>
       <tr>
         <td><b>M1</b> 시그니처 영향 <span class="muted">(33)</span></td>
@@ -128,6 +130,7 @@
         <td class="mono">1.00 / 0.97</td>
         <td class="mono">1.00 / 0.97</td>
         <td class="mono">0.97 / 1.00</td>
+        <td class="mono"><span class="cell-bad">0.67</span> / 0.81†</td>
       </tr>
       <tr>
         <td><b>M2</b> transitive 폐포 <span class="muted">(8)</span></td>
@@ -136,14 +139,15 @@
         <td class="mono"><span class="cell-bad">0.625</span> / 1.00</td>
         <td class="mono">0.75 / 1.00</td>
         <td class="mono"><span class="cell-bad">0.625</span> / 1.00</td>
+        <td class="mono">0.75 / 1.00</td>
       </tr>
       <tr style="border-top:2px solid var(--border);">
         <td><b>평균 recall</b></td>
-        <td class="mono cell-best">0.875</td><td class="mono">0.755</td><td class="mono">0.81</td><td class="mono cell-best">0.875</td><td class="mono">0.80</td>
+        <td class="mono cell-best">0.875</td><td class="mono">0.755</td><td class="mono">0.81</td><td class="mono cell-best">0.875</td><td class="mono">0.80</td><td class="mono cell-bad">0.71</td>
       </tr>
       <tr>
         <td><b>평균 precision</b></td>
-        <td class="mono cell-weak">0.94</td><td class="mono">0.97</td><td class="mono">0.985</td><td class="mono">0.985</td><td class="mono cell-best">1.00</td>
+        <td class="mono cell-weak">0.94</td><td class="mono">0.97</td><td class="mono">0.985</td><td class="mono">0.985</td><td class="mono cell-best">1.00</td><td class="mono">0.905†</td>
       </tr>
       <tr>
         <td><b>격리</b></td>
@@ -152,10 +156,11 @@
         <td><span class="badge ok">준수</span></td>
         <td><span class="badge warn">rg-only</span></td>
         <td><span class="badge ok">오염제거</span></td>
+        <td><span class="badge ok">준수</span></td>
       </tr>
     </tbody>
   </table>
-  <p class="muted" style="font-size:0.85rem;">bare = 텍스트검색(grep)+읽기. M1 은 DI 수신자도 텍스트로 회수해 0.97(serena 0.76 과 대조), M2 깊은 폐포는 0.625 로 최약체. 독립적 우수성 없음 — rg 와 같은 능력군.</p>
+  <p class="muted" style="font-size:0.85rem;">bare = 텍스트검색(grep)+읽기. M1 은 DI 수신자도 텍스트로 회수해 0.97(serena 0.76 과 대조), M2 깊은 폐포는 0.625 로 최약체. 독립적 우수성 없음 — rg 와 같은 능력군. <b>† cocoindex M1 precision 0.81 하락은 함정·환각이 아니라 청크 라인추정 오차</b>(트랩 0·환각 0). 호출지점 식별은 모두 실재이며 위치 정밀도만 ±2 수준으로 빗나감. cocoindex M1 recall 0.67 은 임베딩 top-k 의 전수 회수 한계.</p>
 
   <!-- CHARTS -->
   <h2>효율</h2>
@@ -196,9 +201,10 @@
       <tr><td class="arm">zoekt</td><td class="mono"><span class="cell-best">3,103 / 28.7k / 1 / 37s</span></td><td class="mono">4,730 / 916.8k / 33 / 197s</td><td class="mono">7.8k / 945k / 34 / 234s</td></tr>
       <tr><td class="arm">rg(+sg)</td><td class="mono">4,435 / 287.0k / 14 / 69s</td><td class="mono">5,243 / 670.8k / 26 / 113s</td><td class="mono">9.7k / 958k / 40 / 182s</td></tr>
       <tr><td class="arm">bare</td><td class="mono">3,188 / 77.5k / 4 / 42s</td><td class="mono">3,154 / 478.0k / 15 / 72s</td><td class="mono cell-best">6.3k / 555k / 19 / 114s</td></tr>
+      <tr><td class="arm">cocoindex</td><td class="mono">tot 73.9k‡ / 17 / 274s</td><td class="mono">tot 62.2k‡ / <span class="cell-bad">30</span> / 428s</td><td class="mono">tot 136.1k‡ / 47 / <span class="cell-bad">702s</span></td></tr>
     </tbody>
   </table>
-  <p class="muted" style="font-size:0.85rem;">bare 합계 토큰·시간 최소(6.3k·114s)는 "우수"가 아니라 <b>얕게 탐색하고 일찍 멈춘</b>(M2 0.625) 트레이드오프. serena M2 캐시읽기 1.42M 은 다중홉마다 컨텍스트를 반복 재독한 비용.</p>
+  <p class="muted" style="font-size:0.85rem;">bare 합계 토큰·시간 최소(6.3k·114s)는 "우수"가 아니라 <b>얕게 탐색하고 일찍 멈춘</b>(M2 0.625) 트레이드오프. serena M2 캐시읽기 1.42M 은 다중홉마다 컨텍스트를 반복 재독한 비용. <b>‡ cocoindex 토큰은 Agent usage 의 subagent_tokens 총량</b>(out/cacheR 분리 불가, 입도가 달라 토큰 직접비교 주의). 호출수·시간은 비교 유효 — cocoindex 가 M1·M2 모두 호출수 최다(17·30), 시간 최장(702s): 시맨틱 top-k 의 'near' 결과를 반복질의로 좁힌 비용.</p>
 
   <!-- RESULT VALUES (hit/miss) -->
   <h2>결과값 상세 — 실제 hit / miss</h2>
@@ -211,6 +217,7 @@
       <tr><td class="arm">zoekt</td><td class="mono">12/12</td><td class="mono">21/21</td><td class="mono">1.00</td><td>함정 정확 배제</td></tr>
       <tr><td class="arm">rg(+sg)</td><td class="mono">12/12</td><td class="mono">21/21</td><td class="mono">1.00</td><td>함정 정확 배제</td></tr>
       <tr><td class="arm">bare</td><td class="mono">11/12</td><td class="mono">21/21</td><td class="mono">0.97</td><td>누락 1: <code>formatJsonOnDefault</code> 내부 자기호출(:215). <b>DI 수신자(:60)는 텍스트로 회수</b></td></tr>
+      <tr><td class="arm">cocoindex</td><td class="mono cell-weak">9/12</td><td class="mono cell-weak">13/21</td><td class="mono cell-bad">0.67</td><td>누락: prod 3 + test 8(임베딩 top-k 미회수). <b>DI 수신자(:60) 회수, 함정 2 배제, 환각 0</b> — 전수 열거 불가가 한계</td></tr>
     </tbody>
   </table>
   <h3 style="margin:18px 0 8px;color:var(--muted);">M2 · gold 8 함수</h3>
@@ -222,6 +229,7 @@
       <tr><td class="arm">zoekt</td><td class="mono cell-bad">5/8</td><td class="mono cell-bad">0.625</td><td><code>bindView</code> + 생성자 2개</td></tr>
       <tr><td class="arm">rg(+sg)</td><td class="mono">6/8</td><td class="mono">0.75</td><td>ConvertTypeDialogPresenter 상단 1개</td></tr>
       <tr><td class="arm">bare</td><td class="mono cell-bad">5/8</td><td class="mono cell-bad">0.625</td><td>두 <code>&lt;init&gt;</code> + <code>bindView</code></td></tr>
+      <tr><td class="arm">cocoindex</td><td class="mono">6/8</td><td class="mono">0.75</td><td>생성자 2개 <code>&lt;init&gt;</code> (람다·DI홉은 반복 시맨틱 질의+full-text 로 회수, 함정 4종 배제)</td></tr>
     </tbody>
   </table>
 
@@ -250,7 +258,7 @@
 
   <footer>
     데이터: sonnet 서브에이전트 usage 기준 추정치. N=1(케이스당 1회). 격리는 프롬프트+transcript 사후 감사 기반(하드 샌드박스 아님).
-    gold 는 소스에서 독립 산출(측정 대상 5개 도구 미사용). 상세: <code>dataset.yaml</code>, <code>results.md</code>.
+    gold 는 소스에서 독립 산출(측정 대상 6개 도구 미사용). 상세: <code>dataset.yaml</code>, <code>results.md</code>, <code>cocoindex/README.md</code>.
   </footer>
 </div>
 
@@ -262,13 +270,21 @@
     zoekt:     { calls: 34, time: 234, m2calls: 33, out: 7833, cache: 945 },
     "rg(+sg)": { calls: 40, time: 182, m2calls: 26, out: 9678, cache: 958 },
     "bare":    { calls: 19, time: 114, m2calls: 15, out: 6342, cache: 555 },
+    // cocoindex 토큰(out/cache)은 subagent_tokens 총량이라 out/cacheR 분리 불가 → null(차트에서 n/a). 호출수·시간만 비교.
+    "cocoindex": { calls: 47, time: 702, m2calls: 30, out: null, cache: null },
   };
   const ARMS = Object.keys(AGG);
   function renderBars(elId, key, color, suffix, fmt) {
-    const max = Math.max(...ARMS.map(a => AGG[a][key]));
+    const vals = ARMS.map(a => AGG[a][key]).filter(v => v != null);
+    const max = Math.max(...vals);
     const el = document.getElementById(elId);
     el.innerHTML = ARMS.map(a => {
       const v = AGG[a][key];
+      if (v == null) {
+        return `<div class="bar-row"><div class="name">${a}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:0%;background:${color}" data-w="0"></div></div>
+          <div class="num">n/a</div></div>`;
+      }
       const pct = (v / max * 100).toFixed(1);
       const disp = fmt ? fmt(v) : v;
       return `<div class="bar-row"><div class="name">${a}</div>

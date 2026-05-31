@@ -1,6 +1,6 @@
-# 코드 탐색 백엔드 벤치마크 (codegraph · serena · zoekt · rg+sg · bare)
+# 코드 탐색 백엔드 벤치마크 (codegraph · serena · zoekt · rg+sg · bare · cocoindex)
 
-JSONinja 리포에서 "실제 코드 수정 직전 엔지니어가 던지는 질문"을 5개 코드탐색 백엔드에 동일 프롬프트로 묻고,
+JSONinja 리포에서 "실제 코드 수정 직전 엔지니어가 던지는 질문"을 6개 코드탐색 백엔드에 동일 프롬프트로 묻고,
 소스에서 독립 산출한 정답(gold)과 대조해 정확도·효율을 측정한 벤치마크다. 각 백엔드는 sonnet 서브에이전트가
 구동하며, 차이는 오직 **허용 도구**뿐이다.
 
@@ -11,6 +11,10 @@ JSONinja 리포에서 "실제 코드 수정 직전 엔지니어가 던지는 질
 | C. zoekt | 트라이그램 코드검색 인덱스 |
 | D. rg+sg | ripgrep(텍스트) + ast-grep(구조) |
 | E. bare | 내장 텍스트검색(grep) + 파일읽기 (추가 도구 없음) |
+| F. cocoindex | tree-sitter 청킹 + 임베딩 시맨틱 벡터검색 ([cocoindex/](./cocoindex/)) |
+
+> A~E 는 *정확-매칭형*, F(cocoindex) 만 *시맨틱 임베딩 top-k* 다. F 는 5-way 확정 후 추가된 6번째 암으로,
+> 동일 케이스(M1·M2)에서 "임베딩 검색이 전수·정확 회수 과제에 얼마나 적합한가"를 대조한다.
 
 ## 문서
 
@@ -35,11 +39,16 @@ JSONinja 리포에서 "실제 코드 수정 직전 엔지니어가 던지는 질
   (M1 재현율 0.76, raw 출력 직접 검증). 텍스트(rg/bare)=경계·컨텍스트 강점이나 다중홉 폐포 말단(생성자·람다 콜백)에서 누락.
 - **bare(텍스트+읽기)는 rg 와 동일 능력군.** rg 가 근소 우위(M1 1.00 vs 0.97, M2 0.75 vs 0.625).
   단순 역호출엔 충분하나 깊은 transitive 에선 최약체 — 추가 도구 없는 baseline 의 한계가 과제 유형에 따라 드러난다.
+- **cocoindex(시맨틱 임베딩)는 전수 회수에 부적합하나 무너지지 않는다.** M1 recall 0.67 로 6개 암 중 최저
+  (임베딩 top-k 가 33개 호출지점을 전수 열거 못 함) — 단 함정·환각 0 이고 serena 가 놓친 DI 호출지점은 회수.
+  M2 는 반복 시맨틱 BFS 로 recall 0.75(최상위 동률)까지 끌어올렸으나 호출수 최다(M2 30콜). "임베딩은 정확-탐색에 약하다"는
+  예상은 M1 에서 확인됐고, M2 는 유능한 에이전트가 약한 검색 원시도구를 추론으로 보완하는 양상(serena 의 raw-vs-agent 교훈 재현).
 - **효율**: 전수 조회는 인덱스/그래프가 압도적(zoekt M1 1콜·37s). 다중홉 BFS 는 호출수·토큰 폭증(serena M2 캐시읽기 1.42M).
+  cocoindex 는 의미상 'near' 결과를 'exact' 로 좁히려 질의를 반복 재구성해 호출수가 가장 많다(M1 17콜·M2 30콜).
 
 ## 방법론
 
-- **gold 는 소스에서 독립 산출** — 측정 대상 5개 도구 중 어느 것도 정답 산출에 쓰지 않음(순환논리 차단).
+- **gold 는 소스에서 독립 산출** — 측정 대상 6개 도구 중 어느 것도 정답 산출에 쓰지 않음(순환논리 차단).
   홉별 도달 경로를 `dataset.yaml` 에 감사 가능하게 기록.
 - **blind 채점** — 에이전트에 gold 비공개. recall = 찾은 gold/전체, precision = 맞은 답/제출 답. 라인 ±1 정규화.
 - **provenance 고정** — git `v1.12.1`(`1daf879`), codegraph DB sha256 `54e743b6…`. 재실행 전 일치 확인.
@@ -55,6 +64,11 @@ JSONinja 리포에서 "실제 코드 수정 직전 엔지니어가 던지는 질
 # zoekt 인덱스 (src = main + test)
 export PATH="$HOME/go/bin:$PATH"
 zoekt-index -index .codegraph/zoekt-index src
+
+# cocoindex 인덱스 (tree-sitter 청킹 + MiniLM 임베딩 → SQLite) — 상세는 cocoindex/README.md
+cd cocoindex && uv venv -p 3.13 .venv && . .venv/bin/activate && uv pip install -r requirements.txt
+git archive v1.12.1 src/main/kotlin src/test/kotlin | tar -x -C .src-v1.12.1
+python build_index.py --src-root .src-v1.12.1 --out index.sqlite --git-commit 1daf879beae6ecc853be6a7e496a240568bddea5
 ```
 
 이후 `benchmark-design.md` 의 베이스 프롬프트에 `dataset.yaml` 의 각 케이스 질문과 암별 도구 블록을 끼워
@@ -64,5 +78,7 @@ sonnet 서브에이전트로 실행하고, 산출물을 gold 와 `(qualified_nam
 
 - 각 케이스 1회 실행(N=1) — 샘플링 분산 미측정.
 - D 암은 실제로 `sg`(ast-grep) 미사용(rg-only) — 구조검색 변별은 미측정.
+- F(cocoindex)는 임베딩 모델·청크크기·top-k 가 새 변수(본 실행 = all-MiniLM-L6-v2·1000B 고정). 출력이 청크라
+  gold 의 (file:line) 와는 청크 라인추정으로 환산해 채점 — 정밀도 하락 일부는 라인추정 오차다(함정/환각과 구분).
 - E(bare) 암은 grep 을 `Bash grep` 으로 호출(내장 Grep 도구 미사용). 동일 ripgrep 엔진이라 능력 동등하나,
   내장 도구로의 엄격 강제까지 원하면 MCP·Bash 를 비활성화한 샌드박스가 필요하다(능력은 안 바뀜).

@@ -1,10 +1,10 @@
-# 5-way 코드탐색 도구 벤치마크 설계 (하니스)
+# 6-way 코드탐색 도구 벤치마크 설계 (하니스)
 
 > 목적: 동일한 코드이해 질문을 **sonnet 서브에이전트**에게 주되, 각 에이전트가 쓸 수 있는 탐색 백엔드를
 > 한 가지로 제한해 "어떤 도구를 가진 코드에이전트가 가장 정확·효율적으로 답하는가"를 측정한다.
 > gold 와 질문은 [`dataset.yaml`](./dataset.yaml)(whole-repo 범위, M1·M2)을 사용. 측정 결과는 [`results.md`](./results.md).
 
-## 1. 5개 벤치마크 암(arm)
+## 1. 6개 벤치마크 암(arm)
 
 | 암 | 백엔드 | 서브에이전트 허용 도구 | 설치 |
 |----|--------|------------------------|------|
@@ -13,21 +13,26 @@
 | **C. zoekt** | 트라이그램 코드검색 인덱스 | `zoekt` 검색 CLI 만 | **go install + 인덱싱 필요** |
 | **D. rg + sg** | ripgrep(텍스트) + ast-grep(구조) | `Bash(rg, sg)` 만 | 완료 |
 | **E. bare 코드에이전트** | 추가도구 없음 (기본 파일도구) | 내장 `Grep` + `Glob` + `Read` 만 | 완료 |
+| **F. cocoindex** | tree-sitter 청킹 + 임베딩 벡터검색(SQLite) | `Bash(python query.py)` 만. 소스 Read 금지 | 완료 (cocoindex/) |
+
+> A~E 는 모두 *정확-매칭형*(graph/LSP/trigram/text)이고, **F(cocoindex) 만 시맨틱 임베딩 top-k** 패러다임이다.
+> 따라서 F 는 "전수·정확 회수" 과제(M1·M2)에서 다른 5개 암과 능력 축이 다르며, 이 비대칭 자체가 측정 대상이다.
 
 핵심 통제: 각 암의 서브에이전트는 **자신의 백엔드 출력만으로** 답을 도출한다(다른 암 도구·소스 직접열람 금지,
 gold 비공개). 모델은 전 암 동일하게 **sonnet**으로 고정해 "도구"만 변수로 둔다.
 
 ## 2. 케이스와 암별 변별축 (검증 대상 가설)
 
-`dataset.yaml` 의 2케이스가 5-way 변별의 축이다. 실측 결과는 [`results.md`](./results.md) 참조.
+`dataset.yaml` 의 2케이스가 6-way 변별의 축이다. 실측 결과는 [`results.md`](./results.md) 참조.
 
-| 케이스 | A codegraph | B serena | C zoekt | D rg+sg | E bare |
-|---|---|---|---|---|---|
-| **M1** 시그니처 영향(역호출+타입구분) | 전수성 강, **동명 오탐** | **DI 수신자 누락** | 텍스트 전수 | 텍스트 전수 | 텍스트 전수(DI도 회수) |
-| **M2** transitive 폐포(다중홉+DI홉) | **CTE one-shot**, 단 instantiates/람다 누락 | 수동 BFS, DI홉 누락(우회) | 수동 BFS | 수동 BFS | 수동 BFS, 말단 최약 |
+| 케이스 | A codegraph | B serena | C zoekt | D rg+sg | E bare | F cocoindex |
+|---|---|---|---|---|---|---|
+| **M1** 시그니처 영향(역호출+타입구분) | 전수성 강, **동명 오탐** | **DI 수신자 누락** | 텍스트 전수 | 텍스트 전수 | 텍스트 전수(DI도 회수) | **임베딩 비전수(최저 recall)**, 함정 배제·DI회수 |
+| **M2** transitive 폐포(다중홉+DI홉) | **CTE one-shot**, 단 instantiates/람다 누락 | 수동 BFS, DI홉 누락(우회) | 수동 BFS | 수동 BFS | 수동 BFS, 말단 최약 | 시맨틱 BFS(최다 호출), 생성자 누락 |
 
 → 핵심 가설: 어떤 단일 도구도 두 케이스를 지배하지 못한다(실측에서 확인). codegraph=전수성·효율,
-serena=타입정밀(단 DI 수신자 일관 누락), 텍스트(rg/bare)=경계·컨텍스트, 다중홉 말단은 공통 취약.
+serena=타입정밀(단 DI 수신자 일관 누락), 텍스트(rg/bare)=경계·컨텍스트, cocoindex=시맨틱(전수 약·반복질의로 보완),
+다중홉 말단(생성자·람다)은 공통 취약.
 
 ## 2.5 provenance 고정 (신뢰도)
 
@@ -83,6 +88,7 @@ JSON 한 개만 출력:
 | C zoekt | `Bash 로 zoekt 검색 CLI 만 (사전 빌드된 인덱스 대상). 소스 직접 Read 금지.` |
 | D rg+sg | `Bash 로 rg(ripgrep), sg(ast-grep) 만. 그 외 명령/도구 금지.` |
 | E bare | `내장 Grep + Glob + Read 만. Bash·MCP·sqlite·zoekt 전면 금지.` |
+| F cocoindex | `Bash 로 cocoindex 벡터검색 'python query.py "..." --top-k N' 만. 소스 Read/grep/sqlite3 금지.` |
 
 > 공정성 주의: 모델은 전 암 sonnet 고정. 온도/시드 등 샘플링 설정도 동일하게. 질문 순서·표현도 동일.
 > 유일한 독립변수는 [ALLOWED TOOLS] 블록뿐이다.
@@ -103,7 +109,8 @@ JSON 한 개만 출력:
 
 ## 4. 실행 (완료)
 
-- 본 신뢰 실행 = 5 암 × 2 케이스(M1·M2) = **10 서브에이전트** + 채점. Agent 도구로 암별 병렬 실행.
+- 본 신뢰 실행 = 6 암 × 2 케이스(M1·M2) = **12 서브에이전트** + 채점. Agent 도구로 암별 병렬 실행.
+  (F cocoindex 는 5-way 확정 후 추가된 6번째 암 — 동일 베이스 프롬프트·blind 채점 원칙 그대로 적용.)
 - gold 에 테스트 호출지점이 포함되므로, 실행 전 zoekt 를 src(main+test, 296파일)로 재인덱싱해 인덱스 범위를 전 암 정렬.
 
 ## 5. 알려진 리스크 / 학습

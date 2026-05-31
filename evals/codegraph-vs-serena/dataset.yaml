@@ -24,7 +24,7 @@ meta:
     codegraph_db_sha256: 54e743b63439404afefbe033affabd5d4abe158e6686ca40942cbe808d7a333b
     db_freshness_verified: true
   scope: whole-repo (src/main/kotlin + src/test/kotlin)
-  gold_provenance: 측정 대상 5개 도구 중 어느 것도 gold 산출에 사용하지 않음. rg 로 전수 추출 후 소스 직접 판독으로 수신자 타입·호출 체인을 손으로 검증함. codegraph CTE 는 "타깃 후보 탐색"에만 사용했고 정답 출처가 아님.
+  gold_provenance: 측정 대상 6개 도구(codegraph/serena/zoekt/rg+sg/bare/cocoindex) 중 어느 것도 gold 산출에 사용하지 않음. rg 로 전수 추출 후 소스 직접 판독으로 수신자 타입·호출 체인을 손으로 검증함. codegraph CTE 는 "타깃 후보 탐색"에만 사용했고 정답 출처가 아님.
   matching_key: "M1 = 호출지점(file:line). M2 = (qualified_name) 함수 단위. 라인 ±1 정규화(codegraph 1-based vs serena 0-based)는 채점기에서 흡수."
 
   # ---------------------------------------------------------------------------
@@ -49,6 +49,14 @@ meta:
     C_zoekt:     'Bash 로 zoekt 검색 CLI 만 (src/main + src/test 재인덱싱본 대상). 소스 직접 Read 금지.'
     D_rg_sg:     'Bash 로 rg(ripgrep), sg(ast-grep) 만. 그 외 명령/도구 금지. (이전 파일럿에서 D 가 sg 를 한 번도 안 썼으므로, 이번엔 구조 패턴 1회 이상 sg 사용을 권장하되 강제는 아님.)'
     E_bare:      'Claude Code 내장 Grep + Glob + Read 만. Bash 전면 금지(이전 파일럿에서 E 가 Bash grep/find 를 써 격리를 위반했으므로, 이번엔 Bash 를 차단해 순수 내장도구 베이스라인을 측정).'
+    F_cocoindex: 'Bash 로 cocoindex 벡터검색 스크립트(``python query.py "..." --top-k N``)만. 소스 직접 Read/grep/sqlite3 금지. 시맨틱 임베딩 top-k 청크 검색만으로 답을 도출. 인덱스/스크립트는 cocoindex/ 디렉터리 참조.'
+
+  # F(cocoindex) 암 메모: 다른 5개 암은 정확-매칭형(graph/LSP/trigram/text)이나 cocoindex 는
+  # tree-sitter 청킹 + 트랜스포머 임베딩 + 벡터 top-k 의 *시맨틱* 패러다임이다. 동일 케이스(M1·M2)에
+  # 6번째 암으로 추가해 "임베딩 검색이 전수·정확 회수 과제에서 어떻게 거동하는가"를 측정한다.
+  # 출력이 청크(파일+라인범위)라 gold 의 (file:line) 와는 청크 라인추정으로 환산해 채점(라인 ±1 동일).
+  # provenance: 인덱스는 v1.12.1 소스(.kt 159파일)를 RecursiveSplitter(chunk_size=1000B, kotlin) 청킹 +
+  # all-MiniLM-L6-v2(384d, normalize) 임베딩 → SQLite 1053청크. 상세·재현은 cocoindex/README.md.
 
   output_schema: |
     JSON 한 개만 출력:

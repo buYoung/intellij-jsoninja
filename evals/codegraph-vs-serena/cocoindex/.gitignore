@@ -1,0 +1,6 @@
+.venv/
+index.sqlite
+__pycache__/
+*.pyc
+# v1.12.1 소스 체크아웃(인덱싱 입력)
+.src-v1.12.1/
