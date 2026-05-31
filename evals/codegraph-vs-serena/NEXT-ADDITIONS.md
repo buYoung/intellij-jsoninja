@@ -1,8 +1,12 @@
-# 다음 세션 작업 지시서 — SCIP 암 · zoekt+ctags 암 · M3 케이스 추가
+# 다음 세션 작업 지시서 — SCIP 암(G) · zoekt+ctags 암(H) · M3-W/M3-L 케이스 추가
 
 > 이 문서 하나로 새 세션에서 작업을 시작할 수 있도록 자립형으로 정리했다.
-> 대상 리포: `json-helper2` (IntelliJ Platform Kotlin 플러그인, 단일 모듈).
+> 대상 리포: `json-helper2` (IntelliJ Platform 플러그인 — **polyglot**: Kotlin 플러그인 + Rust `tree-sitter-wasm` 크레이트 + 다중 타깃언어).
 > 작업 디렉터리: `evals/codegraph-vs-serena/`.
+>
+> **확정 사항(이전 세션 결정)**: ① M3 는 초안의 "거울상 Presenter" 안을 폐기하고 **polyglot 경계 저격**(M3-W: Kotlin↔Rust WASM ABI seam,
+> M3-L: 다중 타깃언어 enum)으로 재설계함(근거 §3.0). ② **M3-W 범위는 A안 확정** = 전 암(A~H) 인덱스에 `tree-sitter-wasm/`(Rust) 포함 재인덱싱.
+> 구성: **8 암 × 4 케이스(M1·M2·M3-W·M3-L)**, 추가 실행 20 서브에이전트(총 32). 상세는 §3~§7.
 
 ---
 
@@ -10,6 +14,7 @@
 
 기존 벤치마크는 **6개 암 × 2 케이스(M1·M2) × N=1**, sonnet 서브에이전트, 동일 베이스 프롬프트,
 `{{ALLOWED_TOOLS_BLOCK}}` 만 차등, blind 채점이다.
+이번에 **2 암(G·H)** + **2 케이스(M3-W·M3-L)** 를 추가하여 **8 암 × 4 케이스**로 확장한다(M3 설계는 §3, 확정사항은 문서 상단 참조).
 
 | 암 | 백엔드 | 상태 |
 |----|--------|------|
@@ -89,49 +94,88 @@ A/B 비교**해야 ctags 효과가 측정된다.
 
 ---
 
-## 3. 추가 ③ — M3 케이스: **유사/병렬 서비스 코드의 정밀 구분** (precision under near-duplication)
+## 3. 추가 ③ — M3 케이스: **polyglot 경계 저격** (Kotlin 플러그인 ↔ Rust `tree-sitter-wasm` ↔ 다중 타깃언어)
 
-### 시나리오 (사용자 의도 = "유사 서비스 코드를 정밀하게 확인 / 모노레포 저격")
-이 리포는 단일 모듈이라 진짜 모노레포는 아니지만, **거울상 병렬 구조**가 있어 모노레포의
-"이름·구조가 거의 같은 여러 서비스 중 정확히 하나를 저격" 시나리오를 충실히 흉내낼 수 있다:
+### 시나리오 재정의 (사용자 의도 = "tree-sitter-wasm + Kotlin 을 다루는 코드베이스를 저격")
+초안의 "거울상 Presenter(TypeToJson↔JsonToType)" 안은 **현 소스 실측 결과 무효**다(근거 §3.0).
+대신 이 리포의 **진짜 다중 세계**는 두 가지이고, 둘 다 정밀↔텍스트 서열을 **정반대 방향**으로 가른다:
+- **경계①(언어 간 ABI seam)**: Kotlin 호스트가 Rust WASM export 를 **문자열 이름으로** 바인딩
+  (`TreeSitterWasmRuntime.kt:61-64` 의 `instance.export("alloc"/"dealloc"/"analyze_source"/"get_last_error")`
+  ↔ `tree-sitter-wasm/src/lib.rs` 의 `#[no_mangle] pub extern "C"` 정의). → 단일언어 정밀도구의 **맹점**.
+- **경계②(언어 내 다중 타깃언어 분기)**: 단일 클래스가 `when(language)` 로 4개 타깃언어(KOTLIN/JAVA/TYPESCRIPT/GO)를
+  분기. `SupportedLanguage.KOTLIN` enum 상수 **심볼 참조** vs 텍스트 `'kotlin'` 과대매칭. → 정밀도구 **우위**.
 
-- **TypeToJson 방향**: `TypeToJsonGenerationService`, `TypeToJsonDialogPresenter`(generate/schedulePreview/updateLanguage/bindView/…), `TypeToJsonDialogView`
-- **JsonToType 방향(거울상)**: `JsonToTypeConversionService`, `JsonToTypeDialogPresenter`(동일 메서드명!), `JsonToTypeDialogView`
+### 3.0 초안 무효 근거 (실측, v1.12.1 — advisor 3종 교차검증)
+- `updateLanguage(language: SupportedLanguage)` 는 **두 Presenter 에만** 존재(`TypeToJsonDialogPresenter.kt:38`,
+  `JsonToTypeDialogPresenter.kt:47`). View 는 동명 아님(`updateInputLanguage`/`updateLanguageOptions`) → "4중 이름충돌" 거짓.
+- 그 호출지점은 `ConvertTypeDialogPresenter.kt:79,81` **딱 2곳**(gold 1 + trap 1)이고 인접 2줄이며 수신자 변수명
+  (`typeToJsonPresenter`/`jsonToTypePresenter`)이 방향을 자기설명 → 텍스트 도구도 무료 정답 → **변별력 0**.
+- 서비스측은 `generate`(TypeToJson) vs `convert`(JsonToType) 로 **이름이 달라** 함정 자체가 없음 → 초안 M3-b 무효.
+- 타깃언어 핸들러는 클래스-당-언어가 아니라 **단일 클래스 + `when(language)`**(`JsonToTypeRenderer.kt:112`);
+  언어별 private 메서드는 `renderKotlinType`/`renderJavaType` 처럼 **이름이 달라** 교차클래스 충돌 없음.
 
-→ **메서드명이 양 방향에 동일**(updateLanguage, schedulePreview 등)하고, View/Presenter 에도 동명이 존재.
-임베딩(F)은 의미가 거의 같아 혼동, 텍스트(C/D/E)는 이름으로 양쪽 다 매칭, **정밀 도구(G scip / B serena / A codegraph)만**
-정확히 한쪽만 골라야 한다 → "정밀도 under 유사성" 축을 정조준.
+### 3.A — M3-W: 언어 간 WASM ABI seam (가설: **서열 역전** — 정밀도구 맹점)
+- **질문**: "Kotlin 호스트가 Rust WASM 모듈의 export 를 이름으로 바인딩하는 모든 지점과, 그에 대응하는 Rust 측
+  `#[no_mangle] pub extern \"C\"` **정의**를 모두 나열하라. 대상 ABI: `analyze_source`, `get_last_error`, `alloc`, `dealloc`."
+- **gold 구성**: (Kotlin 문자열 바인딩 `TreeSitterWasmRuntime.kt:61-64`) + (Rust 정의 `tree-sitter-wasm/src/lib.rs` 의 대응 4함수).
+  = **언어 2개에 걸친 cross-file 쌍**.
+- **가설**:
+  - G scip-kotlin / B serena(Kotlin LSP) / A codegraph(Kotlin 파서) = Rust 미인덱싱 + Kotlin 측은 **문자열 리터럴**
+    (심볼 아님) → Rust 정의 0 포착 → **정밀도구 전멸**.
+  - C zoekt / D rg / E bare = 텍스트로 Kotlin·Rust 양측 매칭 → **승리**.
+  - F cocoindex = Rust 청크 인덱싱 시 토큰 강함 → 부분 성공 가능.
+- **이게 핵심 신규 정보**: M1/M2 의 "정밀>텍스트" 서열을 **뒤집는** 유일 케이스 → "단일 지배 도구 없음"을 비단조성으로 강화.
+- ✅ **공정성 전제(확정 — A안)**: **모든 암(A~H)의 인덱싱 범위에 `tree-sitter-wasm/`(Rust)를 포함**한다.
+  기존 6암(A~F)은 `src/main+src/test`(Kotlin)만 인덱싱했으므로 **Rust 포함으로 재인덱싱**한다(범위 통일이 성립 조건).
+  scip(Kotlin 전용)·serena 등 정밀암이 Rust 를 못 커버하는 것은 결과의 일부(=맹점)로 그대로 드러난다 — 이게 M3-W 의 의도.
+- ⚠️ `alloc`/`dealloc` 은 generic 토큰이라 텍스트 오탐 큼 → 변별 핵심은 distinctive 한 `analyze_source`/`get_last_error` 에 둘 것.
 
-### 질문(후보 2개 — 세션에서 소스 확인 후 택1)
-- **(권장) M3-a**: "`TypeToJsonDialogPresenter.updateLanguage(language)` 를 직접 호출하는 모든 지점을 나열하라.
-  동명의 `JsonToTypeDialogPresenter.updateLanguage`, `TypeToJsonDialogView.updateLanguage`, `JsonToTypeDialogView.updateLanguage`
-  호출은 **제외**한다." → 3~4중 이름충돌에서 타입+방향 정밀 구분 요구.
-- **M3-b**: "`TypeToJsonGenerationService.generate` 의 호출지점 전부. 거울상 `JsonToTypeConversionService` 의 대응 메서드 호출은 제외."
+### 3.B — M3-L: 다중 타깃언어 enum 정밀 (가설: **정상 서열** — 정밀도구 우위)
+- **질문**: "`SupportedLanguage.KOTLIN` enum 상수를 **심볼로서 참조**하는 모든 지점(`when` 분기 포함)을 나열하라.
+  단순 문자열 `\"kotlin\"`/`\"kt\"`, 리소스 경로(`tree-sitter/queries/kotlin/…`), `Kotlin*` 식별자,
+  코루틴/플랫폼 문맥의 'kotlin' 등은 **제외**(traps_must_exclude)."
+- **gold 규모(정찰 추정 — 설계 타당성 근거일 뿐, 확정 gold 는 세션 산출)**: `SupportedLanguage.KOTLIN` 심볼 참조
+  ≈ **28개**(main 12 + test 16). 텍스트 `'kotlin'`(대소문자무시) 매칭 ≈ **180라인/45파일** → 텍스트 도구 예상 정밀도 ≈ 15%.
+  (M2 의 gold 8 보다 풍부 → 측정 신뢰도 충분.)
+- **가설**:
+  - B serena / G scip / A codegraph = enum 상수 참조 정밀 해소 → **고정밀**.
+  - C zoekt / D rg / E bare = `'kotlin'` 양측 과대매칭(문자열·경로·타입명·코루틴) → 함정 대량 → **저정밀**.
+  - H zoekt+ctags = `sym:` 로 일부 개선 관전.
+  - F cocoindex = 'kotlin' 의미 분산 → 저재현.
 
-### gold 산출 방법 (반드시 도구 비사용·소스 직접 판독)
-1. `rg "updateLanguage\("` 로 후보 전수 추출(이건 gold '후보 탐색'용일 뿐, 정답 출처 아님).
-2. 각 매치를 소스에서 읽어 **수신자 타입·방향**을 손으로 판별 →
-   `TypeToJsonDialogPresenter` 수신자만 gold, 나머지(JsonToType 방향·View 동명)는 **함정(traps_must_exclude)**.
-3. `(file:line)` 단위로 gold/trap 고정. provenance(v1.12.1) 명시.
-   ※ gold 는 새 세션에서 직접 산출할 것. 이 문서엔 케이스 설계만 있고 gold 수치는 비워둠(무오염 원칙).
+### 서브에이전트 격리(ALLOWED_TOOLS_BLOCK)
+W·L 모두 각 암의 **기존 ALLOWED_TOOLS_BLOCK 그대로**(소스 직접 Read/grep 금지, 해당 암 도구만).
+M3-W 는 공정성 전제(인덱스 범위에 Rust 포함, A안 확정)를 모든 암에 **동일 적용**한 인덱스를 대상으로 실행한다.
 
-### 이 케이스가 각 암에서 드러낼 가설
-| 암 | M3 예상 |
-|----|--------|
-| G scip / B serena | 완전수식 심볼로 정확히 한쪽만 → **고정밀(가설상 승자)** |
-| A codegraph | 이름 매칭 오탐 위험(M1 동명 오탐 재현 가능) |
-| C zoekt / D rg / E bare | 이름으로 양쪽·View 까지 매칭 → 함정 포함 → **precision 하락** |
-| H zoekt+ctags | sym: 로 심볼 구분 시 C 보다 개선되는지 관전 포인트 |
-| F cocoindex | 의미 동일 거울상 혼동 → **최저 정밀/재현 예상** |
+### gold 산출 방법 (도구 비사용·소스 직접 판독, 무오염)
+1. 후보 전수(탐색용일 뿐 정답 출처 아님): (W) `instance.export(` + `pub extern "C"` / (L) `SupportedLanguage.KOTLIN` + `rg -i kotlin`.
+2. 각 매치를 소스에서 읽어 (W) 호스트-바인딩/Rust-정의 여부, (L) enum 상수 심볼 참조 여부(문자열·경로·타입명 trap 배제)를 손판별.
+3. `(file:line)` 단위 gold/trap 고정. provenance(v1.12.1 / 1daf879). gold 수치는 본 문서에 적지 않음(세션 산출).
+
+### 가설 요약표
+| 암 | M3-W (ABI seam, 언어 간) | M3-L (다중언어 enum, 언어 내) |
+|----|----|----|
+| A codegraph | Rust 링크 누락 → 미포착 | enum 참조 정밀(이름오탐 일부 위험) |
+| B serena | 문자열=심볼아님 → 미포착 | **고정밀** |
+| C zoekt | 텍스트로 양측 → **승리** | 'kotlin' 과대매칭 → 저정밀 |
+| D rg+sg | 텍스트로 양측 → **승리** | 과대매칭 → 저정밀 |
+| E bare | 텍스트로 양측 → 승리(수작업) | 과대매칭 → 저정밀 |
+| F cocoindex | Rust 청크 시 부분성공 | 의미분산 → 저재현 |
+| G scip | **맹점(전멸)** | **고정밀(승자)** |
+| H zoekt+ctags | 텍스트로 양측 → 승리 | sym: 개선 관전 |
+
+→ **비단조 서열**: 경계가 *언어 간*(W)이면 텍스트 승, *언어 내 심볼*(L)이면 정밀 승. polyglot 코드베이스의 핵심 교훈.
 
 ---
 
-## 4. 손대야 할 파일 (6-way → 8-way, 2-case → 3-case)
+## 4. 손대야 할 파일 (6-way → 8-way, 2-case → 4-case: M1·M2·M3-W·M3-L)
 
 - `scip/` (신규 디렉터리): `requirements.txt`(or 설치 메모)·`build_index`(인덱싱 절차 스크립트)·`query.py`·`README.md`. cocoindex/ 패턴 모방.
 - `zoekt-ctags` 관련: 재인덱싱 절차를 `README.md` 재현 절에 추가(별도 디렉터리 불필요, 인덱스는 `.codegraph/` 하위·gitignore).
-- `dataset.yaml`: `arms` 에 `G_scip`, `H_zoekt_ctags` 추가. `cases` 에 **M3 블록 신규**(question·discriminators·gold(세션산출)·traps).
-- `benchmark-design.md`: 6→8 암 표, ALLOWED_TOOLS_BLOCK 표 2행 추가, 케이스 표에 M3 열, 실행 수 "8 암 × 3 케이스 = 24 서브에이전트".
+- `dataset.yaml`: `arms` 에 `G_scip`, `H_zoekt_ctags` 추가. `cases` 에 **M3-W·M3-L 블록 신규**(question·discriminators·gold(세션산출)·traps).
+  M3-W 는 `scope` 필드에 `tree-sitter-wasm/`(Rust) 포함을 명시(전 암 동일 적용).
+- `benchmark-design.md`: 6→8 암 표, ALLOWED_TOOLS_BLOCK 표 2행 추가, 케이스 표에 M3-W·M3-L 열,
+  실행 수 "8 암 × 4 케이스 = 32 서브에이전트", **비단조 서열(W=텍스트승 / L=정밀승)** 가설 명기.
 - `README.md`(parent): 암 표·결론·재현 절차(scip-kotlin, ctags 재인덱싱).
 - `results.md`: 스코어보드·효율·hit/miss·발견·격리감사·종합에 G·H 열과 M3 행 추가.
 - `report.html`: 제목·암 표·KPI·스코어보드 표·효율 표·hit/miss·차트 JS(AGG)에 G·H·M3 반영. (cocoindex 토큰처럼 입도 다르면 ‡ 주석.)
@@ -140,8 +184,10 @@ A/B 비교**해야 ctags 효과가 측정된다.
 
 ## 5. 공정성 / provenance 체크리스트
 - [ ] G(scip)·H(zoekt+ctags) 인덱스 모두 **v1.12.1 / 1daf879** 소스로 생성. sha·파일수 기록.
-- [ ] M3 gold 는 **8개 측정 도구 어느 것도 안 쓰고** 소스 직접 판독으로 산출.
-- [ ] 인덱스 범위 정렬: 모든 암이 `src/main + src/test` 동일 범위(M3 호출지점이 test 에도 있으면 포함).
+- [ ] M3-W·M3-L gold 는 **8개 측정 도구 어느 것도 안 쓰고** 소스 직접 판독으로 산출.
+- [ ] 인덱스 범위 정렬: 모든 암이 `src/main + src/test` 동일 범위(M3-L gold 가 test 에도 있으면 포함).
+- [ ] **M3-W 전용(A안 확정)**: 모든 암(A~H) 인덱스에 `tree-sitter-wasm/`(Rust) **포함하여 재인덱싱**. 기존 A~F 인덱스는
+      Kotlin-only 였으므로 반드시 재구축. 한쪽만 Rust 보이면 비교 무효 → 전 암 범위 일치가 성립 조건. 재인덱싱본 sha·파일수 기록.
 - [ ] 각 서브에이전트 transcript 전수 감사(허용 도구 외 사용 0 확인) — cocoindex 때처럼 `~/.claude/projects/.../subagents/agent-*.jsonl` 파싱.
 - [ ] N=1 한계 명시(또는 이참에 N≥3 검토 — 별도 결정).
 
@@ -149,13 +195,23 @@ A/B 비교**해야 ctags 효과가 측정된다.
 - **scip-kotlin 빌드 가능 여부**가 최대 리스크. 안 되면 G 암 보류하고 H+M3 만 진행할지 결정.
 - **ctags Kotlin 지원 수준**: 약하면 H 의 효과가 제한적 — 결과의 일부로 정직 기록.
 - M3 채점 단위는 M1 과 동일 `(file:line)` 권장(함수 단위면 텍스트 암이 또 라인→함수 부담).
-- (제언) 이 리포는 진짜 모노레포가 아니므로 "유사 서비스 정밀구분"은 거울상 구조로 흉내냄. 진짜 모노레포 스케일을
-  원하면 더 큰 멀티모듈 타깃 리포가 필요(현 범위 밖, 별도 논의).
+- **M3-W 범위 공정성(✅ A안으로 확정)**: 전 암(A~H) 인덱스에 Rust 크레이트 **포함하여 재인덱싱**. 기존 A~F 의 Kotlin-only
+  인덱스는 재구축 필요. scip(Kotlin 전용)·serena 등 정밀암의 Rust 미커버는 결과의 일부(맹점)로 드러남 — 이게 M3-W 의 의도.
+  남은 실무 리스크: 각 백엔드(codegraph/zoekt/scip 등)가 **Rust 파일을 실제로 인덱싱 가능한지** 세션에서 확인(불가한 백엔드는
+  "범위 내이나 미지원"으로 정직 기록 — 이 역시 맹점 데이터의 일부).
+- **M3-W 토큰 generic 함정**: `alloc`/`dealloc` 은 텍스트 오탐이 커 채점 noise — distinctive 한 `analyze_source`/
+  `get_last_error` 중심으로 질문·gold 를 구성하거나, generic 토큰은 trap 으로 명시.
+- (재정의) 이 리포는 진짜 모노레포가 아니라 **polyglot(Kotlin+Rust/WASM+다중 타깃언어)** 구조다. M3 는 모노레포 흉내가
+  아니라 이 **언어 경계(seam)** 를 정조준한다. 진짜 멀티모듈 모노레포 스케일이 별도로 필요하면 그건 현 범위 밖(별도 논의).
 
 ## 7. 실행 순서 (권장)
-1. H(zoekt+ctags) 먼저 — 저비용, 즉시 C 와 비교 가능.
-2. M3 케이스 설계 확정 + gold 소스 산출(소스 직접 판독).
-3. G(scip-kotlin) 인덱싱 시도 — 막히면 보고 후 보류 결정.
-4. 8 암 × 3 케이스 중 **신규 조합만** 실행: 기존 6암×2케이스 결과는 재사용, 신규 = (G·H)×(M1·M2·M3) + 전 암×M3.
-   - 즉 추가 실행 = G:3 + H:3 + (A~F)×M3 6 = **12 서브에이전트** (기존 12 + 신규 12 = 총 24).
-5. 채점 → 6종 문서 갱신 → transcript 격리 감사.
+> 범위 결정은 **A안(전 암 Rust 포함)으로 확정**됨 — 아래는 그 전제 위에서의 순서.
+
+1. **전 암(A~H) Rust 포함 재인덱싱**(A안 확정): 기존 A~F Kotlin-only 인덱스 재구축 + G·H 신규 생성. 각 백엔드 Rust 지원 여부 확인·기록.
+2. H(zoekt+ctags) 먼저 — 저비용, 즉시 C 와 비교 가능.
+3. M3-W·M3-L 케이스 설계 확정 + gold 소스 산출(소스 직접 판독, 무오염).
+4. G(scip-kotlin) 인덱싱 시도 — 막히면 보고 후 보류 결정.
+5. 8 암 × 4 케이스 중 **신규 조합만** 실행: 기존 6암×2케이스(M1·M2)는 재사용,
+   신규 = (G·H)×(M1·M2·M3-W·M3-L) + (A~F)×(M3-W·M3-L).
+   - 즉 추가 실행 = G:4 + H:4 + (A~F)×2 = 12 = **20 서브에이전트** (기존 12 + 신규 20 = 총 32).
+6. 채점 → 6종 문서 갱신 → transcript 격리 감사.
