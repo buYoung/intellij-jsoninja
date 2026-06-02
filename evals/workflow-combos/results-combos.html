@@ -1,0 +1,2756 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>도구 조합(워크플로) 벤치마크 결과</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== CSS 토큰 ===== */
+:root {
+  --primary: #1E40AF;
+  --primary-600: #2563EB;
+  --blue-500: #3B82F6;
+  --amber: #F59E0B;
+  --amber-700: #B45309;
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --border: #E2E8F0;
+  --text: #0F172A;
+  --text-muted: #475569;
+  --good: #15803D;
+  --good-bg: #DCFCE7;
+  --warn: #B45309;
+  --warn-bg: #FEF3C7;
+  --bad: #B91C1C;
+  --bad-bg: #FEE2E2;
+  --hero-from: #0B1B3B;
+  --hero-to: #14264d;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05);
+  --shadow-hover: 0 8px 16px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06);
+  --z-nav: 50;
+  --z-tooltip: 100;
+  /* 히트맵 색상 */
+  --heatmap-perfect: #DCFCE7;
+  --heatmap-good: #D1FAE5;
+  --heatmap-warn: #FEF3C7;
+  --heatmap-bad: #FEE2E2;
+  /* 도구 믹스 색상 */
+  --color-zoekt: #3B82F6;
+  --color-sg: #8B5CF6;
+  --color-serena: #F59E0B;
+  --color-read: #10B981;
+  --color-grep: #EF4444;
+}
+
+/* ===== 초기화 ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Fira Sans', system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ===== 접근성 ===== */
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ===== 네비게이션 ===== */
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-nav);
+  background: var(--hero-from);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.site-nav::-webkit-scrollbar { display: none; }
+
+.site-nav-inner {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 16px;
+  max-width: 1440px;
+  margin: 0 auto;
+  white-space: nowrap;
+}
+
+.site-nav a {
+  display: inline-block;
+  color: rgba(255,255,255,0.75);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  transition: color 150ms, background 150ms;
+  cursor: pointer;
+}
+.site-nav a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.12);
+}
+
+/* ===== 레이아웃 ===== */
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.section {
+  padding: 48px 0;
+  scroll-margin-top: 56px;
+}
+
+/* ===== 히어로 ===== */
+.hero {
+  background: linear-gradient(135deg, var(--hero-from) 0%, var(--hero-to) 100%);
+  color: #fff;
+  padding: 48px 0 40px;
+}
+
+.hero-title {
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+
+.hero-subtitle {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 28px;
+}
+
+.kpi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.kpi-chip {
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  color: rgba(255,255,255,0.85);
+  white-space: nowrap;
+}
+
+.governance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--good-bg);
+  color: var(--good);
+  border: 1px solid #86EFAC;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ===== 섹션 제목 ===== */
+.section-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ===== 카드 ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.card:hover {
+  border-color: #CBD5E1;
+  box-shadow: var(--shadow-hover);
+}
+
+/* ===== 결론 콜아웃 ===== */
+.callout-conclusion {
+  background: #FFFBEB;
+  border: 2px solid var(--amber);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  position: relative;
+}
+.callout-conclusion-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--amber-700);
+  margin-bottom: 12px;
+}
+.callout-conclusion-main {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 16px;
+  line-height: 1.7;
+}
+.callout-conclusion-detail {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+.callout-conclusion-emphasis {
+  background: var(--hero-from);
+  color: #fff;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+/* ===== 그리드 ===== */
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+@media (max-width: 1024px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+/* ===== 조합 카드 ===== */
+.combo-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.combo-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: var(--shadow-hover);
+}
+
+.combo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.combo-badge-c1 { background: #DBEAFE; color: #1E40AF; }
+.combo-badge-c2 { background: #EDE9FE; color: #5B21B6; }
+.combo-badge-c3 { background: #FCE7F3; color: #9D174D; }
+.combo-badge-c4 { background: #D1FAE5; color: #065F46; }
+.combo-badge-c5 { background: #FEF9C3; color: #92400E; }
+.combo-badge-c6 { background: #F1F5F9; color: #334155; }
+
+.combo-baseline-badge {
+  display: inline-block;
+  background: #D1FAE5;
+  color: #065F46;
+  border: 1px solid #6EE7B7;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  margin-left: 8px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 12px 0;
+  font-size: 13px;
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+}
+
+.pipeline-step {
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  color: var(--text);
+}
+.pipeline-step-highlight {
+  background: #FEF3C7;
+  border: 1px solid #FCD34D;
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  color: var(--amber-700);
+  font-weight: 600;
+}
+.pipeline-arrow {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.combo-intent {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.combo-distinctive {
+  display: inline-block;
+  background: #F1F5F9;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 11px;
+  padding: 2px 8px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.combo-footer-note {
+  margin-top: 20px;
+  padding: 12px 16px;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ===== 히트맵 테이블 ===== */
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.heatmap-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.heatmap-table thead tr {
+  background: #F1F5F9;
+}
+.heatmap-table th {
+  padding: 10px 14px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.heatmap-table th.col-combo { text-align: left; }
+.heatmap-table th.col-discriminative {
+  background: #FEF3C7;
+  color: var(--amber-700);
+  position: relative;
+}
+.heatmap-table th.col-discriminative::after {
+  content: "변별";
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--amber);
+}
+.heatmap-table td {
+  padding: 10px 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  transition: background 150ms;
+}
+.heatmap-table td.col-combo {
+  text-align: left;
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.heatmap-table tbody tr:hover td { background: rgba(37, 99, 235, 0.03); }
+.heatmap-table tbody tr:last-child td { border-bottom: none; }
+
+.metric-chips {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.metric-chip-label {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.75;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.chip-perfect { background: var(--heatmap-perfect); color: var(--good); }
+.chip-good { background: #D1FAE5; color: #047857; }
+.chip-warn { background: var(--heatmap-warn); color: var(--warn); }
+.chip-bad { background: var(--heatmap-bad); color: var(--bad); }
+
+.sd-note {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-top: 1px;
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+}
+/* C6×M2 최대분산 경고 강조 */
+.sd-note-critical {
+  display: block;
+  font-size: 10px;
+  color: var(--bad);
+  font-weight: 700;
+  margin-top: 1px;
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  background: var(--bad-bg);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.chip-warn-critical {
+  background: var(--bad-bg);
+  border: 2px solid #FCA5A5;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  color: var(--bad);
+}
+
+/* ===== 히트맵 범례 ===== */
+.heatmap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: center;
+}
+.legend-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-right: 4px;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+.legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.table-note {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #F8FAFC;
+  border-left: 3px solid var(--amber);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ===== 다이버징 막대 차트 (반응형) ===== */
+.dchart {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 8px 0 4px;
+}
+.dchart-axislabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.dchart-axislabels .neg { color: var(--bad); }
+.dchart-axislabels .pos { color: var(--good); }
+.dchart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.dchart-metric {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.dchart-metric small {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.dchart-delta {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dchart-delta.pos { color: var(--good); background: var(--good-bg); }
+.dchart-delta.neg { color: var(--bad); background: var(--bad-bg); }
+.dchart-delta.zero { color: var(--text-muted); background: #F1F5F9; }
+.dchart-track {
+  position: relative;
+  height: 22px;
+  background: #F1F5F9;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.dchart-axis {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #CBD5E1;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+.dchart-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+}
+.dchart-bar.pos {
+  left: 50%;
+  background: var(--good);
+  opacity: 0.85;
+  border-radius: 0 3px 3px 0;
+}
+.dchart-bar.neg {
+  right: 50%;
+  background: var(--bad);
+  opacity: 0.85;
+  border-radius: 3px 0 0 3px;
+}
+.dchart-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+/* ===== 요지 카드 ===== */
+.insight-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+}
+@media (max-width: 1024px) {
+  .insight-cards { grid-template-columns: 1fr; }
+}
+
+.insight-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.insight-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.insight-number-good { background: var(--good-bg); color: var(--good); }
+.insight-number-bad { background: var(--bad-bg); color: var(--bad); }
+.insight-number-neutral { background: #DBEAFE; color: var(--primary); }
+.insight-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.insight-body {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ===== 경고 박스 ===== */
+.callout-warning {
+  display: flex;
+  gap: 12px;
+  background: var(--warn-bg);
+  border: 1px solid #FCD34D;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-top: 24px;
+}
+.callout-warning-icon { flex-shrink: 0; margin-top: 1px; }
+.callout-warning-body {
+  font-size: 13px;
+  color: var(--warn);
+  line-height: 1.6;
+}
+.callout-warning-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+/* ===== 케이스 섹션 ===== */
+.case-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+@media (max-width: 768px) {
+  .case-cards { grid-template-columns: 1fr; }
+}
+
+.case-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.case-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.case-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.4;
+}
+.case-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--amber);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.case-perfect-badge {
+  background: var(--good-bg);
+  color: var(--good);
+  border: 1px solid #86EFAC;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.case-body {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.case-body strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.case-body code {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  color: var(--primary);
+}
+
+/* ===== 미니 막대/점 차트 (C1 M2 붕괴) ===== */
+.mini-bar-chart {
+  margin: 14px 0;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.mini-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.mini-bar-row:last-child { margin-bottom: 0; }
+.mini-bar-label {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 36px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.mini-bar-track {
+  flex: 1;
+  height: 18px;
+  background: #E2E8F0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+}
+.mini-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: width 300ms;
+}
+.mini-bar-fill-normal { background: #60A5FA; }
+.mini-bar-fill-warn { background: var(--amber); }
+.mini-bar-fill-bad { background: var(--bad); }
+.mini-bar-value {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  width: 44px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.mini-bar-value-normal { color: #1D4ED8; }
+.mini-bar-value-warn { color: var(--warn); }
+.mini-bar-value-bad { color: var(--bad); }
+
+/* ===== FP 빈도 막대 ===== */
+.fp-chart {
+  margin: 14px 0;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.fp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.fp-row:last-child { margin-bottom: 0; }
+.fp-label {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 11px;
+  color: var(--text);
+  width: 240px;
+  flex-shrink: 0;
+}
+.fp-trap-label {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 240px;
+  flex-shrink: 0;
+}
+.fp-bar-track {
+  flex: 1;
+  height: 16px;
+  background: #E2E8F0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.fp-bar-fill {
+  height: 100%;
+  background: var(--bad);
+  border-radius: var(--radius-sm);
+  opacity: 0.8;
+}
+.fp-bar-fill-trap {
+  height: 100%;
+  background: var(--text-muted);
+  border-radius: var(--radius-sm);
+  opacity: 0.5;
+}
+.fp-value {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bad);
+  width: 32px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.fp-value-trap {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 32px;
+  flex-shrink: 0;
+  text-align: right;
+}
+@media (max-width: 768px) {
+  .fp-label, .fp-trap-label { width: 140px; font-size: 10px; }
+}
+
+/* ===== 비용 테이블 ===== */
+.cost-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cost-table thead tr {
+  background: #F1F5F9;
+}
+.cost-table th {
+  padding: 10px 12px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.cost-table th:first-child { text-align: left; }
+.cost-table td {
+  padding: 10px 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.cost-table td:first-child { text-align: left; }
+.cost-table tbody tr:hover td { background: rgba(37, 99, 235, 0.03); }
+.cost-table tbody tr:last-child td { border-bottom: none; }
+
+.inline-bar-cell {
+  position: relative;
+  min-width: 100px;
+}
+.inline-bar-bg {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 0;
+}
+.inline-bar-value {
+  position: relative;
+  z-index: 1;
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stacked-bar {
+  display: flex;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  min-width: 100px;
+  margin: 0 auto;
+}
+.stacked-segment {
+  height: 100%;
+  min-width: 1px;
+}
+.seg-zoekt { background: var(--color-zoekt); }
+.seg-sg { background: var(--color-sg); }
+.seg-serena { background: var(--color-serena); }
+.seg-read { background: var(--color-read); }
+.seg-grep { background: var(--color-grep); }
+
+.stacked-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  justify-content: center;
+}
+.stacked-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.stacked-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.cost-note-list {
+  margin-top: 16px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cost-note-list li {
+  padding: 10px 14px;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.cost-note-list li strong { color: var(--text); }
+.cost-tag-best {
+  background: var(--good-bg);
+  color: var(--good);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-left: 4px;
+}
+.cost-tag-worst {
+  background: var(--bad-bg);
+  color: var(--bad);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-left: 4px;
+}
+
+/* ===== 안정성 ===== */
+.stability-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 20px 0;
+}
+.stability-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stability-label {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+  width: 130px;
+  flex-shrink: 0;
+}
+.stability-track {
+  flex: 1;
+  height: 20px;
+  background: #E2E8F0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.stability-fill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+}
+.stability-fill-high { background: var(--bad); opacity: 0.85; }
+.stability-fill-mid { background: var(--amber); opacity: 0.85; }
+.stability-fill-low { background: var(--good); opacity: 0.85; }
+.stability-value {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  width: 48px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* ===== 권고 카드 ===== */
+.rec-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.rec-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.rec-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: var(--shadow-hover);
+}
+.rec-card-primary {
+  border-color: var(--primary);
+  border-width: 2px;
+  background: #EFF6FF;
+}
+.rec-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.rec-number-primary { background: var(--primary); color: #fff; }
+.rec-number-secondary { background: #F1F5F9; color: var(--text-muted); font-size: 14px; }
+.rec-content { flex: 1; }
+.rec-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.rec-body {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.rec-body strong { color: var(--text); }
+.rec-body code {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  background: rgba(0,0,0,0.05);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ===== details (무결성) ===== */
+.integrity-details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.integrity-summary {
+  padding: 16px 20px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #F8FAFC;
+  border-bottom: 1px solid var(--border);
+  list-style: none;
+  transition: background 150ms;
+  user-select: none;
+}
+.integrity-summary:hover { background: #F1F5F9; }
+.integrity-summary::marker { display: none; }
+.integrity-summary::-webkit-details-marker { display: none; }
+.integrity-chevron {
+  margin-left: auto;
+  transition: transform 200ms;
+}
+details[open] .integrity-chevron {
+  transform: rotate(180deg);
+}
+
+.integrity-body {
+  padding: 20px;
+}
+.integrity-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.integrity-row:last-child { border-bottom: none; }
+.integrity-key {
+  font-weight: 600;
+  color: var(--text);
+  width: 200px;
+  flex-shrink: 0;
+}
+.integrity-value {
+  color: var(--text-muted);
+  flex: 1;
+}
+.integrity-value code {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 11px;
+  background: #F1F5F9;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ===== 푸터 ===== */
+.footer {
+  background: var(--hero-from);
+  color: rgba(255,255,255,0.75);
+  padding: 40px 0;
+  margin-top: 48px;
+}
+.footer-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.artifact-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.artifact-list li {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+}
+.artifact-list a {
+  color: #93C5FD;
+  text-decoration: none;
+}
+.artifact-list a:hover { color: #BFDBFE; }
+.footer-divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  margin: 24px 0;
+}
+.footer-meta {
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+}
+
+/* ===== 상태 배지 ===== */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.status-badge-good { background: var(--good-bg); color: var(--good); }
+.status-badge-bad { background: var(--bad-bg); color: var(--bad); }
+.status-badge-warn { background: var(--warn-bg); color: var(--warn); }
+.status-badge-neutral { background: #DBEAFE; color: var(--primary); }
+
+/* ===== 코드 ===== */
+code {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  color: var(--primary);
+}
+
+/* ===== 구분선 ===== */
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+/* ===== 히어로 KPI 라벨 ===== */
+.kpi-meta-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+  margin-bottom: 8px;
+}
+.kpi-chip-k {
+  color: rgba(255,255,255,0.5);
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+/* ===== 섹션 아이콘/힌트/리드 (번호 없는 섹션) ===== */
+.section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--amber);
+  color: #fff;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+.section-hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber-700);
+  background: var(--warn-bg);
+  border: 1px solid #FCD34D;
+  border-radius: var(--radius-sm);
+  padding: 2px 10px;
+}
+.section-lead {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: -6px 0 18px;
+}
+.section-lead strong { color: var(--text); }
+
+/* ===== 용어 사전 ===== */
+.glossary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 1024px) {
+  .glossary-grid { grid-template-columns: 1fr; }
+}
+.glossary-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+.glossary-group-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.glossary-item {
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.glossary-item:last-child { border-bottom: none; padding-bottom: 0; }
+.glossary-term {
+  font-family: 'Fira Code', ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.glossary-count {
+  font-family: 'Fira Sans', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--good);
+  background: var(--good-bg);
+  border-radius: 4px;
+  padding: 0 5px;
+  margin-left: 4px;
+}
+.glossary-def {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-top: 3px;
+}
+.glossary-def code {
+  font-size: 11px;
+  padding: 0 4px;
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 스티키 네비게이션 ===== -->
+<nav class="site-nav" aria-label="섹션 탐색">
+  <div class="site-nav-inner">
+    <a href="#glossary">용어</a>
+    <a href="#conclusion">결론</a>
+    <a href="#combos">조합</a>
+    <a href="#scoreboard">스코어보드</a>
+    <a href="#delta">변화량</a>
+    <a href="#cases">케이스</a>
+    <a href="#cost">비용</a>
+    <a href="#stability">안정성</a>
+    <a href="#recommendations">권고</a>
+    <a href="#integrity">무결성</a>
+  </div>
+</nav>
+
+<!-- ===== 히어로 ===== -->
+<header class="hero">
+  <div class="container">
+    <h1 class="hero-title">도구 조합(워크플로) 벤치마크 결과</h1>
+    <p class="hero-subtitle">C1~C6 × M1·M2·M3-W·M3-L · N=3 · 같은 gold·blind·±1 채점</p>
+
+    <p class="kpi-meta-label">1차 실행(C1~C4) — 2026-06-01, wf_5e31d1d3-f29, 48셀</p>
+    <div class="kpi-chips">
+      <span class="kpi-chip"><span class="kpi-chip-k">Run</span>wf_5e31d1d3-f29</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">에이전트</span>49 = 워밍업 1 + 측정 48셀</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">총 토큰</span>1,414,506 (셀당 평균 ~29K)</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">총 tool-use</span>700 (셀당 평균 ~14.6회)</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">총 실행시간</span>524초 (전체 병렬 벽시계)</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">실행일</span>2026-06-01</span>
+    </div>
+
+    <p class="kpi-meta-label" style="margin-top:12px;">증분 실행(C5·C6) — 2026-06-02, wf_3a30b864-737, 24셀 (순차 재실행)</p>
+    <div class="kpi-chips">
+      <span class="kpi-chip"><span class="kpi-chip-k">Run</span>wf_3a30b864-737</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">에이전트</span>25 = 워밍업 1 + 측정 24셀</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">총 토큰</span>709,311</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">실행일</span>2026-06-02</span>
+    </div>
+
+    <p class="kpi-meta-label" style="margin-top:12px;">전체 합계 — 총 6조합 × 4케이스 × N=3 = 72 측정셀</p>
+    <div class="kpi-chips">
+      <span class="kpi-chip"><span class="kpi-chip-k">총 셀</span>72 (6조합 × 4케이스 × N=3)</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">총 토큰</span>2,123,817 (양 실행 합계)</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">검증모델</span>claude-sonnet-4-6</span>
+      <span class="kpi-chip"><span class="kpi-chip-k">채점</span>grader.py 캐논 + opus 종합</span>
+    </div>
+
+    <div class="governance-badge">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      거버넌스 71/72 깨끗 (비준수 1셀: C5×M3-W×r1 Bash)
+    </div>
+  </div>
+</header>
+
+<!-- ===== 0. 용어 한눈에 ===== -->
+<section id="glossary" class="section" style="padding-top: 40px;">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </span>
+      용어 한눈에
+      <span class="section-hint">먼저 읽어주세요</span>
+    </h2>
+    <p class="section-lead">
+      이 리포트는 약어가 많습니다. 결론(①)부터 읽더라도 아래 정의를 먼저 훑어보면
+      <strong>M3-W 와 M3-L 의 차이</strong>나 <strong>stickiness</strong> 같은 용어에서 막히지 않습니다.
+    </p>
+
+    <div class="glossary-grid">
+      <!-- 4개 케이스 -->
+      <div class="glossary-group">
+        <p class="glossary-group-title">4개 케이스 — 측정 문제</p>
+        <div class="glossary-item">
+          <span class="glossary-term">M1 — 시그니처 영향<span class="glossary-count">정답 33</span></span>
+          <p class="glossary-def">함수 시그니처를 바꿨을 때 영향받는 호출부를 모두 찾는 문제.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">M2 — 동작 전파<span class="glossary-count">정답 8</span></span>
+          <p class="glossary-def">한 변경이 호출 사슬을 따라 퍼지는 함수 전체 집합(transitive 폐포)을 추적.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">M3-W — 언어 간 경계<span class="glossary-count">정답 8</span></span>
+          <p class="glossary-def"><strong>언어 경계를 넘는</strong> 문제 — Kotlin↔Rust(WASM ABI) 양쪽 심볼을 찾음 (Kotlin 4 + Rust 4, 함정 2).</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">M3-L — enum 참조<span class="glossary-count">정답 29</span></span>
+          <p class="glossary-def"><strong>한 언어 안에서</strong> 특정 enum 이 참조되는 모든 지점을 찾음 — M3-W 가 경계를 넘는 것과 달리 동일 언어 내 대량 참조.</p>
+        </div>
+      </div>
+
+      <!-- 6개 조합 -->
+      <div class="glossary-group">
+        <p class="glossary-group-title">6개 조합 — 도구 파이프라인 (상세는 ② 조합)</p>
+        <div class="glossary-item">
+          <span class="glossary-term">C1</span>
+          <p class="glossary-def"><code>zoekt+ctags → serena → read</code> — 텍스트로 후보를 넓게 잡고 serena 심볼로 검증·확장.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">C2</span>
+          <p class="glossary-def"><code>serena → zoekt+ctags → read</code> — 심볼로 먼저 정밀하게 시작하고 텍스트로 누락 보정.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">C3</span>
+          <p class="glossary-def"><code>zoekt+ctags → ast-grep → serena → read</code> — 텍스트 → 구조패턴(AST) → 심볼 3단 정제.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">C4 <span class="combo-baseline-badge" style="margin-left:2px;">베이스라인</span></span>
+          <p class="glossary-def"><code>zoekt+ctags → read</code> — 가장 단순, serena 없음. 다른 조합을 재는 기준선.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">C5</span>
+          <p class="glossary-def"><code>serena → read</code> — 텍스트 인덱스 전무, 순수 심볼 도구(LSP)+읽기 끝점. zoekt/sg/rg/bash 금지.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">C6</span>
+          <p class="glossary-def"><code>grep·find(셸) → read</code> — 인덱스·심볼·LSP 전무, 출고 상태 텍스트검색 끝점. rg/zoekt/sg/serena 금지.</p>
+        </div>
+      </div>
+
+      <!-- 측정·채점 용어 -->
+      <div class="glossary-group">
+        <p class="glossary-group-title">측정 · 채점 용어</p>
+        <div class="glossary-item">
+          <span class="glossary-term">N=3</span>
+          <p class="glossary-def">각 셀(조합 × 케이스)을 3회 반복 측정 → 중앙값·표준편차(SD) 산출.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">gold · blind</span>
+          <p class="glossary-def"><strong>gold</strong> = 사람이 검증한 정답 집합. <strong>blind</strong> = 채점기가 어느 조합 결과인지 모른 채 같은 기준으로 채점.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">±1 채점</span>
+          <p class="glossary-def">보고한 라인이 정답 라인과 ±1 줄 이내면 정답 인정(라인 드리프트 흡수).</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">recall · precision</span>
+          <p class="glossary-def"><strong>recall(재현율)</strong> = 정답 중 찾아낸 비율. <strong>precision(정밀도)</strong> = 찾아낸 것 중 정답 비율(오탐이 적을수록 높음).</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">tool-use · stickiness</span>
+          <p class="glossary-def"><strong>tool-use</strong> = 셀당 전체 도구 호출 횟수. <strong>stickiness</strong> = 강제된 distinctive 도구를 실제로 몇 번 불렀는지(도구 믹스 분포) — 조합이 의도대로 차별화됐는지 보는 지표.</p>
+        </div>
+        <div class="glossary-item">
+          <span class="glossary-term">도구</span>
+          <p class="glossary-def"><code>zoekt+ctags</code> 텍스트·심볼 인덱스 · <code>serena</code> LSP 심볼 분석 · <code>ast-grep(sg)</code> 구조(AST) 패턴 · <code>read</code> 파일 직접 확인.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ===== 1. 결론 ===== -->
+<section id="conclusion" class="section">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-number">1</span>
+      한 줄 결론
+    </h2>
+    <div class="callout-conclusion">
+      <p class="callout-conclusion-title">핵심 결론</p>
+      <p class="callout-conclusion-main">
+        "조합의 순이득은 작고 케이스 한정적이며, 두 신규 끝점(C5·C6)이 그 한계를 더 또렷이 보여준다."
+      </p>
+      <p class="callout-conclusion-detail">
+        단일도구(N=1) 대비 수치 향상은 여전히 <strong>M2(동작 전파) recall 0.75 → 0.875</strong>, <strong>M3-L 정밀도 0.76 → 1.00</strong> 둘뿐이고,
+        둘 다 serena/sg 없는 <strong>최단순 C4(zoekt+ctags→read)만으로 달성</strong>된다.
+        신규 두 조합은 공간의 양 끝을 못박는다:
+        <strong>C6(grep/find→read)</strong>는 6조합 최저비용·최고속이지만 M2 재현율이 치명적으로 불안정(±0.331 — 전 연구 최대 분산).
+        <strong>C5(serena→read)</strong>는 단일도구 serena의 약점을 그대로 재현(M1 0.758·M2 0.75)하면서 6조합 중 비용 최고(캐시읽기 350K·tool-use 18.2).
+      </p>
+      <div class="callout-conclusion-emphasis">
+        결론 불변: C4(zoekt+ctags→read)가 비용·속도·품질의 최적 균형 — 심볼 도구를 얹으면(C1·C2·C5) 비싸지면서 M3-W 정밀도를 깎고, 텍스트만 쓰면(C6) 가장 싸지만 M2 폐포 추적이 운에 좌우된다.
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ===== 2. 측정 대상 ===== -->
+<section id="combos" class="section">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-number">2</span>
+      측정 대상 — 6개 조합
+    </h2>
+
+    <div class="grid-4">
+      <!-- C1 -->
+      <div class="combo-card">
+        <div class="combo-badge combo-badge-c1">C1</div>
+        <div class="pipeline">
+          <span class="pipeline-step">zoekt+ctags</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step-highlight">serena</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step">read</span>
+        </div>
+        <div>
+          <span class="combo-distinctive">강제: serena ≥1회</span>
+        </div>
+        <p class="combo-intent">텍스트로 후보를 넓게 잡고 serena 로 심볼 검증·확장</p>
+      </div>
+
+      <!-- C2 -->
+      <div class="combo-card">
+        <div class="combo-badge combo-badge-c2">C2</div>
+        <div class="pipeline">
+          <span class="pipeline-step-highlight">serena</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step">zoekt+ctags</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step">read</span>
+        </div>
+        <div>
+          <span class="combo-distinctive">강제: serena 먼저(first)</span>
+        </div>
+        <p class="combo-intent">심볼로 정밀하게 시작하고 텍스트로 누락 보정</p>
+      </div>
+
+      <!-- C3 -->
+      <div class="combo-card">
+        <div class="combo-badge combo-badge-c3">C3</div>
+        <div class="pipeline">
+          <span class="pipeline-step">zoekt+ctags</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step-highlight">ast-grep(sg)</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step-highlight">serena</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step">read</span>
+        </div>
+        <div>
+          <span class="combo-distinctive">강제: sg ≥1 &amp; serena ≥1</span>
+        </div>
+        <p class="combo-intent">텍스트 → 구조패턴(AST) → 심볼 3단 정제</p>
+      </div>
+
+      <!-- C4 -->
+      <div class="combo-card">
+        <div class="combo-badge combo-badge-c4">C4</div>
+        <span class="combo-baseline-badge">베이스라인</span>
+        <div class="pipeline" style="margin-top:12px;">
+          <span class="pipeline-step">zoekt+ctags</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step">read</span>
+        </div>
+        <div>
+          <span class="combo-distinctive">강제: serena 금지</span>
+        </div>
+        <p class="combo-intent">단일도구 H 에 read 확인만 더함</p>
+      </div>
+
+      <!-- C5 -->
+      <div class="combo-card">
+        <div class="combo-badge combo-badge-c5">C5</div>
+        <div class="pipeline">
+          <span class="pipeline-step-highlight">serena</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step">read</span>
+        </div>
+        <div>
+          <span class="combo-distinctive">강제: serena ≥1, zoekt/sg/rg/bash 금지</span>
+        </div>
+        <p class="combo-intent">텍스트 인덱스 없는 "순수 심볼도구+읽기" 끝점</p>
+      </div>
+
+      <!-- C6 -->
+      <div class="combo-card">
+        <div class="combo-badge combo-badge-c6">C6</div>
+        <div class="pipeline">
+          <span class="pipeline-step-highlight" style="background:#FEE2E2; border-color:#FCA5A5; color:#B91C1C;">grep·find(셸)</span>
+          <span class="pipeline-arrow">→</span>
+          <span class="pipeline-step">read</span>
+        </div>
+        <div>
+          <span class="combo-distinctive">강제: grep|find ≥1, rg/zoekt/sg/serena 금지</span>
+        </div>
+        <p class="combo-intent">인덱스·심볼·LSP 전무, 출고 상태 텍스트검색 끝점</p>
+      </div>
+    </div>
+
+    <div class="combo-footer-note">
+      4 케이스(M1 시그니처 영향 33 · M2 동작 전파 8 · M3-W 언어경계 8 · M3-L enum 참조 29) × 6조합 × N=3 = <strong>72 측정셀</strong>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ===== 3. 스코어보드 ===== -->
+<section id="scoreboard" class="section">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-number">3</span>
+      스코어보드 — N=3 중앙값 히트맵
+    </h2>
+
+    <!-- 범례 -->
+    <div class="heatmap-legend" style="margin-bottom: 14px;">
+      <span class="legend-label">수치 범례:</span>
+      <span class="legend-item">
+        <span class="legend-swatch" style="background:#DCFCE7; border-color:#86EFAC;"></span>
+        1.00 (완벽)
+      </span>
+      <span class="legend-item">
+        <span class="legend-swatch" style="background:#D1FAE5; border-color:#6EE7B7;"></span>
+        0.85~0.99 (양호)
+      </span>
+      <span class="legend-item">
+        <span class="legend-swatch" style="background:#FEF3C7; border-color:#FCD34D;"></span>
+        0.66~0.84 (주의)
+      </span>
+      <span class="legend-item">
+        <span class="legend-swatch" style="background:#FEE2E2; border-color:#FCA5A5;"></span>
+        &lt;0.66 (나쁨)
+      </span>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="heatmap-table" aria-label="N=3 중앙값 히트맵 스코어보드">
+        <thead>
+          <tr>
+            <th class="col-combo">조합</th>
+            <th>M1 (정답 33)</th>
+            <th class="col-discriminative">M2 (정답 8)</th>
+            <th class="col-discriminative">M3-W (정답 8)</th>
+            <th>M3-L (정답 29)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- C1 -->
+          <tr>
+            <td class="col-combo">C1</td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-warn">
+                  <span class="metric-chip-label">R</span>0.75
+                  <span class="sd-note">±0.26</span>
+                </span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-bad">
+                  <span class="metric-chip-label">P</span>0.53
+                  <span class="sd-note">±0.08</span>
+                </span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+          </tr>
+          <!-- C2 -->
+          <tr>
+            <td class="col-combo">C2</td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-good">
+                  <span class="metric-chip-label">R</span>0.875
+                  <span class="sd-note">±0.14</span>
+                </span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-bad">
+                  <span class="metric-chip-label">P</span>0.50
+                  <span class="sd-note">±0.00</span>
+                </span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+          </tr>
+          <!-- C3 -->
+          <tr>
+            <td class="col-combo">C3</td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-good">
+                  <span class="metric-chip-label">R</span>0.875
+                  <span class="sd-note">±0.13</span>
+                </span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-warn">
+                  <span class="metric-chip-label">P</span>0.667
+                  <span class="sd-note">±0.24</span>
+                </span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+          </tr>
+          <!-- C4 -->
+          <tr>
+            <td class="col-combo">C4</td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-good">
+                  <span class="metric-chip-label">R</span>0.875
+                  <span class="sd-note">±0.07</span>
+                </span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-warn">
+                  <span class="metric-chip-label">P</span>0.667
+                  <span class="sd-note">±0.19</span>
+                </span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+          </tr>
+          <!-- C5 -->
+          <tr>
+            <td class="col-combo">C5</td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-bad">
+                  <span class="metric-chip-label">R</span>0.758
+                  <span class="sd-note">±0.00</span>
+                </span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-warn">
+                  <span class="metric-chip-label">R</span>0.75
+                  <span class="sd-note">±0.22</span>
+                </span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-warn">
+                  <span class="metric-chip-label">P</span>0.667<sup>¹</sup>
+                  <span class="sd-note">±0.04</span>
+                </span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect">
+                  <span class="metric-chip-label">P</span>1.00
+                  <span class="sd-note">±0.04</span>
+                </span>
+              </div>
+            </td>
+          </tr>
+          <!-- C6 -->
+          <tr>
+            <td class="col-combo">C6</td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="chip-warn-critical">
+                  <span class="metric-chip-label">R</span>0.875
+                  <span class="sd-note-critical">±0.331 !</span>
+                </span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">R</span>1.00</span>
+                <span class="metric-chip chip-warn">
+                  <span class="metric-chip-label">P</span>0.727
+                  <span class="sd-note">±0.18</span>
+                </span>
+              </div>
+            </td>
+            <td>
+              <div class="metric-chips">
+                <span class="metric-chip chip-perfect">
+                  <span class="metric-chip-label">R</span>1.00
+                  <span class="sd-note">±0.02</span>
+                </span>
+                <span class="metric-chip chip-perfect"><span class="metric-chip-label">P</span>1.00</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="table-note">
+      M1·M3-L 은 C1~C4·C6 에서 천장(1.00/1.00). <strong>C5 만 M1 재현율 0.758 로 떨어진다</strong>(serena DI 맹점). <strong>변별은 M1(C5↓)·M2(재현율·분산)·M3-W(정밀도)에서</strong> 일어난다.
+      C6×M2 ±0.331 은 전 72셀 최대 분산 — 중앙값이 C4(±0.07)와 같아도 재현성이 전혀 다름.
+    </p>
+    <p class="table-note" style="margin-top:8px; font-size:11px; color:var(--text-muted);">
+      ¹ C5×M3-W 중앙값은 준수 2런(r2·r3) 기준 0.70, 3런 전체 기준 0.667. r1 은 C5 에서 금지된 Bash 를 1회 사용해 비준수(조합 미실현)로 분류(§9). 결론은 어느 기준이든 동일(≈0.67~0.73, serena 단독 1.00 미달).
+    </p>
+    <p class="table-note" style="margin-top:8px; padding:0; background:none; border:none; font-size:11px; color:var(--text-muted);">
+      약어 — <strong>R</strong> = recall(재현율, 정답 중 찾아낸 비율) · <strong>P</strong> = precision(정밀도, 찾아낸 것 중 정답 비율) · <strong>±</strong> = N=3 표준편차(SD, 낮을수록 재현성 높음) · <strong>M1~M3-L</strong> = 측정 케이스(괄호 안 숫자는 정답 개수). 상세는 <a href="#glossary">용어 한눈에</a>.
+    </p>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ===== 4. Delta ===== -->
+<section id="delta" class="section">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-number">4</span>
+      단일도구 baseline 대비 변화량 (delta)
+    </h2>
+
+    <!-- 다이버징 차트 -->
+    <div class="card" style="margin-bottom: 24px;">
+      <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+        기준선: 단일도구 결과(<code>../codegraph-vs-serena/results.md</code> §3). 0 중심 — 양수(녹색 우측) = 향상, 음수(적색 좌측) = 손해.
+      </p>
+      <div class="dchart">
+        <div class="dchart-axislabels">
+          <span class="neg">← 손해</span>
+          <span class="pos">향상 →</span>
+        </div>
+        <!-- M1 recall (C1~C4·C6) -->
+        <div class="dchart-row">
+          <div class="dchart-head">
+            <span class="dchart-metric">M1 recall <small>(C1~C4·C6)</small></span>
+            <span class="dchart-delta zero">±0</span>
+          </div>
+          <div class="dchart-track">
+            <div class="dchart-axis"></div>
+          </div>
+          <p class="dchart-desc">이미 천장(단일도구 H/C/rg 1.00). 텍스트 기반 조합은 이득 없음.</p>
+        </div>
+        <!-- M1 recall (C5 붕괴) -->
+        <div class="dchart-row">
+          <div class="dchart-head">
+            <span class="dchart-metric">M1 recall <small>(C5 — serena→read)</small></span>
+            <span class="dchart-delta neg">−0.242</span>
+          </div>
+          <div class="dchart-track">
+            <div class="dchart-axis"></div>
+            <div class="dchart-bar neg" style="width: 50%;"></div>
+          </div>
+          <p class="dchart-desc"><strong>C5 만 1.00→0.758 로 붕괴</strong> — serena DI 맹점(타입 미명시 필드 호출 8곳 누락). read 를 더해도 회복 못 함. C6(grep)은 텍스트로 다 잡아 1.00.</p>
+        </div>
+        <!-- M2 recall -->
+        <div class="dchart-row">
+          <div class="dchart-head">
+            <span class="dchart-metric">M2 recall</span>
+            <span class="dchart-delta pos">+0.125</span>
+          </div>
+          <div class="dchart-track">
+            <div class="dchart-axis"></div>
+            <div class="dchart-bar pos" style="width: 26%;"></div>
+          </div>
+          <p class="dchart-desc">유일한 재현율 향상 0.75 → 0.875(7/8). 단 최단순 C4 로도 달성.</p>
+        </div>
+        <!-- M3-W precision (serena 포함) -->
+        <div class="dchart-row">
+          <div class="dchart-head">
+            <span class="dchart-metric">M3-W precision <small>(serena 포함, C1·C2)</small></span>
+            <span class="dchart-delta neg">−0.13~−0.17</span>
+          </div>
+          <div class="dchart-track">
+            <div class="dchart-axis"></div>
+            <div class="dchart-bar neg" style="width: 31%;"></div>
+          </div>
+          <p class="dchart-desc">serena 를 끼우면 악화(0.667 → 0.50~0.53). C4 만 baseline H 와 동률.</p>
+        </div>
+        <!-- M3-L precision -->
+        <div class="dchart-row">
+          <div class="dchart-head">
+            <span class="dchart-metric">M3-L precision</span>
+            <span class="dchart-delta pos">+0.24</span>
+          </div>
+          <div class="dchart-track">
+            <div class="dchart-axis"></div>
+            <div class="dchart-bar pos" style="width: 50%;"></div>
+          </div>
+          <p class="dchart-desc">read/serena 확인 단계가 enum 오탐 정리(H 0.76 → 1.00).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 요지 카드 4개 -->
+    <div class="insight-cards">
+      <div class="insight-card">
+        <div class="insight-number insight-number-good">1</div>
+        <p class="insight-title">이득(M2)은 도구결합 효과가 아니다</p>
+        <p class="insight-body">
+          어느 단일도구도 M2 8/8 못 함(전부 6/8 이하). 조합은 7/8 중앙값 회수하는데
+          <strong>2단계 심볼도구가 없는 C4(serena 금지)도 median 0.875</strong>. serena 더한 C1 은 중앙값 못 올리고
+          오히려 불안정(±0.26). C6 도 중앙값 0.875 동률이나 ±0.331(전 72셀 최대 분산)로 운에 좌우된다.
+          +0.125 는 <strong>read 확인 + N=1→N=3 샘플링 효과</strong>.
+          8번째 함수 <code>ConvertTypeDialogPresenter.&lt;init&gt;</code>(depth-5 DI 생성자)는 거의 모든 run 이 놓쳐 천장 7/8.
+        </p>
+      </div>
+      <div class="insight-card">
+        <div class="insight-number insight-number-bad">2</div>
+        <p class="insight-title">M3-W 오탐원 정정: ctags 고유가 아니라 "심볼 도구 공통의 선언부/호출부 혼동"</p>
+        <p class="insight-body">
+          오탐 정체 <code>TreeSitterWasmRuntime.kt:20–23</code>(WASM 함수 <strong>선언부</strong>, 정답은 호출부 61–64).
+          1차 보고는 ctags 단계 탓으로 봤으나, <strong>ctags 가 전혀 없는 C5 도 <code>find_symbol</code> 로 정확히 같은 20–23 선언부를 물어왔다</strong>(r1·r3).
+          즉 이 오탐은 ctags 고유가 아니라 <strong>심볼 인덱스(ctags)든 LSP 심볼검색(serena find_symbol)이든 공통으로</strong> 선언 심볼을 후보로 끌어들이는 현상.
+          반대로 <strong>텍스트 검색(zoekt·rg·serena search_for_pattern·C6 grep)은 호출 패턴을 직접 매칭해 이를 피한다</strong>
+          — 그래서 C6(0.727)가 심볼 낀 C1·C2·C5(0.50~0.667)보다 정밀하다. serena 가 단독으론 1.00 인 것도 <code>search_for_pattern</code>(텍스트) 덕이다.
+        </p>
+      </div>
+      <div class="insight-card">
+        <div class="insight-number insight-number-bad">3</div>
+        <p class="insight-title">C5 는 serena 단독 복제판 — 이득 없이 최고 비용</p>
+        <p class="insight-body">
+          M1 0.758(serena 단독 0.76)·M2 0.75(0.75)·M3-L 1.00(1.00) 까지 단일도구 serena 와 거의 일치.
+          read 를 더해도 <strong>DI 수신자 호출(타입 미명시 <code>service&lt;T&gt;()</code>·필드 호출) 누락</strong>은 그대로(M1 25/33 고정).
+          게다가 셀당 캐시읽기 <strong>350K·tool-use 18.2 로 6조합 중 가장 비싸다</strong>. "심볼 정밀도"를 위해 최대 비용을 치르고도 재현율은 최하위.
+        </p>
+      </div>
+      <div class="insight-card">
+        <div class="insight-number insight-number-neutral">4</div>
+        <p class="insight-title">부수 이득(M3-L) — 전 조합 공통</p>
+        <p class="insight-body">
+          plain zoekt+ctags(H) enum 정밀도 0.76 였는데 조합의 마지막 read/확인 단계가 오탐을 잘라
+          <strong>1.00</strong> 으로(C5·C6 포함). read 확인이 없는 단일도구 H 에서만 나타나는 구조적 약점.
+        </p>
+      </div>
+    </div>
+
+    <!-- 비교 주의 경고 -->
+    <div class="callout-warning">
+      <div class="callout-warning-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="#B45309" aria-hidden="true">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <div class="callout-warning-body">
+        <p class="callout-warning-title">비교 주의</p>
+        <p>
+          단일도구 baseline 은 <strong>N=1</strong>(샘플링 분산 미측정), 조합은 <strong>N=3 중앙값</strong>이다. delta 는 점추정 대 중앙값 비교다.
+          다만 baseline 약점(M2 6/8, M3-L 0.76)은 구조적 한계라 방향성 결론(M2·M3-L 이득, M3-W 손해, C5=serena 복제·고비용, C6=최저비용·M2 불안정)은 N=3 분산까지 봐도 유효하다.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ===== 5. 케이스별 심층 ===== -->
+<section id="cases" class="section">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-number">5</span>
+      케이스별 심층
+    </h2>
+
+    <div class="case-cards">
+      <!-- M1 -->
+      <div class="case-card">
+        <div class="case-card-header">
+          <h3 class="case-title">M1 — 시그니처 영향 (정답 33) ★ C5 가 유일하게 무너지는 곳</h3>
+          <span class="case-badge">C5 붕괴</span>
+        </div>
+        <div class="case-body">
+          <p>C1~C4·C6: 1.00/1.00. 함정(동명 <code>JsoninjaPanelPresenter.formatJson</code>) 정확 배제.</p>
+          <p style="margin-top:10px;">
+            <strong>C5: 재현율 0.758(25/33) 고정(±0)</strong> — 단일도구 serena(0.76)와 동일.
+            <code>find_symbol</code>+<code>find_referencing_symbols</code>로는 <strong>타입을 명시하지 않고 DI 로 주입받은 필드를 통한 호출 8곳</strong>을 일관 누락.
+            read 를 더해도 회복 못 함.
+            <strong>C6(grep)은 같은 8곳을 텍스트로 다 잡아 1.00</strong> — 이 케이스에서 텍스트가 심볼을 이긴다.
+          </p>
+          <p style="margin-top:10px;">
+            참고: C2×M1×r3 은 33곳을 일관되게 gold−1 라인으로 보고했으나 ±1 밴드 + 1:1 최대이분매칭이 33/33 을 깨끗한
+            bijection 으로 흡수(§9 채점 무결성). 채점 아티팩트 아님, serena-first 의 enclosing-statement 라인 기준 드리프트.
+          </p>
+        </div>
+      </div>
+
+      <!-- M2 -->
+      <div class="case-card">
+        <div class="case-card-header">
+          <h3 class="case-title">M2 — 동작 전파 / transitive 폐포 (정답 8) ★ 변별·분산 케이스</h3>
+          <span class="case-badge">변별 케이스</span>
+        </div>
+        <div class="case-body">
+          <p><strong>C2·C3·C4·C6 중앙값 0.875(7/8) 동률</strong> — 단일도구(0.75)를 넘어선 유일한 지점. serena/sg 없는 C4 도 동률이므로 도구결합이 아니라 read 단계/샘플링 효과.</p>
+          <p style="margin-top:10px;"><strong>C1: 중앙값 0.75, ±0.26</strong> — r3 에서 <strong>0.375</strong>. 답 3개만 제출하고 종료(depth-4~5 누락).</p>
+          <p style="margin-top:6px;"><strong>C5: 중앙값 0.75(±0.22)</strong> — serena 단독과 동일. r1 0.375(3개만 제출 후 종료) → serena 의 깊은 traversal 조기종료 리스크 재현.</p>
+
+          <!-- C6 M2 run별 급락 미니 차트 (최대분산) -->
+          <p style="margin-top:12px; font-size:12px; font-weight:600; color:var(--bad);">C6×M2 run별 재현율 — 전 72셀 최대 분산(±0.331)</p>
+          <div class="mini-bar-chart">
+            <div class="mini-bar-row">
+              <span class="mini-bar-label">r1</span>
+              <div class="mini-bar-track">
+                <div class="mini-bar-fill mini-bar-fill-bad" style="width: 37.5%;"></div>
+              </div>
+              <span class="mini-bar-value mini-bar-value-bad">0.375</span>
+            </div>
+            <div class="mini-bar-row">
+              <span class="mini-bar-label">r2</span>
+              <div class="mini-bar-track">
+                <div class="mini-bar-fill mini-bar-fill-normal" style="width: 87.5%;"></div>
+              </div>
+              <span class="mini-bar-value mini-bar-value-normal">0.875</span>
+            </div>
+            <div class="mini-bar-row">
+              <span class="mini-bar-label">r3</span>
+              <div class="mini-bar-track">
+                <div class="mini-bar-fill mini-bar-fill-normal" style="width: 100%;"></div>
+              </div>
+              <span class="mini-bar-value mini-bar-value-normal">1.00</span>
+            </div>
+          </div>
+
+          <p style="margin-top:8px; font-size:12px; color:var(--bad); font-weight:600;">grep 만으로 다중홉을 쫓으면 사슬 말단에서 run 마다 끊긴다 — "되면 8/8, 안 되면 3/8".</p>
+
+          <!-- C1 M2 run별 급락 미니 차트 -->
+          <p style="margin-top:12px; font-size:12px; font-weight:600; color:var(--text-muted);">C1×M2 run별 재현율 (±0.26)</p>
+          <div class="mini-bar-chart">
+            <div class="mini-bar-row">
+              <span class="mini-bar-label">r1</span>
+              <div class="mini-bar-track">
+                <div class="mini-bar-fill mini-bar-fill-normal" style="width: 87.5%;"></div>
+              </div>
+              <span class="mini-bar-value mini-bar-value-normal">0.875</span>
+            </div>
+            <div class="mini-bar-row">
+              <span class="mini-bar-label">r2</span>
+              <div class="mini-bar-track">
+                <div class="mini-bar-fill mini-bar-fill-warn" style="width: 75%;"></div>
+              </div>
+              <span class="mini-bar-value mini-bar-value-warn">0.75</span>
+            </div>
+            <div class="mini-bar-row">
+              <span class="mini-bar-label">r3</span>
+              <div class="mini-bar-track">
+                <div class="mini-bar-fill mini-bar-fill-bad" style="width: 37.5%;"></div>
+              </div>
+              <span class="mini-bar-value mini-bar-value-bad">0.375</span>
+            </div>
+          </div>
+
+          <p style="margin-top:10px;"><strong>C3 만 r3 에서 8/8</strong> 한 번 기록(평균 0.875 vs C4 0.833). 단 중앙값은 C4 와 같다.</p>
+          <p style="margin-top:8px;">공통 천장: <code>ConvertTypeDialogPresenter.&lt;init&gt;</code> 는 전 run 누락.</p>
+        </div>
+      </div>
+
+      <!-- M3-W -->
+      <div class="case-card">
+        <div class="case-card-header">
+          <h3 class="case-title">M3-W — 언어 간 경계 / ABI seam (정답 8 = Kotlin 4 + Rust 4, 함정 2)</h3>
+          <span class="case-badge">변별 케이스</span>
+        </div>
+        <div class="case-body">
+          <p>재현율 전 조합 1.00. 문제는 <strong>정밀도</strong>. 오탐 빈도 (오류 항목은 적색, 함정 항목은 회색):</p>
+
+          <div class="fp-chart" style="margin-top:12px;">
+            <div class="fp-row">
+              <span class="fp-label">TreeSitterWasmRuntime.kt:20–23 (선언부 오탐 — 심볼 도구 공통)</span>
+              <div class="fp-bar-track">
+                <div class="fp-bar-fill" style="width: 100%;"></div>
+              </div>
+              <span class="fp-value">12×</span>
+            </div>
+            <div class="fp-row">
+              <span class="fp-trap-label">WasmMemoryBridge.kt:19 (함정)</span>
+              <div class="fp-bar-track">
+                <div class="fp-bar-fill-trap" style="width: 60%;"></div>
+              </div>
+              <span class="fp-value-trap">6×</span>
+            </div>
+            <div class="fp-row">
+              <span class="fp-trap-label">WasmMemoryBridge.kt:36 (함정)</span>
+              <div class="fp-bar-track">
+                <div class="fp-bar-fill-trap" style="width: 60%;"></div>
+              </div>
+              <span class="fp-value-trap">6×</span>
+            </div>
+            <div class="fp-row">
+              <span class="fp-trap-label">WasmMemoryBridge.kt:50</span>
+              <div class="fp-bar-track">
+                <div class="fp-bar-fill-trap" style="width: 30%;"></div>
+              </div>
+              <span class="fp-value-trap">3×</span>
+            </div>
+          </div>
+
+          <p style="margin-top:10px;">
+            근본 오탐원 정정: <strong>ctags 고유가 아니라 심볼 도구(ctags·serena find_symbol) 공통의 선언부/호출부 혼동</strong>(§4-2 참고).
+            C5(ctags 없음)도 같은 20–23 을 물어왔다.
+            <strong>정밀도 순서: C2(0.50) &lt; C1(0.53) &lt; C3·C4·C5(0.667) &lt; C6(0.727) &lt; (단일도구 serena·zoekt·rg 1.00)</strong>.
+            텍스트만 쓰는 C6 가 조합 중 최고.
+          </p>
+        </div>
+      </div>
+
+      <!-- M3-L -->
+      <div class="case-card">
+        <div class="case-card-header">
+          <h3 class="case-title">M3-L — enum 참조 (정답 29)</h3>
+          <span class="case-perfect-badge">중앙값 천장</span>
+        </div>
+        <div class="case-body">
+          <p>전 조합 <strong>1.00/1.00</strong>. C3·C4 가 run 별로 28/29(0.966)도 있으나 중앙값 1.00.</p>
+          <p style="margin-top:10px;">조합이 H 정밀도 약점(0.76) 보완 — 마지막 read/serena 확인 단계가 오탐을 잘라 1.00 으로 끌어올림.</p>
+          <div style="margin-top: 14px; background: var(--good-bg); border: 1px solid #86EFAC; border-radius: var(--radius-md); padding: 10px 14px;">
+            <p style="font-size:13px; color:var(--good); font-weight:600;">H(0.76) 대비 +0.24 향상 — 조합의 가장 명확한 실질 이득</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ===== 6. 비용 ===== -->
+<section id="cost" class="section">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-number">6</span>
+      비용 · stickiness — 셀당 평균 (transcript 실측)
+    </h2>
+    <p class="section-lead">
+      <strong>stickiness</strong> = 각 조합이 강제된 distinctive 도구(serena·sg·grep 등)를 실제로 몇 번 호출했는지 = 아래 <strong>도구믹스(z/sg/se/grep/rd)</strong> 분포.
+      조합이 의도대로 차별화됐는지 보는 지표다. <strong>tool-use</strong> = 셀당 전체 도구 호출 횟수.
+    </p>
+
+    <div class="table-wrapper">
+      <table class="cost-table" aria-label="셀당 평균 비용 및 도구 사용 현황">
+        <thead>
+          <tr>
+            <th>조합</th>
+            <th>출력토큰</th>
+            <th>캐시읽기</th>
+            <th>tool-use</th>
+            <th>벽시계(초)</th>
+            <th>도구믹스 (z/sg/se/grep/rd)</th>
+            <th>특징</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- C1 -->
+          <tr>
+            <td><strong>C1</strong></td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:84.7%; background: rgba(59,130,246,0.12);"></div>
+              <span class="inline-bar-value">3,307</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:76.9%; background: rgba(99,102,241,0.10);"></div>
+              <span class="inline-bar-value">269K</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:81.3%; background: rgba(245,158,11,0.12);"></div>
+              <span class="inline-bar-value">14.8</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:96.0%; background: rgba(245,158,11,0.10);"></div>
+              <span class="inline-bar-value">91.6</span>
+            </td>
+            <td>
+              <div class="stacked-bar" style="max-width:140px;">
+                <div class="stacked-segment seg-zoekt" style="flex: 3.4;"></div>
+                <div class="stacked-segment seg-sg" style="flex: 0;"></div>
+                <div class="stacked-segment seg-serena" style="flex: 3.8;"></div>
+                <div class="stacked-segment seg-grep" style="flex: 0;"></div>
+                <div class="stacked-segment seg-read" style="flex: 5.0;"></div>
+              </div>
+              <div style="font-family:'Fira Code',monospace; font-size:10px; color:var(--text-muted); margin-top:2px;">3.4 / 0 / 3.8 / 0 / 5.0</div>
+            </td>
+            <td style="font-size:12px; color:var(--text-muted);">—</td>
+          </tr>
+          <!-- C2 -->
+          <tr>
+            <td><strong>C2</strong></td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:95.4%; background: rgba(59,130,246,0.12);"></div>
+              <span class="inline-bar-value">3,729</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:89.7%; background: rgba(99,102,241,0.10);"></div>
+              <span class="inline-bar-value">314K</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:86.8%; background: rgba(239,68,68,0.12);"></div>
+              <span class="inline-bar-value">15.8</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:100%; background: rgba(239,68,68,0.10);"></div>
+              <span class="inline-bar-value">95.5</span>
+            </td>
+            <td>
+              <div class="stacked-bar" style="max-width:140px;">
+                <div class="stacked-segment seg-zoekt" style="flex: 2.9;"></div>
+                <div class="stacked-segment seg-sg" style="flex: 0;"></div>
+                <div class="stacked-segment seg-serena" style="flex: 6.2;"></div>
+                <div class="stacked-segment seg-grep" style="flex: 0;"></div>
+                <div class="stacked-segment seg-read" style="flex: 3.9;"></div>
+              </div>
+              <div style="font-family:'Fira Code',monospace; font-size:10px; color:var(--text-muted); margin-top:2px;">2.9 / 0 / 6.2 / 0 / 3.9</div>
+            </td>
+            <td style="font-size:12px; color:var(--bad); font-weight:600;">최저속·serena 최다, M3-W 정밀도 최저</td>
+          </tr>
+          <!-- C3 -->
+          <tr>
+            <td><strong>C3</strong></td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:90.3%; background: rgba(59,130,246,0.12);"></div>
+              <span class="inline-bar-value">3,527</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:82.6%; background: rgba(99,102,241,0.10);"></div>
+              <span class="inline-bar-value">289K</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:79.1%; background: rgba(245,158,11,0.10);"></div>
+              <span class="inline-bar-value">14.4</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:87.9%; background: rgba(245,158,11,0.10);"></div>
+              <span class="inline-bar-value">83.9</span>
+            </td>
+            <td>
+              <div class="stacked-bar" style="max-width:140px;">
+                <div class="stacked-segment seg-zoekt" style="flex: 3.5;"></div>
+                <div class="stacked-segment seg-sg" style="flex: 2.9;"></div>
+                <div class="stacked-segment seg-serena" style="flex: 2.1;"></div>
+                <div class="stacked-segment seg-grep" style="flex: 0;"></div>
+                <div class="stacked-segment seg-read" style="flex: 3.7;"></div>
+              </div>
+              <div style="font-family:'Fira Code',monospace; font-size:10px; color:var(--text-muted); margin-top:2px;">3.5 / 2.9 / 2.1 / 0 / 3.7</div>
+            </td>
+            <td style="font-size:12px; color:var(--text-muted);">4단계인데 의외로 효율적</td>
+          </tr>
+          <!-- C4 -->
+          <tr>
+            <td><strong>C4</strong> <span class="combo-baseline-badge" style="margin-left:0; display:inline-block; margin-top:0;">베이스라인</span></td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:100%; background: rgba(59,130,246,0.12);"></div>
+              <span class="inline-bar-value">3,909</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:70.9%; background: rgba(99,102,241,0.10);"></div>
+              <span class="inline-bar-value">248K</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:72.5%; background: rgba(21,128,61,0.12);"></div>
+              <span class="inline-bar-value">13.2</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:81.1%; background: rgba(21,128,61,0.12);"></div>
+              <span class="inline-bar-value">77.4</span>
+            </td>
+            <td>
+              <div class="stacked-bar" style="max-width:140px;">
+                <div class="stacked-segment seg-zoekt" style="flex: 4.3;"></div>
+                <div class="stacked-segment seg-sg" style="flex: 0;"></div>
+                <div class="stacked-segment seg-serena" style="flex: 0;"></div>
+                <div class="stacked-segment seg-grep" style="flex: 0;"></div>
+                <div class="stacked-segment seg-read" style="flex: 7.4;"></div>
+              </div>
+              <div style="font-family:'Fira Code',monospace; font-size:10px; color:var(--text-muted); margin-top:2px;">4.3 / 0 / 0 / 0 / 7.4</div>
+            </td>
+            <td style="font-size:12px; color:var(--good); font-weight:600;"><strong>균형 최적</strong> — 싸고 빠르고 품질 동급, M2 안정(±0.07)</td>
+          </tr>
+          <!-- C5 -->
+          <tr>
+            <td><strong>C5</strong></td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:95.7%; background: rgba(59,130,246,0.12);"></div>
+              <span class="inline-bar-value">3,739</span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:100%; background: rgba(239,68,68,0.10);"></div>
+              <span class="inline-bar-value">350K <span class="cost-tag-worst" style="background:var(--bad-bg); color:var(--bad); font-size:9px; padding:1px 5px; border-radius:3px; font-weight:700;">최고</span></span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:100%; background: rgba(239,68,68,0.12);"></div>
+              <span class="inline-bar-value">18.2 <span style="background:var(--bad-bg); color:var(--bad); font-size:9px; padding:1px 5px; border-radius:3px; font-weight:700;">최고</span></span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:87.4%; background: rgba(245,158,11,0.10);"></div>
+              <span class="inline-bar-value">83.4</span>
+            </td>
+            <td>
+              <div class="stacked-bar" style="max-width:140px;">
+                <div class="stacked-segment seg-zoekt" style="flex: 0;"></div>
+                <div class="stacked-segment seg-sg" style="flex: 0;"></div>
+                <div class="stacked-segment seg-serena" style="flex: 6.0;"></div>
+                <div class="stacked-segment seg-grep" style="flex: 0;"></div>
+                <div class="stacked-segment seg-read" style="flex: 7.8;"></div>
+              </div>
+              <div style="font-family:'Fira Code',monospace; font-size:10px; color:var(--text-muted); margin-top:2px;">0 / 0 / 6.0 / 0 / 7.8</div>
+            </td>
+            <td style="font-size:12px; color:var(--bad); font-weight:600;"><strong>6조합 최고비용</strong>(캐시·tool-use), 재현율 최하위</td>
+          </tr>
+          <!-- C6 -->
+          <tr>
+            <td><strong>C6</strong></td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:67.3%; background: rgba(21,128,61,0.12);"></div>
+              <span class="inline-bar-value">2,630 <span class="cost-tag-best">최저</span></span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:37.1%; background: rgba(21,128,61,0.12);"></div>
+              <span class="inline-bar-value">130K <span class="cost-tag-best">최저</span></span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:42.3%; background: rgba(21,128,61,0.12);"></div>
+              <span class="inline-bar-value">7.7 <span class="cost-tag-best">최저</span></span>
+            </td>
+            <td class="inline-bar-cell">
+              <div class="inline-bar-bg" style="width:58.5%; background: rgba(21,128,61,0.12);"></div>
+              <span class="inline-bar-value">55.8 <span class="cost-tag-best">최고속</span></span>
+            </td>
+            <td>
+              <div class="stacked-bar" style="max-width:140px;">
+                <div class="stacked-segment seg-zoekt" style="flex: 0;"></div>
+                <div class="stacked-segment seg-sg" style="flex: 0;"></div>
+                <div class="stacked-segment seg-serena" style="flex: 0;"></div>
+                <div class="stacked-segment seg-grep" style="flex: 4.2;"></div>
+                <div class="stacked-segment seg-read" style="flex: 2.8;"></div>
+              </div>
+              <div style="font-family:'Fira Code',monospace; font-size:10px; color:var(--text-muted); margin-top:2px;">0 / 0 / 0 / 4.2 / 2.8</div>
+            </td>
+            <td style="font-size:12px; color:var(--good); font-weight:600;"><strong>6조합 최저비용·최고속</strong>(C4 tool-use의 58%). 단 M2 불안정(±0.331)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 도구믹스 범례 -->
+    <div class="stacked-legend" style="margin-top:12px; justify-content:flex-start;">
+      <span class="legend-label">도구믹스:</span>
+      <span class="stacked-legend-item"><span class="stacked-legend-dot" style="background:var(--color-zoekt);"></span>zoekt(z)</span>
+      <span class="stacked-legend-item"><span class="stacked-legend-dot" style="background:var(--color-sg);"></span>ast-grep(sg)</span>
+      <span class="stacked-legend-item"><span class="stacked-legend-dot" style="background:var(--color-serena);"></span>serena(se)</span>
+      <span class="stacked-legend-item"><span class="stacked-legend-dot" style="background:var(--color-grep);"></span>grep/find</span>
+      <span class="stacked-legend-item"><span class="stacked-legend-dot" style="background:var(--color-read);"></span>read(rd)</span>
+    </div>
+
+    <p class="table-note" style="margin-top:8px; padding:0; background:none; border:none; font-size:11px; color:var(--text-muted);">
+      약어 — <strong>tool-use</strong> = 셀당 전체 도구 호출 횟수 · <strong>K</strong> = 1,000(예: 350K = 350,000 토큰) · <strong>벽시계(초)</strong> = 셀 1회 완료까지 실제 경과 시간 · <strong>도구믹스 z/sg/se/grep/rd</strong> = 위 범례 순서(zoekt / ast-grep / serena / grep·find / read)의 평균 호출 횟수. 상세는 <a href="#glossary">용어 한눈에</a>.
+    </p>
+
+    <!-- 요점 글머리 -->
+    <ul class="cost-note-list" style="margin-top:20px;">
+      <li>
+        <strong>C5(serena→read)</strong>는 가장 비싸다(캐시읽기 350K·tool-use 18.2 — 6조합 중 최고). serena 다중홉이 매 턴 컨텍스트를 재독하는 단일도구 serena 고비용 행태를 그대로 답습. 재현율은 최하위(M1 0.758·M2 0.75).
+      </li>
+      <li>
+        <strong>C6(grep/find→read)</strong>는 압도적으로 싸고 빠르다(55.8초·7.7 tool-use — 6조합 중 최저·최고속). C4 대비 tool-use 58%, 속도 72%. 단 M2 분산(±0.331 — 전 72셀 최대)이 그 효율의 대가.
+      </li>
+      <li>
+        <strong>C2(serena-first)</strong>는 가장 느린데(95.5초) 품질 이득 없음(M3-W 정밀도 최저 0.50). 셀당 serena <strong>6.2</strong>회.
+      </li>
+      <li>
+        <strong>C4(zoekt+ctags→read)</strong>는 C1~C4 중 균형 최적(tool-use 13.2·벽시계 77.4초)이고 M2 안정(±0.07). C6 가 절대 비용은 더 낮으나 M2 신뢰성이 없으므로 기본값으로는 C4 권장.
+      </li>
+      <li>
+        distinctive 강제·금지 71/72 준수: C1/C2 serena≥1, C3 sg≥1 &amp; serena≥1, C4 serena=0, C5 serena≥1·zoekt/sg/rg/bash=0, C6 grep|find≥1·serena=0. 비준수 1셀(C5×M3-W×r1 Bash — §9).
+      </li>
+    </ul>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ===== 7. 안정성 ===== -->
+<section id="stability" class="section">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-number">7</span>
+      안정성 — N=3 표준편차
+    </h2>
+
+    <div class="grid-2" style="gap:24px;">
+      <div class="card">
+        <h3 style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:14px;">M2 재현율 SD (불안정 핫스폿)</h3>
+        <div class="stability-chart">
+          <div class="stability-row">
+            <span class="stability-label" style="color:var(--bad); font-weight:700;">C6×M2</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-high" style="width: 100%; background:var(--bad);"></div>
+            </div>
+            <span class="stability-value" style="color:var(--bad); font-weight:700;">±0.331 !</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C1×M2</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-high" style="width: 78.5%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--bad);">±0.26</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C5×M2</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-mid" style="width: 66.5%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--warn);">±0.22</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C2×M2</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-mid" style="width: 42.3%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--warn);">±0.14</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C3×M2</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-mid" style="width: 39.3%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--warn);">±0.13</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C4×M2</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-low" style="width: 21.2%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--good);">±0.07</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:14px;">M3-W 정밀도 SD (오탐 변동)</h3>
+        <div class="stability-chart">
+          <div class="stability-row">
+            <span class="stability-label">C3×M3-W</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-high" style="width: 100%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--bad);">±0.24</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C4×M3-W</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-mid" style="width: 79.2%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--warn);">±0.19</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C6×M3-W</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-mid" style="width: 75.0%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--warn);">±0.18</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C1×M3-W</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-mid" style="width: 33.3%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--warn);">±0.08</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C5×M3-W</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-low" style="width: 16.7%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--good);">±0.04</span>
+          </div>
+          <div class="stability-row">
+            <span class="stability-label">C2×M3-W</span>
+            <div class="stability-track">
+              <div class="stability-fill stability-fill-low" style="width: 0%;"></div>
+            </div>
+            <span class="stability-value" style="color:var(--good);">±0.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px; padding: 14px 16px; background: #F8FAFC; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 13px; color: var(--text-muted); line-height:1.6;">
+      대부분 셀 SD=0(완전 재현). 불안정 핫스폿은 M2 재현율 — <strong>C6×M2 SD 0.331(전 72셀 최대)</strong>.
+      텍스트만으로 다중홉을 쫓으면(C6×M2) 분산이 폭발하고, serena 의존이 깊어도(C1·C5×M2) 재현율 분산이 크다.
+      안정성 원하면 <strong>C4</strong>(M2 ±0.07), M2 재현율·안정성 균형 원하면 <strong>C3</strong>(±0.13으로 균형).
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ===== 8. 권고 ===== -->
+<section id="recommendations" class="section">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-number">8</span>
+      권고
+    </h2>
+
+    <div class="rec-cards">
+      <!-- 권고 1: 강조 -->
+      <div class="rec-card rec-card-primary">
+        <div class="rec-number rec-number-primary">1</div>
+        <div class="rec-content">
+          <p class="rec-title">기본값은 C4(zoekt+ctags→read)</p>
+          <p class="rec-body">
+            4 케이스 중 3개 최상위 동급 + M2 중앙값 동률이면서 <strong>M2 가 안정적(±0.07)</strong>이고
+            비용·속도도 좋다(tool-use 13.2·벽시계 77.4초). 신규 두 끝점을 본 뒤에도 결론 불변.
+          </p>
+        </div>
+      </div>
+      <!-- 권고 2 -->
+      <div class="rec-card">
+        <div class="rec-number rec-number-secondary">2</div>
+        <div class="rec-content">
+          <p class="rec-title">비용·속도 절대 우선이고 M2(폐포)가 무관하면 C6(grep/find→read)</p>
+          <p class="rec-body">
+            인덱스·심볼·LSP 없이 <strong>6조합 최저비용</strong>으로 M1·M3-L 만점, M3-W 최고(0.727).
+            <strong>단 M2 는 쓰지 말 것</strong>(±0.331 — 전 72셀 최대 분산, 되면 8/8·안 되면 3/8).
+            "전수 역호출·폐포 추적"이 필요하면 C4.
+          </p>
+        </div>
+      </div>
+      <!-- 권고 3 -->
+      <div class="rec-card">
+        <div class="rec-number rec-number-secondary">3</div>
+        <div class="rec-content">
+          <p class="rec-title">C5(serena→read)는 비권장</p>
+          <p class="rec-body">
+            단일도구 serena 를 그대로 복제해 <strong>DI 호출 누락(M1 0.758·M2 0.75)</strong> + <strong>최고 비용(350K·18.2)</strong>.
+            심볼 정밀도가 정말 필요하면 단일 serena 를 쓰되, <strong>M3-W 같은 언어 경계엔 find_symbol 이 선언부 오탐을 물으므로
+            search_for_pattern(텍스트)을 강제</strong>해야 한다.
+          </p>
+        </div>
+      </div>
+      <!-- 권고 4 -->
+      <div class="rec-card">
+        <div class="rec-number rec-number-secondary">4</div>
+        <div class="rec-content">
+          <p class="rec-title">언어 경계(M3-W)엔 심볼 도구(ctags·serena find_symbol)를 얹지 말 것</p>
+          <p class="rec-body">
+            선언부/호출부 혼동으로 정밀도가 깎인다. 조합 중엔 텍스트만 쓰는 C6(0.727)가 최선이고,
+            근본적으로는 plain zoekt·rg·serena search_for_pattern 단일도구가 1.00 이다.
+          </p>
+        </div>
+      </div>
+      <!-- 권고 5 -->
+      <div class="rec-card">
+        <div class="rec-number rec-number-secondary">5</div>
+        <div class="rec-content">
+          <p class="rec-title">C2(serena-first)는 비권장</p>
+          <p class="rec-body">
+            최고 비용·최저 속도에 품질 이득이 없고 <strong>M3-W 정밀도는 최악(0.50)</strong>.
+            serena 를 파이프라인 첫 단계에 두는 설계는 이 벤치마크에서 실익을 보이지 못했다.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ===== 9. 채점 무결성 ===== -->
+<section id="integrity" class="section">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="section-number">9</span>
+      채점 무결성 (부록)
+    </h2>
+
+    <details class="integrity-details">
+      <summary class="integrity-summary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        채점 무결성 세부 내용 보기
+        <svg class="integrity-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </summary>
+      <div class="integrity-body">
+        <div class="integrity-row">
+          <span class="integrity-key">거버넌스 전 항목</span>
+          <span class="integrity-value">
+            <span class="status-badge status-badge-good">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              71/72 깨끗
+            </span>
+            <span style="font-size:11px; color:var(--text-muted); margin-left:8px;">비준수 1셀: C5×M3-W×r1 Bash 1회 사용(serena 가 Rust 를 못 봐 grep 으로 샘 — 경계 약점이 준수 위반으로 표출). 해당 셀은 조합 미실현으로 분류.</span>
+          </span>
+        </div>
+        <div class="integrity-row">
+          <span class="integrity-key">모델 준수</span>
+          <span class="integrity-value">전부 <code>claude-sonnet-4-6</code>(model_ok). opus 생성 0건, advisor tool_use 0건. "sonnet 작업 · opus 비참여" 충족.</span>
+        </div>
+        <div class="integrity-row">
+          <span class="integrity-key">격리 위반</span>
+          <span class="integrity-value">격리 위반 0건. 셀 내 인덱싱 0건. <strong>강화된 무결성 게이트</strong>(Read·Grep·Glob·Bash 의 <code>evals/</code>·<code>grader.py</code>·<code>dataset.yaml</code>·결과파일 접근 탐지)로 재검증한 결과 금지경로 접근 0회(C1~C4 도 강화 기준으로 클린 재확인). gold 누수 0.</span>
+        </div>
+        <div class="integrity-row">
+          <span class="integrity-key">C5·C6 재실행 경위 (투명 기록)</span>
+          <span class="integrity-value">
+            C5·C6 1차 시도(Workflow <code>wf_bb51745f-323</code>, 2026-06-01)는 <strong>serena Kotlin LSP 가 단일 인스턴스 제약에서 12개 병렬 에이전트와 충돌해 전부 <code>cancelled (-32800)</code> 초기화 실패</strong> → 에이전트들이 gold 파일을 베끼는 무결성 위반이 발생해 <strong>해당 실행 전량 폐기</strong>.
+            원인 규명 후 ① 무결성 게이트 추가(gold 누수 탐지) ② C5 를 <strong>순차 실행</strong>(단일 LSP 재사용)·C6 는 병렬
+            ③ 워밍업 성공 게이트(LSP 실패 시 셀 미실행으로 부정행위 차단) 로 재설계해 <code>wf_3a30b864-737</code> 로 재실행, 정상 측정.
+            1차 폐기분은 채점·집계에서 완전 배제(새 wf 디렉터리만 사용).
+          </span>
+        </div>
+        <div class="integrity-row">
+          <span class="integrity-key">adjudication</span>
+          <span class="integrity-value">
+            18건, 전부 C2×M1×r3 단일 셀의 <code>line_boundary_pm1</code>
+            (제출이 일관되게 gold−1). grader 의 Kuhn 1:1 최대이분매칭 검증 결과 33쌍 전부 깨끗한 bijection
+            (exact 15 + ±1 18, 중복커버 0). 인접 gold(119/120)도 정상 해소. 매칭 버그 아님, serena-first 의 enclosing-statement 라인 보고 드리프트.
+            캐논 점수(R=1.0/P=1.0) 유효, 점수 변동 없음.
+          </span>
+        </div>
+        <div class="integrity-row">
+          <span class="integrity-key">±1 밴드 검증 범위</span>
+          <span class="integrity-value">이 검증은 ±1 밴드를 쓰는 모든 M1 셀·단일도구 baseline 비교에도 유효하다.</span>
+        </div>
+        <div class="integrity-row">
+          <span class="integrity-key">채점 캐논</span>
+          <span class="integrity-value"><code>grader.py</code>(동결). opus 는 종합·해석만, 기계 hit 재계산 금지 원칙 준수.</span>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ===== 푸터 ===== -->
+<footer class="footer">
+  <div class="container">
+    <p class="footer-title">산출물 목록 <span style="font-weight:400; color:var(--text-muted); font-size:12px;">(버전 관리 포함)</span></p>
+    <ul class="artifact-list">
+      <li><code>metrics-combos.csv</code> — 72행 원시 측정값 (6조합 × 4케이스 × N=3)</li>
+      <li><code>aggregate-combos.csv</code> — N=3 중앙값·평균±SD</li>
+      <li><code>run_grading.py</code> · <code>build_prompts.py</code> · <code>cell_prompts.json</code> · <code>gen_workflow.py</code></li>
+      <li><code>grader.py</code> — 채점 캐논 (동결)</li>
+      <li><code>metrics_parser.py</code> · <code>stats_governance.py</code> — 메트릭·거버넌스</li>
+      <li><code>PROVENANCE-combos.txt</code> — combos-src_v16, 5059 심볼</li>
+    </ul>
+    <p class="footer-meta" style="margin-top:6px;">로컬 전용(미추적, 재생성 가능): <code>_full_workflow.js</code>·<code>_rerun_workflow.js</code>(<code>gen_workflow.py</code>로 재생성) · <code>_quality.csv</code>·<code>_metrics.csv</code>·<code>adjudication-needed.jsonl</code>(<code>run_grading.py</code>로 재생성) · <code>_answers/</code></p>
+    <hr class="footer-divider">
+    <p class="footer-meta" style="margin-bottom:6px;">
+      원본 문서: <code>results-combos.md</code> &nbsp;|&nbsp;
+      단일도구 비교: <code>../codegraph-vs-serena/results.md</code>
+    </p>
+    <p class="footer-meta">1차: wf_5e31d1d3-f29 · 2026-06-01 · 48셀 · 1,414,506토큰 &nbsp;|&nbsp; 증분: wf_3a30b864-737 · 2026-06-02 · 24셀 · 709,311토큰</p>
+    <p class="footer-meta">claude-sonnet-4-6 · grader.py(캐논 동결)+opus 종합 · 총 72셀</p>
+  </div>
+</footer>
+
+</body>
+</html>
