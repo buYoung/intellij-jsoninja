@@ -1,0 +1,37 @@
+# workflow-combos 벤치마크 provenance (zoekt+ctags 인덱스)
+# git v1.12.1 (1daf879) 기준. src·tree-sitter-wasm 은 v1.12.1 이후 불변(working tree = v1.12.1-8-g5ffca60,
+# 단 변경분은 evals/·.gitignore·CHANGELOG 한정 → gold·소스 경로 유효).
+
+## 측정 격리(measurement isolation) — 사용자 요구
+# 모든 셀 측정은 "검색만" 측정한다. 인덱싱 시간은 측정에 포함되면 안 된다.
+# → zoekt+ctags 인덱스는 측정 셀 밖에서 사전 빌드(아래). 셀은 -index_dir 로 읽기만 한다.
+# → 셀 내부 zoekt-index/인덱스 빌드 금지(HARD CONSTRAINT + transcript 사후감사).
+# → serena 는 측정 C1/C2/C3 전에 워밍업 셀(측정 제외)로 LSP 를 선기동한다.
+
+## zoekt+ctags 인덱스 (H-baseline 과 기능적으로 동일)
+build_method: single-root staging (.kt+.rs only, 상대경로 보존) → zoekt-index -require_ctags
+staging_dir: .codegraph/combos-src   # 159 .kt + 24 .rs = 183 files (live tree = v1.12.1)
+index_dir: .codegraph/zoekt-ctags-index
+shard: combos-src_v16.00000.zoekt
+shard_sha256: f15863a66d58e3a1ed5a113fbe8936b36f7885ee81a4aaa0c0750a25bccbf030
+files_processed: 183   # kt 159 + rs 24 (PROVENANCE-m3.txt 추출본 수치와 일치)
+symbols: 5059          # H-baseline(PROVENANCE-m3) 5059 와 정확히 일치 → 기능 동등 확인
+ctags: Universal Ctags 6.2.1 (/opt/homebrew/bin/ctags)
+ctags_symlink: $HOME/go/bin/universal-ctags -> /opt/homebrew/bin/ctags
+  # zoekt 는 'universal-ctags' 이름 바이너리를 찾으므로 심볼릭 링크 필요. 미생성 시 -require_ctags 실패.
+
+## 쿼리 구문(실측 — DESIGN/PIPELINE_BLOCK 교정 대상)
+# 잘못된 표기: zoekt -index PATH "..."   ← zoekt 는 -index 플래그 모름
+# 올바른 표기: zoekt -index_dir .codegraph/zoekt-ctags-index "sym:Foo"   (+ -jsonl, -sym 플래그 가용)
+# 경로 검증: sym 결과가 gold 와 동일한 상대경로로 출력됨
+#   - src/main/kotlin/com/livteam/jsoninja/model/SupportedLanguage.kt:7
+#   - tree-sitter-wasm/src/lib.rs:92  (gold: tree-sitter-wasm/src/lib.rs:92)
+
+## 빌드 시 발견·교정한 함정(재현 주의)
+# 1) 다중 positional dir(src/main/kotlin src/test/kotlin)은 basename 'kotlin' 충돌 → test shard 가 main shard 덮어씀.
+#    → 단일 root staging 으로 해결.
+# 2) 하위 dir 을 root 로 인덱싱하면 경로 prefix 가 제거됨(lib.rs vs tree-sitter-wasm/src/lib.rs) → 단일 root 로 해결.
+
+## 데이터 출처
+# gold·dataset: ../codegraph-vs-serena/dataset.yaml
+# H-baseline provenance: ../codegraph-vs-serena/PROVENANCE-m3.txt (zoekt-ctags 5059 심볼)
