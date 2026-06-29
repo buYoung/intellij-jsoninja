@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Code Folding**: Collapsing and expanding folded JSON in JSONinja editors now behaves consistently, so folding actions no longer get blocked or leave the editor in an unexpected state.
+
 ## [1.12.1] - 2026-05-28
 
 ### Fixed
