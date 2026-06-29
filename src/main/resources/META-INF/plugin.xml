@@ -31,6 +31,7 @@
         <gotoDeclarationHandler implementation="com.livteam.jsoninja.extensions.JsoninjaTemplateGotoDeclarationHandler"
                                 order="first"/>
 
+        <postStartupActivity implementation="com.livteam.jsoninja.listeners.JsoninjaFoldingActionGuardStartupActivity"/>
         <postStartupActivity implementation="com.livteam.jsoninja.listeners.JsoninjaOnboardingStartupActivity"/>
     </extensions>
 

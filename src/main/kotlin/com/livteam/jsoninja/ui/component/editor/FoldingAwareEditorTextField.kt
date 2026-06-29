@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.ui.component.editor
 
+import com.intellij.json.JsonLanguage
 import com.intellij.lang.folding.LanguageFolding
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
@@ -15,6 +16,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiFile
 import com.intellij.ui.EditorTextField
 import com.intellij.util.Alarm
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
@@ -33,7 +35,7 @@ internal class FoldingAwareEditorTextField(
     fileType: FileType,
     isViewer: Boolean = false,
     oneLineMode: Boolean = false,
-) : EditorTextField(document, project, fileType, isViewer, oneLineMode) {
+) : EditorTextField(document, project, fileType, isViewer, oneLineMode), Disposable {
     private val editorProject = project
     private var foldingCoroutineScope: CoroutineScope? = null
     private var foldingRefreshAlarm: Alarm? = null
@@ -43,6 +45,9 @@ internal class FoldingAwareEditorTextField(
 
     override fun onEditorAdded(editor: Editor) {
         super.onEditorAdded(editor)
+        if (cleanupRegistrationEditor != null && cleanupRegistrationEditor !== editor) {
+            clearRefreshInfrastructure()
+        }
         ensureRefreshInfrastructure(editor)
         scheduleFoldRegionsRefresh(editor, debounceDelayMs = 0)
     }
@@ -55,7 +60,6 @@ internal class FoldingAwareEditorTextField(
 
     private fun ensureRefreshInfrastructure(editor: Editor) {
         val project = editorProject ?: return
-        val editorDisposable = editor as? Disposable ?: return
 
         val currentScope = foldingCoroutineScope
         if (currentScope == null || currentScope.coroutineContext[Job]?.isCancelled == true) {
@@ -63,19 +67,12 @@ internal class FoldingAwareEditorTextField(
             foldingCoroutineScope = newScope
 
             val alarmDisposable = Disposer.newDisposable("JSONinja folding alarm")
-            Disposer.register(editorDisposable, alarmDisposable)
+            Disposer.register(this, alarmDisposable)
             foldingAlarmDisposable = alarmDisposable
             foldingRefreshAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, alarmDisposable)
         }
 
-        if (cleanupRegistrationEditor === editor) {
-            return
-        }
-
         cleanupRegistrationEditor = editor
-        Disposer.register(editorDisposable) {
-            clearRefreshInfrastructure()
-        }
     }
 
     private fun scheduleFoldRegionsRefresh(
@@ -161,13 +158,17 @@ internal class FoldingAwareEditorTextField(
         foldingCoroutineScope = null
         cleanupRegistrationEditor = null
     }
+
+    override fun dispose() {
+        clearRefreshInfrastructure()
+    }
 }
 
 private val LOG = logger<FoldingAwareEditorTextField>()
 private val JSONINJA_FOLD_REGION_KEY = Key.create<Boolean>("JSONINJA_FOLD_REGION_KEY")
 private const val FOLDING_REFRESH_DEBOUNCE_DELAY_MS = 150
 
-private data class ManualFoldRegion(
+internal data class ManualFoldRegion(
     val startOffset: Int,
     val endOffset: Int,
     val placeholderText: String,
@@ -175,7 +176,7 @@ private data class ManualFoldRegion(
     val isGutterMarkEnabledForSingleLine: Boolean,
 )
 
-private fun collectFoldRegions(
+internal fun collectFoldRegions(
     project: Project,
     document: Document,
 ): List<ManualFoldRegion> {
@@ -185,7 +186,7 @@ private fun collectFoldRegions(
         return emptyList()
     }
 
-    val foldingBuilder = LanguageFolding.INSTANCE.forLanguage(psiFile.language) ?: return emptyList()
+    val foldingBuilder = findFoldingBuilder(psiFile) ?: return emptyList()
     return LanguageFolding.buildFoldingDescriptors(foldingBuilder, psiFile, document, false)
         .mapNotNull { descriptor ->
             val range = descriptor.range
@@ -206,7 +207,16 @@ private fun collectFoldRegions(
         }
 }
 
-private fun applyFoldRegions(
+private fun findFoldingBuilder(psiFile: PsiFile) =
+    LanguageFolding.INSTANCE.forLanguage(psiFile.language)
+        ?: psiFile.language.baseLanguage?.let { LanguageFolding.INSTANCE.forLanguage(it) }
+        ?: if (psiFile.language is JsonLanguage) {
+            LanguageFolding.INSTANCE.forLanguage(JsonLanguage.INSTANCE)
+        } else {
+            null
+        }
+
+internal fun applyFoldRegions(
     editor: Editor,
     foldRegions: List<ManualFoldRegion>,
 ) {

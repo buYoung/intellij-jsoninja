@@ -133,6 +133,15 @@ dependencies {
     }
 }
 
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlin" && requested.name.startsWith("kotlin-")) {
+            useVersion(libs.versions.kotlin.get())
+            because("Keep Kotlin runtime artifacts aligned with the IntelliJ Platform test runtime.")
+        }
+    }
+}
+
 val checkWasmPrerequisites by tasks.registering {
     group = "wasm"
     description = "Verify Rust and WASM build prerequisites"
