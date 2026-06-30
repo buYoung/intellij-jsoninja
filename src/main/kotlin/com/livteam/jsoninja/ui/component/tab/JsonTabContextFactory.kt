@@ -1,17 +1,26 @@
 package com.livteam.jsoninja.ui.component.tab
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import com.livteam.jsoninja.ui.component.jsonQuery.JsonQueryPresenter
 import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 import com.livteam.jsoninja.ui.component.model.TabUiState
 import java.awt.BorderLayout
 import javax.swing.JPanel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class JsonTabContextFactory(
     private val project: Project,
@@ -49,11 +58,12 @@ class JsonTabContextFactory(
         tabContentPanel.add(jmesComponent, BorderLayout.NORTH)
         tabContentPanel.add(editor, BorderLayout.CENTER)
 
-        setupJmesPathPresenter(jsonQueryPresenter, editor, initialJson = content)
+        setupJmesPathPresenter(jsonQueryPresenter, editor, tabDisposable, initialJson = content)
 
         return TabUiState(
             panel = tabContentPanel,
             editor = editor,
+            queryPresenter = jsonQueryPresenter,
             disposable = tabDisposable
         )
     }
@@ -72,8 +82,16 @@ class JsonTabContextFactory(
     private fun setupJmesPathPresenter(
         jsonQueryPresenter: JsonQueryPresenter,
         editor: JsonEditorView,
+        tabDisposable: Disposable,
         initialJson: String? = null
     ) {
+        val queryResultFormatScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
+        var queryResultFormatJob: Job? = null
+        Disposer.register(tabDisposable) {
+            queryResultFormatJob?.cancel()
+            queryResultFormatScope.cancel()
+        }
+
         initialJson?.takeIf { it.isNotBlank() }?.let {
             jsonQueryPresenter.setOriginalJson(it)
         }
@@ -90,9 +108,19 @@ class JsonTabContextFactory(
         }
 
         jsonQueryPresenter.setOnSearchCallback { _, resultJson ->
+            queryResultFormatJob?.cancel()
             val jsonFormatState = helperService.getJsonFormatState()
-            val formattedJson = formatterService.formatJson(resultJson, jsonFormatState)
-            editor.setText(formattedJson)
+            queryResultFormatJob = queryResultFormatScope.launch {
+                try {
+                    val formattedJson = formatterService.formatJsonOnDefault(resultJson, jsonFormatState)
+                    withContext(Dispatchers.EDT) {
+                        if (project.isDisposed) return@withContext
+                        editor.setText(formattedJson)
+                    }
+                } catch (cancellationException: CancellationException) {
+                    throw cancellationException
+                }
+            }
         }
     }
 }

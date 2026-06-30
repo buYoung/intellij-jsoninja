@@ -7,8 +7,8 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.dialog.loadJson.LoadJsonFromApiDialog
 
 class LoadJsonFromApiAction : AnAction(
-    LocalizationBundle.message("action.load.json.api.text"),
-    LocalizationBundle.message("action.load.json.api.description"),
+    LocalizationBundle.messagePointer("action.load.json.api.text"),
+    LocalizationBundle.messagePointer("action.load.json.api.description"),
     AllIcons.Actions.Download
 ) {
     override fun actionPerformed(actionEvent: AnActionEvent) {

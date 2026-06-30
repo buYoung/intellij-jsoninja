@@ -6,6 +6,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
@@ -13,6 +14,11 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.diff.JsonDiffKeys
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SortJsonDiffKeysOnceAction : AnAction(
     LocalizationBundle.message("action.diff.sort.keys.once"),
@@ -28,17 +34,40 @@ class SortJsonDiffKeysOnceAction : AnAction(
         val formatterService = project.service<JsonFormatterService>()
         val leftDocument = editors[0].document
         val rightDocument = editors[1].document
+        val leftOriginalText = leftDocument.text
+        val rightOriginalText = rightDocument.text
+        val leftModificationStamp = leftDocument.modificationStamp
+        val rightModificationStamp = rightDocument.modificationStamp
 
-        val leftFormatted = formatterService.formatJson(leftDocument.text, JsonFormatState.PRETTIFY, true)
-        val rightFormatted = formatterService.formatJson(rightDocument.text, JsonFormatState.PRETTIFY, true)
+        project.service<JsoninjaCoroutineScopeService>().launch {
+            try {
+                val formattedDocuments = withContext(Dispatchers.Default) {
+                    formatterService.formatJson(leftOriginalText, JsonFormatState.PRETTIFY, true) to
+                        formatterService.formatJson(rightOriginalText, JsonFormatState.PRETTIFY, true)
+                }
 
-        if (leftFormatted == leftDocument.text && rightFormatted == rightDocument.text) {
-            return
-        }
+                withContext(Dispatchers.EDT) {
+                    if (project.isDisposed) return@withContext
+                    if (
+                        leftDocument.modificationStamp != leftModificationStamp ||
+                        rightDocument.modificationStamp != rightModificationStamp
+                    ) {
+                        return@withContext
+                    }
 
-        WriteCommandAction.runWriteCommandAction(project) {
-            applyFormatted(leftDocument, leftFormatted)
-            applyFormatted(rightDocument, rightFormatted)
+                    val (leftFormatted, rightFormatted) = formattedDocuments
+                    if (leftFormatted == leftDocument.text && rightFormatted == rightDocument.text) {
+                        return@withContext
+                    }
+
+                    WriteCommandAction.runWriteCommandAction(project) {
+                        applyFormatted(leftDocument, leftFormatted)
+                        applyFormatted(rightDocument, rightFormatted)
+                    }
+                }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            }
         }
     }
 

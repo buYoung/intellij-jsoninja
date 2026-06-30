@@ -1,0 +1,200 @@
+{
+  "language": "typescript",
+  "declarations": [
+    {
+      "name": "ApiResponse",
+      "kind": "type_alias",
+      "span": {
+        "start_row": 1,
+        "start_col": 8,
+        "end_row": 1,
+        "end_col": 62
+      },
+      "annotations": [],
+      "type_parameters": [
+        {
+          "name": "T",
+          "constraints": [],
+          "span": {
+            "start_row": 1,
+            "start_col": 25,
+            "end_row": 1,
+            "end_col": 26
+          }
+        }
+      ],
+      "super_types": [],
+      "fields": [],
+      "enum_values": [],
+      "aliased_type": {
+        "kind": "map",
+        "span": {
+          "start_row": 1,
+          "start_col": 30,
+          "end_row": 1,
+          "end_col": 61
+        },
+        "key_type": {
+          "kind": "primitive",
+          "primitive": "string",
+          "span": {
+            "start_row": 1,
+            "start_col": 37,
+            "end_row": 1,
+            "end_col": 43
+          }
+        },
+        "value_type": {
+          "kind": "list",
+          "span": {
+            "start_row": 1,
+            "start_col": 45,
+            "end_row": 1,
+            "end_col": 60
+          },
+          "element_type": {
+            "kind": "nullable",
+            "span": {
+              "start_row": 1,
+              "start_col": 51,
+              "end_row": 1,
+              "end_col": 59
+            },
+            "wrapped_type": {
+              "kind": "named",
+              "name": "T",
+              "type_arguments": [],
+              "is_type_parameter": true,
+              "span": {
+                "start_row": 1,
+                "start_col": 51,
+                "end_row": 1,
+                "end_col": 52
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "User",
+      "kind": "interface",
+      "span": {
+        "start_row": 2,
+        "start_col": 8,
+        "end_row": 5,
+        "end_col": 9
+      },
+      "annotations": [],
+      "type_parameters": [],
+      "super_types": [
+        {
+          "kind": "named",
+          "name": "Base",
+          "type_arguments": [],
+          "is_type_parameter": false,
+          "span": {
+            "start_row": 2,
+            "start_col": 31,
+            "end_row": 2,
+            "end_col": 35
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "source_name": "name",
+          "optional": true,
+          "span": {
+            "start_row": 3,
+            "start_col": 10,
+            "end_row": 3,
+            "end_col": 23
+          },
+          "annotations": [],
+          "type": {
+            "kind": "primitive",
+            "primitive": "string",
+            "span": {
+              "start_row": 3,
+              "start_col": 17,
+              "end_row": 3,
+              "end_col": 23
+            }
+          }
+        },
+        {
+          "name": "profile",
+          "source_name": "profile",
+          "optional": false,
+          "span": {
+            "start_row": 4,
+            "start_col": 10,
+            "end_row": 4,
+            "end_col": 51
+          },
+          "annotations": [],
+          "type": {
+            "kind": "inline_object",
+            "span": {
+              "start_row": 4,
+              "start_col": 19,
+              "end_row": 4,
+              "end_col": 51
+            },
+            "fields": [
+              {
+                "name": "age",
+                "source_name": "age",
+                "optional": false,
+                "span": {
+                  "start_row": 4,
+                  "start_col": 21,
+                  "end_row": 4,
+                  "end_col": 32
+                },
+                "annotations": [],
+                "type": {
+                  "kind": "primitive",
+                  "primitive": "number",
+                  "span": {
+                    "start_row": 4,
+                    "start_col": 26,
+                    "end_row": 4,
+                    "end_col": 32
+                  }
+                }
+              },
+              {
+                "name": "active",
+                "source_name": "active",
+                "optional": false,
+                "span": {
+                  "start_row": 4,
+                  "start_col": 34,
+                  "end_row": 4,
+                  "end_col": 49
+                },
+                "annotations": [],
+                "type": {
+                  "kind": "primitive",
+                  "primitive": "boolean",
+                  "span": {
+                    "start_row": 4,
+                    "start_col": 42,
+                    "end_row": 4,
+                    "end_col": 49
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "enum_values": [],
+      "aliased_type": null
+    }
+  ],
+  "diagnostics": []
+}

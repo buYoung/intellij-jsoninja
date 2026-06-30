@@ -1,0 +1,9 @@
+# 중간 산출물·스크래치 (gen_workflow.py / run_grading.py 로 재생성 가능)
+_*
+__pycache__/
+.panel_disk_raw/
+adjudication-needed.jsonl
+
+# 미리보기·검증 이미지
+*.png
+.playwright-mcp/

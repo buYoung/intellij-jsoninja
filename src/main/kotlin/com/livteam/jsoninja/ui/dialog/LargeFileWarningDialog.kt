@@ -18,7 +18,9 @@ import javax.swing.JComponent
 class LargeFileWarningDialog(
     private val project: Project,
     private val fileSizeBytes: Long,
-    private val fileName: String? = null
+    private val fileName: String? = null,
+    private val messageKey: String = DEFAULT_MESSAGE_KEY,
+    private val thresholdBytesOverride: Long? = null,
 ) : DialogWrapper(project) {
 
     private val dontShowAgainCheckBox = JBCheckBox(LocalizationBundle.message("warning.large.file.dont.show.again"))
@@ -36,21 +38,25 @@ class LargeFileWarningDialog(
         fun showWarningIfNeeded(
             project: Project,
             fileSizeBytes: Long,
-            fileName: String? = null
+            fileName: String? = null,
+            messageKey: String = DEFAULT_MESSAGE_KEY,
+            thresholdBytesOverride: Long? = null,
         ): Boolean {
             val settings = JsoninjaSettingsState.getInstance(project)
-            val thresholdBytes = settings.largeFileThresholdMB * 1024 * 1024L
+            val thresholdBytes = thresholdBytesOverride ?: (settings.largeFileThresholdMB * 1024 * 1024L)
 
             // 파일이 임계값보다 작거나 warning이 비활성화된 경우 계속 진행
             if (fileSizeBytes < thresholdBytes || !settings.showLargeFileWarning) {
                 return true
             }
 
-            val dialog = LargeFileWarningDialog(project, fileSizeBytes, fileName)
+            val dialog = LargeFileWarningDialog(project, fileSizeBytes, fileName, messageKey, thresholdBytesOverride)
             dialog.show()
 
             return dialog.isOK
         }
+
+        private const val DEFAULT_MESSAGE_KEY = "warning.large.file.message"
     }
 
     init {
@@ -65,7 +71,7 @@ class LargeFileWarningDialog(
         val formatter = DecimalFormat("#.##")
         val formattedSize = formatter.format(fileSizeMB)
 
-        val message = LocalizationBundle.message("warning.large.file.message", formattedSize)
+        val message = LocalizationBundle.message(messageKey, formattedSize)
 
         return panel {
             row {

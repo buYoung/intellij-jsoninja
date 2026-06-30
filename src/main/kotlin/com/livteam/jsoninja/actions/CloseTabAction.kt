@@ -10,9 +10,9 @@ import com.livteam.jsoninja.ui.component.main.JsoninjaPanelView
  * IDE의 표준 탭 닫기 단축키(CloseContent)를 재사용합니다.
  */
 class CloseTabAction : AnAction(
-    "Close Tab",
-    "Close current JSON editor tab",
-    null
+    { "Close Tab" },
+    { "Close current JSON editor tab" },
+    null as javax.swing.Icon?
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return

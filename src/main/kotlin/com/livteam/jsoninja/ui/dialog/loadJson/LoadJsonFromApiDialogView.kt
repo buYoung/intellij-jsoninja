@@ -4,7 +4,6 @@ import com.intellij.ide.highlighter.HighlighterFactory
 import com.intellij.json.JsonFileType
 import com.intellij.json.JsonLanguage
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
@@ -27,12 +26,14 @@ import com.intellij.ui.dsl.builder.*
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiRequestMethod
 import java.awt.BorderLayout
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JLabel
+import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 
@@ -116,19 +117,23 @@ class LoadJsonFromApiDialogView(
 
     private fun createComponent(): JComponent {
         requestMethodComboBox = ComboBox(ApiRequestMethod.entries.toTypedArray()).apply {
-            renderer = SimpleListCellRenderer.create { label, value, _ ->
-                label.text = value?.name ?: ""
+            renderer = object : SimpleListCellRenderer<ApiRequestMethod>() {
+                override fun customize(list: JList<out ApiRequestMethod>, value: ApiRequestMethod?, index: Int, selected: Boolean, hasFocus: Boolean) {
+                    text = value?.name ?: ""
+                }
             }
         }
         requestUrlTextField = JBTextField()
         sendButton = JButton(LocalizationBundle.message("dialog.load.json.api.send"))
         authorizationTypeComboBox = ComboBox(ApiAuthorizationType.entries.toTypedArray()).apply {
-            renderer = SimpleListCellRenderer.create { label, value, _ ->
-                label.text = when (value) {
-                    ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
-                    ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
-                    ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
-                    null -> ""
+            renderer = object : SimpleListCellRenderer<ApiAuthorizationType>() {
+                override fun customize(list: JList<out ApiAuthorizationType>, value: ApiAuthorizationType?, index: Int, selected: Boolean, hasFocus: Boolean) {
+                    text = when (value) {
+                        ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
+                        ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
+                        ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
+                        null -> ""
+                    }
                 }
             }
         }
@@ -238,16 +243,14 @@ class LoadJsonFromApiDialogView(
     }
 
     private fun createRequestBodyEditorTextField(): EditorTextField {
-        val document = EditorFactory.getInstance().createDocument("")
-        return EditorTextField(document, project, PlainTextFileType.INSTANCE, false, false).apply {
-            preferredSize = JBUI.size(620, 220)
-            setPlaceholder(LocalizationBundle.message("dialog.load.json.api.body.placeholder"))
-            addSettingsProvider { editor ->
-                editor.settings.applyRequestBodyEditorSettings()
-                editor.isEmbeddedIntoDialogWrapper = true
-            }
-            putClientProperty(EditorTextField.SUPPLEMENTARY_KEY, true)
-        }
+        return EditorTextFieldFactory.createPlainTextField(
+            project = project,
+            preferredSize = JBUI.size(620, 220),
+            placeholderText = LocalizationBundle.message("dialog.load.json.api.body.placeholder"),
+            configureEditorSettings = {
+                applyRequestBodyEditorSettings()
+            },
+        )
     }
 
     private fun EditorSettings.applyRequestBodyEditorSettings() {

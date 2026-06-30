@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.livteam.jsoninja</id>
     <name>JSONinja</name>
-    <version>1.9.0</version>
+    <version>1.13.0</version>
     <vendor email="leebu18@gmail.com">BuYoung</vendor>
 
     <depends>com.intellij.modules.lang</depends>
@@ -31,14 +31,13 @@
         <gotoDeclarationHandler implementation="com.livteam.jsoninja.extensions.JsoninjaTemplateGotoDeclarationHandler"
                                 order="first"/>
 
+        <postStartupActivity implementation="com.livteam.jsoninja.listeners.JsoninjaFoldingActionGuardStartupActivity"/>
         <postStartupActivity implementation="com.livteam.jsoninja.listeners.JsoninjaOnboardingStartupActivity"/>
     </extensions>
 
     <applicationListeners>
         <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener"
                   topic="com.intellij.openapi.application.ApplicationActivationListener"/>
-        <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener"
-                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
 
     <actions>
@@ -84,6 +83,8 @@
             <action id="com.livteam.jsoninja.action.GenerateRandomJsonAction"
                     class="com.livteam.jsoninja.actions.GenerateRandomJsonAction"
                     icon="/icons/random_json.svg"/>
+            <action id="com.livteam.jsoninja.action.TypeConversionAction"
+                    class="com.livteam.jsoninja.actions.TypeConversionAction"/>
             <action id="com.livteam.jsoninja.action.LoadJsonFromApiAction"
                     class="com.livteam.jsoninja.actions.LoadJsonFromApiAction"
                     icon="AllIcons.Actions.Download"/>
@@ -99,17 +100,33 @@
                     class="com.livteam.jsoninja.actions.OpenSettingsAction"
                     icon="AllIcons.General.Settings"/>
         </group>
-
-        <action id="com.livteam.jsoninja.action.SwitchDiffDisplayModeAction"
-                class="com.livteam.jsoninja.actions.SwitchDiffDisplayModeAction"/>
-
         <action id="com.livteam.jsoninja.action.CopyJsonQueryAction"
                 class="com.livteam.jsoninja.actions.CopyJsonQueryAction"
         >
         </action>
 
+        <action id="com.livteam.jsoninja.action.TypeConversionAction.Menu"
+                class="com.livteam.jsoninja.actions.TypeConversionAction">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+
         <group id="com.livteam.jsoninja.action.group.EditorPopup" popup="false">
             <reference ref="com.livteam.jsoninja.action.CopyJsonQueryAction"/>
+        </group>
+
+        <!-- JSONinja Editor Context Menu Actions -->
+        <group id="com.livteam.jsoninja.action.group.EditorContextMenu" popup="true">
+            <action id="com.livteam.jsoninja.action.editor.EditorPrettifyJsonAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorPrettifyJsonAction"/>
+            <action id="com.livteam.jsoninja.action.editor.EditorUglifyJsonAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorUglifyJsonAction"/>
+            <separator/>
+            <action id="com.livteam.jsoninja.action.editor.EditorEscapeJsonAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorEscapeJsonAction"/>
+            <action id="com.livteam.jsoninja.action.editor.EditorUnescapeJsonAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorUnescapeJsonAction"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
 
     </actions>

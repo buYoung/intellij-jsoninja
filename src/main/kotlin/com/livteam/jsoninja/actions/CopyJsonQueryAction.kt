@@ -19,18 +19,19 @@ class CopyJsonQueryAction : AnAction() {
 
         val settings = JsoninjaSettingsState.getInstance(project)
         val type = JsonQueryType.fromString(settings.jsonQueryType)
-        val isJmes = type == JsonQueryType.JMESPATH
+        val useDotNotation = type == JsonQueryType.JMESPATH || type == JsonQueryType.JACKSON_JQ
 
         val path = JsonPathHelper.getPathFromTemplateText(
             documentText = editor.document.text,
             offset = offset,
             project = project,
-            isJmes = isJmes
+            isJmes = useDotNotation
         )?.path ?: run {
             val element = psiFile.findElementAt(offset) ?: return
             when (type) {
                 JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
                 JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
+                JsonQueryType.JACKSON_JQ -> JsonPathHelper.getJqPath(element)
             }
         }
 

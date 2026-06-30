@@ -1,16 +1,22 @@
 package com.livteam.jsoninja.ui.component.tab
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import com.livteam.jsoninja.ui.component.model.TabUiState
 import java.awt.Component
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class JsonTabsPresenter(
     private val project: Project,
@@ -24,6 +30,7 @@ class JsonTabsPresenter(
 
     private val formatterService = project.getService(JsonFormatterService::class.java)
     private val helperService = project.getService(JsonHelperService::class.java)
+    private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
     private val tabContextFactory = JsonTabContextFactory(
         project = project,
         parentDisposable = parentDisposable,
@@ -43,12 +50,13 @@ class JsonTabsPresenter(
             onTabSelectedListener?.invoke(getCurrentEditor())
         }
         Disposer.register(parentDisposable) {
+            coroutineScope.cancel()
             tabContexts.clear()
         }
     }
 
     fun setupInitialTabs() {
-        invokeLater {
+        launchOnEdt {
             addNewTabInternal(0)
             addPlusTab()
         }
@@ -63,7 +71,7 @@ class JsonTabsPresenter(
     }
 
     fun onPlusTabSelected() {
-        invokeLater {
+        launchOnEdt {
             addNewTabFromPlusTab()
         }
     }
@@ -98,10 +106,19 @@ class JsonTabsPresenter(
     }
 
     fun onTabCloseClicked(tabContentComponent: Component) {
-        invokeLater {
+        launchOnEdt {
             val closableTabIndex = view.indexOfComponent(tabContentComponent)
-            if (closableTabIndex == -1) return@invokeLater
+            if (closableTabIndex == -1) return@launchOnEdt
             closeTabAt(closableTabIndex)
+        }
+    }
+
+    private fun launchOnEdt(action: () -> Unit) {
+        coroutineScope.launch {
+            withContext(Dispatchers.EDT) {
+                if (project.isDisposed) return@withContext
+                action()
+            }
         }
     }
 

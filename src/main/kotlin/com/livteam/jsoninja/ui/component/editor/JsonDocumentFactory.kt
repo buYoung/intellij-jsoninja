@@ -2,13 +2,14 @@ package com.livteam.jsoninja.ui.component.editor
 
 import com.intellij.json.JsonFileType
 import com.intellij.json.JsonLanguage
-import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
@@ -59,7 +60,7 @@ object JsonDocumentFactory {
         val factory = PsiFileFactory.getInstance(notNullProject)
 
         val stamp = LocalTimeCounter.currentTime()
-        val psiFile = ReadAction.compute<PsiFile, RuntimeException> {
+        val psiFile = ApplicationManager.getApplication().runReadAction(Computable {
             factory.createFileFromText(
                 "Dummy." + (fileType.defaultExtension.takeIf { it.isNotEmpty() } ?: extensionToUse),
                 fileType,
@@ -68,14 +69,14 @@ object JsonDocumentFactory {
                 true,
                 false
             )
-        }
+        })
         psiFile.putUserData(JSONINJA_PSI_FILE_KEY, true)
 
         documentCreator.customizePsiFile(psiFile)
 
-        val document = ReadAction.compute<Document?, RuntimeException> {
+        val document = ApplicationManager.getApplication().runReadAction(Computable<Document?> {
             PsiDocumentManager.getInstance(notNullProject).getDocument(psiFile)
-        }
+        })
 
         val finalDocument = document ?: EditorFactory.getInstance().createDocument(value)
         finalDocument.putUserData(JSONINJA_EDITOR_KEY, true)

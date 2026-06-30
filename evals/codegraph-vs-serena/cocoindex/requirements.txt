@@ -1,0 +1,5 @@
+# cocoindex 암 (F) 의존성 — Python 3.13 venv 권장 (uv venv -p 3.13)
+# 핵심: cocoindex 의 tree-sitter 청킹(RecursiveSplitter) + sentence-transformers 임베딩
+cocoindex==1.0.7
+sentence-transformers>=3.3.1
+numpy>=1.23.2

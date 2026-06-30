@@ -1,22 +1,90 @@
 package com.livteam.jsoninja.services
 
 import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.editor.DiffEditorTabFilesManager
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.json.JsonFileType
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.DialogWrapper
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction
 import com.livteam.jsoninja.diff.JsonDiffKeys
+import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.ui.diff.JsonDiffVirtualFile
+import com.livteam.jsoninja.ui.diff.JsonDiffWindowDialog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Service(Service.Level.PROJECT)
 class JsonDiffService(private val project: Project) {
 
     private val formatterService = project.service<JsonFormatterService>()
+    private val coroutineScopeService = project.service<JsoninjaCoroutineScopeService>()
 
+    private data class ActiveDiffContext(
+        var displayMode: JsonDiffDisplayMode,
+        var sortKeys: Boolean,
+        val leftDocument: Document,
+        val rightDocument: Document,
+        var editorTabFile: JsonDiffVirtualFile? = null,
+        var windowDialog: JsonDiffWindowDialog? = null
+    )
+
+    private var activeDiffContext: ActiveDiffContext? = null
+
+    fun openDiff(
+        displayMode: JsonDiffDisplayMode,
+        currentJson: String?,
+        defaultSortKeys: Boolean
+    ) {
+        val leftJson = currentJson ?: "{}"
+        val existingContext = activeDiffContext
+        val hasExistingOpenHost = existingContext != null && hasOpenHost(existingContext)
+        val sortKeys = if (hasExistingOpenHost) existingContext.sortKeys else defaultSortKeys
+
+        coroutineScopeService.launch {
+            try {
+                val leftDiffText = withContext(Dispatchers.Default) {
+                    prepareDiffText(leftJson, sortKeys)
+                }
+                val rightDiffText = if (hasExistingOpenHost) {
+                    null
+                } else {
+                    withContext(Dispatchers.Default) {
+                        prepareDiffText("{}", defaultSortKeys)
+                    }
+                }
+
+                withContext(Dispatchers.EDT) {
+                    if (project.isDisposed) return@withContext
+                    val diffContext = getOrCreateContext(leftDiffText, rightDiffText, displayMode, defaultSortKeys)
+                    val currentDisplayMode = getCurrentDisplayMode(diffContext)
+
+                    if (currentDisplayMode != displayMode) {
+                        closeOpenHosts(diffContext)
+                        diffContext.displayMode = displayMode
+                    }
+
+                    openCurrentHost(diffContext)
+                }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            }
+        }
+    }
 
     /**
      * Validates and formats JSON in a single operation to improve performance
@@ -26,31 +94,15 @@ class JsonDiffService(private val project: Project) {
      */
     fun validateAndFormat(json: String, semantic: Boolean): Pair<Boolean, String?> {
         return try {
-            // First check if JSON is valid
             if (!formatterService.isValidJson(json)) {
                 return Pair(false, null)
             }
 
-            // Single parsing operation for both validation and formatting
             val formatState = if (semantic) JsonFormatState.PRETTIFY_SORTED else JsonFormatState.PRETTIFY
             val formatted = formatterService.formatJson(json, formatState, semantic)
-
-            // If formatting succeeds, the JSON is valid
             Pair(true, formatted)
         } catch (e: Exception) {
-            // If formatting fails, the JSON is invalid
             Pair(false, null)
-        }
-    }
-
-    private fun createDiffContent(json: String, editable: Boolean = true): com.intellij.diff.contents.DiffContent {
-        val json5FileType = FileTypeManager.getInstance().getFileTypeByExtension("json5")
-        val fileType = if (json5FileType is UnknownFileType) JsonFileType.INSTANCE else json5FileType
-
-        return if (editable) {
-            DiffContentFactory.getInstance().createEditable(project, json, fileType)
-        } else {
-            DiffContentFactory.getInstance().create(project, json, fileType, false)
         }
     }
 
@@ -60,18 +112,26 @@ class JsonDiffService(private val project: Project) {
         title: String? = null,
         semantic: Boolean = false
     ): SimpleDiffRequest {
+        val leftFinal = prepareDiffText(leftJson, semantic)
+        val rightFinal = prepareDiffText(rightJson, semantic)
+
+        return createDiffRequest(
+            leftDocument = createDiffDocument(leftFinal),
+            rightDocument = createDiffDocument(rightFinal),
+            title = title,
+            semantic = semantic
+        )
+    }
+
+    fun createDiffRequest(
+        leftDocument: Document,
+        rightDocument: Document,
+        title: String? = null,
+        semantic: Boolean = false
+    ): SimpleDiffRequest {
         val diffTitle = title ?: LocalizationBundle.message("dialog.json.diff.title")
-
-        // Use validateAndFormat for better performance
-        val (leftValid, leftFormatted) = validateAndFormat(leftJson, semantic)
-        val (rightValid, rightFormatted) = validateAndFormat(rightJson, semantic)
-
-        // Use original JSON if formatting failed
-        val leftFinal = if (leftValid && leftFormatted != null) leftFormatted else leftJson
-        val rightFinal = if (rightValid && rightFormatted != null) rightFormatted else rightJson
-
-        val leftContent = createDiffContent(leftFinal)
-        val rightContent = createDiffContent(rightFinal)
+        val leftContent = createDiffContent(leftDocument)
+        val rightContent = createDiffContent(rightDocument)
 
         val request = SimpleDiffRequest(
             diffTitle,
@@ -83,7 +143,140 @@ class JsonDiffService(private val project: Project) {
 
         request.putUserData(JsonDiffKeys.JSON_DIFF_REQUEST_MARKER, true)
         request.putUserData(JsonDiffKeys.JSON_DIFF_SORT_KEYS, semantic)
+        request.putUserData(
+            DiffUserDataKeys.CONTEXT_ACTIONS,
+            listOf(
+                SortJsonDiffKeysOnceAction()
+            )
+        )
 
         return request
+    }
+
+    private fun getOrCreateContext(
+        preparedLeftJson: String,
+        preparedRightJson: String?,
+        displayMode: JsonDiffDisplayMode,
+        defaultSortKeys: Boolean
+    ): ActiveDiffContext {
+        val existingContext = activeDiffContext
+
+        if (existingContext != null && hasOpenHost(existingContext)) {
+            replaceDocumentText(existingContext.leftDocument, preparedLeftJson)
+            return existingContext
+        }
+
+        return ActiveDiffContext(
+            displayMode = displayMode,
+            sortKeys = defaultSortKeys,
+            leftDocument = createDiffDocument(preparedLeftJson),
+            rightDocument = createDiffDocument(preparedRightJson ?: "{}")
+        ).also { activeDiffContext = it }
+    }
+
+    private fun hasOpenHost(diffContext: ActiveDiffContext): Boolean {
+        return isEditorTabOpen(diffContext) || isWindowOpen(diffContext)
+    }
+
+    private fun getCurrentDisplayMode(diffContext: ActiveDiffContext): JsonDiffDisplayMode {
+        return getOpenDisplayMode(diffContext) ?: diffContext.displayMode
+    }
+
+    private fun getOpenDisplayMode(diffContext: ActiveDiffContext): JsonDiffDisplayMode? {
+        val isEditorTabOpen = isEditorTabOpen(diffContext)
+        val isWindowOpen = isWindowOpen(diffContext)
+
+        return when {
+            isEditorTabOpen && !isWindowOpen -> JsonDiffDisplayMode.EDITOR_TAB
+            isWindowOpen && !isEditorTabOpen -> JsonDiffDisplayMode.WINDOW
+            isEditorTabOpen && isWindowOpen -> diffContext.displayMode
+            else -> null
+        }
+    }
+
+    private fun isEditorTabOpen(diffContext: ActiveDiffContext): Boolean {
+        val diffFile = diffContext.editorTabFile ?: return false
+        return FileEditorManager.getInstance(project).isFileOpen(diffFile)
+    }
+
+    private fun isWindowOpen(diffContext: ActiveDiffContext): Boolean {
+        return diffContext.windowDialog?.isOpen() == true
+    }
+
+    private fun openCurrentHost(diffContext: ActiveDiffContext) {
+        when (diffContext.displayMode) {
+            JsonDiffDisplayMode.EDITOR_TAB -> openEditorTab(diffContext)
+            JsonDiffDisplayMode.WINDOW -> openWindowDialog(diffContext)
+        }
+    }
+
+    private fun closeOpenHosts(diffContext: ActiveDiffContext) {
+        if (isEditorTabOpen(diffContext)) {
+            diffContext.editorTabFile?.let { FileEditorManager.getInstance(project).closeFile(it) }
+        }
+
+        if (isWindowOpen(diffContext)) {
+            diffContext.windowDialog?.close(DialogWrapper.CANCEL_EXIT_CODE)
+        }
+    }
+
+    private fun openEditorTab(diffContext: ActiveDiffContext) {
+        val diffFile = diffContext.editorTabFile ?: JsonDiffVirtualFile(
+            project = project,
+            diffService = this,
+            leftDocument = diffContext.leftDocument,
+            rightDocument = diffContext.rightDocument,
+            sortKeys = diffContext.sortKeys
+        ).also { diffContext.editorTabFile = it }
+
+        DiffEditorTabFilesManager.getInstance(project).showDiffFile(diffFile, true)
+    }
+
+    private fun openWindowDialog(diffContext: ActiveDiffContext) {
+        val existingDialog = diffContext.windowDialog
+        if (existingDialog != null && existingDialog.isOpen()) {
+            existingDialog.showOrFocus()
+            return
+        }
+
+        val dialog = JsonDiffWindowDialog(
+            project = project,
+            diffRequest = createDiffRequest(
+                leftDocument = diffContext.leftDocument,
+                rightDocument = diffContext.rightDocument,
+                semantic = diffContext.sortKeys
+            ),
+            onClosed = {
+                if (activeDiffContext === diffContext) {
+                    diffContext.windowDialog = null
+                }
+            }
+        )
+
+        diffContext.windowDialog = dialog
+        dialog.showOrFocus()
+    }
+
+    private fun createDiffDocument(initialText: String): Document {
+        return EditorFactory.getInstance().createDocument(initialText)
+    }
+
+    private fun replaceDocumentText(document: Document, newText: String) {
+        if (document.text == newText) return
+
+        WriteCommandAction.runWriteCommandAction(project) {
+            document.setText(newText)
+        }
+    }
+
+    private fun prepareDiffText(json: String, semantic: Boolean): String {
+        val (isValid, formattedJson) = validateAndFormat(json, semantic)
+        return if (isValid && formattedJson != null) formattedJson else json
+    }
+
+    private fun createDiffContent(document: Document): com.intellij.diff.contents.DocumentContent {
+        val json5FileType = FileTypeManager.getInstance().getFileTypeByExtension("json5")
+        val fileType = if (json5FileType is UnknownFileType) JsonFileType.INSTANCE else json5FileType
+        return DiffContentFactory.getInstance().create(project, document, fileType)
     }
 }

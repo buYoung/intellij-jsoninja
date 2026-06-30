@@ -1,0 +1,13 @@
+{
+  "name": "json-helper2",
+  "private": true,
+  "scripts": {
+    "changelog": "node scripts/update-changelog-with-codex.cjs",
+    "release": "release-it",
+    "release:dry": "release-it --dry-run"
+  },
+  "devDependencies": {
+    "release-it": "^20.0.1"
+  },
+  "packageManager": "pnpm@10.29.2"
+}

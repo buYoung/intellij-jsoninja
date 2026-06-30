@@ -14,6 +14,8 @@ import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * JSON 포맷팅 서비스
@@ -23,7 +25,8 @@ import java.util.concurrent.ConcurrentHashMap
 @Service(Service.Level.PROJECT)
 class JsonFormatterService(private val project: Project) {
     private val LOG = logger<JsonFormatterService>()
-    private val settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
+    private val settings: JsoninjaSettingsState
+        get() = JsoninjaSettingsState.getInstance(project)
     
     private val defaultMapper = service<JsonObjectMapperService>().objectMapper
     
@@ -203,6 +206,14 @@ class JsonFormatterService(private val project: Project) {
             LOG.warn("JSON 포맷팅 실패: ${e.message}")
             json
         }
+    }
+
+    suspend fun formatJsonOnDefault(
+        json: String,
+        formatState: JsonFormatState,
+        sortOverride: Boolean? = null
+    ): String = withContext(Dispatchers.Default) {
+        formatJson(json, formatState, sortOverride)
     }
 
     /**

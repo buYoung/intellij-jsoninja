@@ -1,14 +1,25 @@
 package com.livteam.jsoninja.ui.component.editor
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.TemplatePlaceholderSupport
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class JsonEditorTreePresenter(
+    private val project: Project,
     private val view: JsonEditorTreeView
 ) {
     companion object {
@@ -17,8 +28,38 @@ class JsonEditorTreePresenter(
     }
 
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
+    private val coroutineScope: CoroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
+    private var refreshTreeJob: Job? = null
 
     fun refreshTreeFromJson(jsonText: String) {
+        refreshTreeJob?.cancel()
+        refreshTreeJob = coroutineScope.launch {
+            try {
+                val treeModel = withContext(Dispatchers.Default) {
+                    buildTreeModel(jsonText)
+                }
+
+                withContext(Dispatchers.EDT) {
+                    if (project.isDisposed) return@withContext
+                    view.setTreeModel(treeModel)
+                }
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            }
+        }
+    }
+
+    fun cancelRefresh() {
+        refreshTreeJob?.cancel()
+        refreshTreeJob = null
+    }
+
+    fun dispose() {
+        cancelRefresh()
+        coroutineScope.cancel()
+    }
+
+    private fun buildTreeModel(jsonText: String): DefaultTreeModel {
         val treeRootNode = DefaultMutableTreeNode(TREE_ROOT_LABEL)
 
         try {
@@ -43,7 +84,7 @@ class JsonEditorTreePresenter(
             )
         }
 
-        view.setTreeModel(DefaultTreeModel(treeRootNode))
+        return DefaultTreeModel(treeRootNode)
     }
 
     private fun appendJsonNode(

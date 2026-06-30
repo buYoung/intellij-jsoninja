@@ -11,8 +11,8 @@ import com.livteam.jsoninja.settings.JsoninjaSettingsConfigurable
  * JSONinja 설정 페이지를 여는 액션 클래스입니다.
  */
 class OpenSettingsAction : AnAction(
-    LocalizationBundle.message("settings.action.text"),
-    LocalizationBundle.message("settings.action.description"),
+    LocalizationBundle.messagePointer("settings.action.text"),
+    LocalizationBundle.messagePointer("settings.action.description"),
     AllIcons.General.Settings
 ) {
     override fun actionPerformed(e: AnActionEvent) {

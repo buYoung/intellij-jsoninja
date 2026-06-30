@@ -4,6 +4,114 @@
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-06-30
+
+### Added
+
+- **Settings Sync**: JSONinja settings can now be synced with JetBrains Settings Sync, with a settings-page checkbox to turn syncing on or off.
+
+### Changed
+
+- **Settings**: JSONinja preferences now stay consistent across open projects, so changes such as formatting, query, diff, and type-conversion defaults take effect wherever JSONinja is open.
+- **Onboarding**: The welcome experience is now remembered across projects, so dismissing it once does not make it reappear for each project.
+
+## [1.12.2] - 2026-06-29
+
+### Fixed
+
+- **Code Folding**: Collapsing and expanding folded JSON in JSONinja editors now behaves consistently, so folding actions no longer get blocked or leave the editor in an unexpected state.
+
+## [1.12.1] - 2026-05-28
+
+### Fixed
+
+- **Code Folding**: JSONinja editors now keep folding refreshes compatible with newer IDE builds, avoiding failures caused by unsupported IDE APIs.
+
+## [1.12.0] - 2026-05-27
+
+### Changed
+
+- **JSON Editing**: Formatting, escaping, unescaping, and query result updates now keep the editor responsive while processing larger JSON content.
+- **JSON Diff**: Opening a diff and sorting diff keys now keeps the diff view responsive on larger inputs and avoids applying outdated results if the content changes during processing.
+- **Schema-Based JSON Generation**: Schema URL suggestions now wait briefly while you type and only show results for the latest input, reducing freezes when searching the schema catalog.
+
+### Fixed
+
+- **Code Folding**: Folding regions now refresh more reliably after edits without interrupting typing, while preserving expanded and collapsed states where possible.
+
+## [1.11.4] - 2026-05-21
+
+### Improved
+
+- Fixed a bug that caused jsoninja to slow down.
+
+### Fixed
+
+- **JSON Type Conversion**: Go type conversion now respects JSON tag names and Go's default JSON field names, so generated JSON uses the expected property names instead of exported struct field names.
+- **JSON Type Conversion**: Complex nested objects, maps, arrays, aliases, and enums now convert more reliably in both directions, including cases where supporting type declarations appear before the main type.
+
+## [1.11.3] - 2026-04-28
+
+### Fixed
+
+- **Code Folding**: Fixed an issue where code folding did not work in JSONinja editors.
+
+## [1.11.2] - 2026-04-08
+
+### Added
+
+- **JSON Diff Display Modes**: You can now choose how to view JSON Diff results.
+  - **Open in Editor Tab**: Show the diff inside a regular editor tab alongside your other files.
+  - **Open in Window**: Show the diff in a separate floating window for side-by-side comparison with the main editor.
+  - Dedicated toolbar actions let you pick the mode that fits your workflow, and switching modes reuses the currently open diff instead of starting over.
+
+### Fixed
+
+- **Code Folding**: Code folding works again in JSONinja editors on IDE 2026.1, so you can collapse and expand JSON objects and arrays as before.
+- **JSON Diff View**: The existing JSON Diff view no longer disappears when you click the diff action icon again; reopening a diff now preserves its contents and state.
+
+## [1.11.1] - 2026-04-08
+
+### Fixed
+
+- **Code Folding**: Fixed an issue where code folding no longer worked in the plugin editors on IDE 2026.1.
+- **JSON Diff Tool Window**: Fixed an issue where the contents of the existing JSON Diff tool window disappeared when clicking the action icon.
+
+## [1.11.0] - 2026-04-08
+
+### Added
+
+- **JSON Type Conversion**: Added a new feature to convert JSON data into type declarations for multiple programming languages.
+    - Supports Kotlin, Java, and Go as target languages.
+    - Live preview panel shows the converted type declarations in real time.
+    - Configurable annotation styles and conversion options per language.
+    - Generates sample JSON data from type declarations for quick validation.
+    - Handles complex data structures including nested objects and arrays.
+    - Java import deduplication to avoid unnecessary import statements.
+
+## [1.10.1] - 2026-03-26
+
+### Changed
+
+- Updated maximum supported IDE version to 263.*
+
+## [1.10.0] - 2026-03-24
+
+### Added
+
+- **Editor JSON Formatting**: Added JSON formatting actions to the editor context menu.
+    - Prettify: Format and indent JSON for readability.
+    - Minify: Compress JSON by removing whitespace.
+    - Escape: Escape special characters in JSON strings.
+    - Unescape: Restore escaped characters in JSON strings.
+- **Jackson JQ Support**: Added Jackson JQ as a new query method in JSON Query, alongside JsonPath and JMESPath.
+
+### Changed
+
+- **JSON Query Improvements**: Improved settings change listener, refined multilingual translations, and refactored variable naming for clarity.
+
+## [1.9.0] - 2026-03-02
+
 ### Added
 
 - **JSON Tree View**: Added a new graphical Tree View interface to easily navigate, visualize, and interact with JSON structures.
@@ -295,7 +403,18 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.2...v1.13.0
+[1.12.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.1...v1.12.2
+[1.12.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.0...v1.12.1
+[1.12.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.4...v1.12.0
+[1.11.4]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.3...v1.11.4
+[1.11.3]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.2...v1.11.3
+[1.11.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.1...v1.11.2
+[1.11.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.0...v1.11.1
+[1.11.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.1...v1.11.0
+[1.10.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.10.0...v1.10.1
+[1.10.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.6.1...v1.7.0

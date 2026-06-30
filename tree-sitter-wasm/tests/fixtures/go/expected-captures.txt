@@ -1,0 +1,6 @@
+type.name|UserResponse
+generic.param|T
+type.kind|struct
+field.name|Name
+field.type|string
+annotation|`json:\"name\"`

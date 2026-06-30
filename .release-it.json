@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/release-it@20/schema/release-it.json",
+  "npm": false,
+  "git": {
+    "commitMessage": "chore: release v${version}",
+    "requireBranch": "main",
+    "tagName": "v${version}",
+    "tagAnnotation": "Release v${version}"
+  },
+  "hooks": {
+    "after:bump": "node scripts/update-changelog-with-codex.cjs ${latestTag} ${version}",
+    "before:git:commit": "git add CHANGELOG.md gradle.properties src/main/resources/META-INF/plugin.xml"
+  }
+}
