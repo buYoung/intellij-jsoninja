@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-06-30
+
 ### Added
 
 - **Settings Sync**: JSONinja settings can now be synced with JetBrains Settings Sync, with a settings-page checkbox to turn syncing on or off.
@@ -401,7 +403,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.2...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.2...v1.13.0
 [1.12.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.1...v1.12.2
 [1.12.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.4...v1.12.0
