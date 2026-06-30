@@ -1,6 +1,7 @@
 package com.livteam.jsoninja.settings
 
 import com.intellij.openapi.options.Configurable
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.components.JBCheckBox
@@ -17,8 +18,9 @@ import javax.swing.*
 
 class JsoninjaSettingsConfigurable(private val project: Project) : Configurable {
 
-    private val settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
+    private var settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
 
+    private var settingsSyncCheckBox: JBCheckBox? = null
     private var indentSizeSpinner: JSpinner? = null
     private var sortKeysCheckBox: JBCheckBox? = null
     private var jsonFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
@@ -116,6 +118,10 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
 
     override fun createComponent(): JComponent? {
         if (mainPanel == null) {
+            settingsSyncCheckBox = JBCheckBox(
+                LocalizationBundle.message("settings.sync.enabled.label"),
+                JsoninjaSettingsState.isSettingsSyncEnabled()
+            )
             indentSizeSpinner = JSpinner(SpinnerNumberModel(settings.indentSize, 0, 32, 1))
             sortKeysCheckBox = JBCheckBox(LocalizationBundle.message("settings.sortkeys.label"), settings.sortKeys)
             diffSortKeysCheckBox = JBCheckBox(LocalizationBundle.message("settings.diff.sort.label"), settings.diffSortKeys)
@@ -186,6 +192,10 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             jsonQueryTypeComboBox?.selectedItem = selectedJsonQueryTypeWrapper
 
             mainPanel = panel {
+                row {
+                    cell(settingsSyncCheckBox!!)
+                }
+                separator()
                 row(LocalizationBundle.message("settings.indent.label")) {
                     cell(indentSizeSpinner!!)
                 }
@@ -244,7 +254,8 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             JsonDiffDisplayMode.EDITOR_TAB
         }
         val currentJsonQueryType = JsonQueryType.fromString(settings.jsonQueryType)
-        return indentSizeSpinner?.value != settings.indentSize ||
+        return settingsSyncCheckBox?.isSelected != JsoninjaSettingsState.isSettingsSyncEnabled() ||
+                indentSizeSpinner?.value != settings.indentSize ||
                 sortKeysCheckBox?.isSelected != settings.sortKeys ||
                 (jsonFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentFormatState.name ||
                 (iconPackComboBox?.selectedItem as? JsonIconPackWrapper)?.pack?.name != currentIconPack.name ||
@@ -257,6 +268,10 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
     }
 
     override fun apply() {
+        settings = JsoninjaSettingsState.setSettingsSyncEnabled(
+            project,
+            settingsSyncCheckBox?.isSelected ?: JsoninjaSettingsState.isSettingsSyncEnabled()
+        )
         settings.indentSize = indentSizeSpinner?.value as? Int ?: settings.indentSize
         settings.sortKeys = sortKeysCheckBox?.isSelected ?: settings.sortKeys
         val selectedFormatWrapper = jsonFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper
@@ -273,10 +288,16 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         settings.largeFileThresholdMB = largeFileThresholdSpinner?.value as? Int ?: settings.largeFileThresholdMB
         settings.showLargeFileWarning = showLargeFileWarningCheckBox?.isSelected ?: settings.showLargeFileWarning
 
-        project.messageBus.syncPublisher(JsoninjaSettingsListener.TOPIC).onSettingsChanged(settings)
+        ProjectManager.getInstance().openProjects
+            .filter { !it.isDisposed }
+            .forEach { openProject ->
+                openProject.messageBus.syncPublisher(JsoninjaSettingsListener.TOPIC).onSettingsChanged(settings)
+            }
     }
 
     override fun reset() {
+        settings = JsoninjaSettingsState.getInstance(project)
+        settingsSyncCheckBox?.isSelected = JsoninjaSettingsState.isSettingsSyncEnabled()
         indentSizeSpinner?.value = settings.indentSize
         sortKeysCheckBox?.isSelected = settings.sortKeys
 
@@ -336,6 +357,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
 
     override fun disposeUIResources() {
         mainPanel = null
+        settingsSyncCheckBox = null
         indentSizeSpinner = null
         sortKeysCheckBox = null
         jsonFormatStateComboBox = null

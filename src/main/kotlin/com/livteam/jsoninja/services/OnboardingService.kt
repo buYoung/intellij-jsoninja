@@ -102,10 +102,19 @@ class OnboardingService(
     }
 
     private fun isOnboardingSeen(): Boolean {
-        return PropertiesComponent.getInstance(project).getBoolean(ONBOARDING_SEEN_KEY, false)
+        val onboardingState = OnboardingStateService.getInstance()
+        if (onboardingState.isWelcomeDialogSeen) return true
+
+        if (PropertiesComponent.getInstance(project).getBoolean(ONBOARDING_SEEN_KEY, false)) {
+            onboardingState.markWelcomeDialogSeen()
+            return true
+        }
+
+        return false
     }
 
     private fun markOnboardingSeen() {
+        OnboardingStateService.getInstance().markWelcomeDialogSeen()
         PropertiesComponent.getInstance(project).setValue(ONBOARDING_SEEN_KEY, true)
     }
 

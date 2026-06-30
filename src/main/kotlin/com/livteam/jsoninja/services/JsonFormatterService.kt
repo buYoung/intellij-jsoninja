@@ -25,7 +25,8 @@ import kotlinx.coroutines.withContext
 @Service(Service.Level.PROJECT)
 class JsonFormatterService(private val project: Project) {
     private val LOG = logger<JsonFormatterService>()
-    private val settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
+    private val settings: JsoninjaSettingsState
+        get() = JsoninjaSettingsState.getInstance(project)
     
     private val defaultMapper = service<JsonObjectMapperService>().objectMapper
     

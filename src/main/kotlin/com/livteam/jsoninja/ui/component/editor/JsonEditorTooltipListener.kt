@@ -33,7 +33,8 @@ class JsonEditorTooltipListener(
         private const val HINT_DELAY_MS = 200
     }
 
-    private val settings = JsoninjaSettingsState.getInstance(project)
+    private val settings: JsoninjaSettingsState
+        get() = JsoninjaSettingsState.getInstance(project)
     private var tooltipJob: Job? = null
     @Volatile
     private var pendingTooltip: PendingTooltip? = null

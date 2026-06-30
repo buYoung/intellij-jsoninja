@@ -12,7 +12,8 @@ import com.livteam.jsoninja.settings.JsoninjaSettingsState
 @Service(Service.Level.PROJECT)
 class JsonHelperService(private val project: Project) {
 
-    private val settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
+    private val settings: JsoninjaSettingsState
+        get() = JsoninjaSettingsState.getInstance(project)
 
     /**
      * JSON 포맷 상태 설정
