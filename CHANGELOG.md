@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-06-29
+
 ### Fixed
 
 - **Code Folding**: Collapsing and expanding folded JSON in JSONinja editors now behaves consistently, so folding actions no longer get blocked or leave the editor in an unexpected state.
@@ -390,7 +392,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.1...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.2...HEAD
+[1.12.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.1...v1.12.2
 [1.12.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.4...v1.12.0
 [1.11.4]: https://github.com/buYoung/intellij-jsoninja/compare/v1.11.3...v1.11.4
