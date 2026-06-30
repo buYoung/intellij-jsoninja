@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Settings Sync**: JSONinja settings can now be synced with JetBrains Settings Sync, with a settings-page checkbox to turn syncing on or off.
+
+### Changed
+
+- **Settings**: JSONinja preferences now stay consistent across open projects, so changes such as formatting, query, diff, and type-conversion defaults take effect wherever JSONinja is open.
+- **Onboarding**: The welcome experience is now remembered across projects, so dismissing it once does not make it reappear for each project.
+
 ## [1.12.2] - 2026-06-29
 
 ### Fixed
