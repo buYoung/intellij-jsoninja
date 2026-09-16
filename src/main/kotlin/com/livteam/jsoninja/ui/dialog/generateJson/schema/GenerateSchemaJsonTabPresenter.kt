@@ -47,10 +47,12 @@ class GenerateSchemaJsonTabPresenter(
     private var schemaStoreCatalogItems: List<SchemaStoreCatalogItem> = emptyList()
     private var schemaStoreCatalogState = SchemaStoreCatalogState.LOADING
     private var schemaStoreFilterJob: Job? = null
+    private var schemaRetrievalUri: String? = null
 
     init {
         view.setOnSchemaUrlInputChanged { filterSchemaStoreCatalogItemsByInput() }
         view.setOnLoadSchemaFromUrlRequested { loadSchemaFromUrl() }
+        view.setOnSchemaSourceReplaced { schemaRetrievalUri = null }
         loadSchemaStoreCatalog()
     }
 
@@ -111,7 +113,8 @@ class GenerateSchemaJsonTabPresenter(
             isJson5 = view.isJson5Selected() || isCommentedMode,
             schemaText = view.getSchemaText(),
             schemaOutputCount = view.getSchemaOutputCountText().toIntOrNull() ?: initialConfig.schemaOutputCount,
-            schemaPropertyGenerationMode = schemaPropertyGenerationMode
+            schemaPropertyGenerationMode = schemaPropertyGenerationMode,
+            schemaRetrievalUri = schemaRetrievalUri
         )
     }
 
@@ -429,6 +432,7 @@ class GenerateSchemaJsonTabPresenter(
                 withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
                     if (isDisposed) return@withContext
                     setSchemaEditorText(fetchedSchemaText)
+                    schemaRetrievalUri = schemaUrl
                     view.markSchemaStoreSelectionLoaded()
                 }
             } catch (cancellationException: CancellationException) {

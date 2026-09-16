@@ -45,9 +45,11 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         validationService.parseStrictSchema(schemaText)
     }
 
-    fun prepareSchema(schemaText: String): PreparedSchema {
+    fun prepareSchema(schemaText: String): PreparedSchema = prepareSchema(schemaText, null)
+
+    fun prepareSchema(schemaText: String, retrievalUri: String?): PreparedSchema {
         val parsedSchemaNode = validationService.parseStrictSchema(schemaText)
-        val normalizedJsonSchema = normalizer.normalize(parsedSchemaNode)
+        val normalizedJsonSchema = normalizer.normalize(parsedSchemaNode, retrievalUri)
         val schemaValidationResult = validationService.validateSchema(normalizedJsonSchema.resolvedSchemaNode)
         if (!schemaValidationResult.isValid || schemaValidationResult.compiledSchema == null) {
             throw JsonSchemaGenerationException(
@@ -72,7 +74,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
             throw JsonSchemaGenerationException("Schema output count must be greater than zero.")
         }
 
-        val preparedSchema = prepareSchema(config.schemaText)
+        val preparedSchema = prepareSchema(config.schemaText, config.schemaRetrievalUri)
         if (config.schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED) {
             return generateCommentedSchemaOutput(preparedSchema, config.schemaOutputCount)
         }

@@ -18,7 +18,7 @@
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-09-preview-state.md` — Apply only previews for the current input; exists because audit items R1.6, M1b share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-10-json-to-type.md` — Generate types that admit the source JSON; exists because audit items R1.7, R1.8, R1.9a, R1.9b, R2.9 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-11-type-to-json.md` — Preserve enum literals and optional-field modes; exists because audit items R2.5, R2.6 share one independent behavior/acceptance boundary.
-- [ ] `docs/briefs/2026-09-16-fix-json-integrity-12-schema-refs.md` — Resolve schema references in their source context; exists because audit items R1.10, R1.11 share one independent behavior/acceptance boundary.
+- [x] `docs/briefs/2026-09-16-fix-json-integrity-12-schema-refs.md` — Resolve schema references in their source context; exists because audit items R1.10, R1.11 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-13-schema-numbers.md` — Generate numbers within actual schema bounds; exists because audit items R2.4a, R2.4b share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-14-onboarding.md` — 구현·기존 검증·커밋 완료, 네이티브 창 관찰 대기. Close only diff UI owned by the tutorial; exists because audit items R1.3 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-refactor-json-integrity-15-http-lifecycle.md` — Bound and share JSON HTTP request cleanup; exists because audit items M2 share one independent behavior/acceptance boundary.
@@ -92,6 +92,8 @@
 - Must not overlap: `docs/briefs/2026-09-16-fix-json-integrity-02-json-input.md` and `docs/briefs/2026-09-16-ci-json-integrity-16-ci-artifacts.md` — serialize child 02 before child 16 for any justified input dependency before final package/workflow wiring. Join when: the latter consumes the accepted predecessor record and re-verifies the final shared state.
 
 ## Conflict Hotspots
+
+- `src/main/resources/messages/LocalizationBundle*.properties` — 12가 새 참조 오류의 세 진단 키를 단독으로 추가한다. 15는 기존 키를 재사용하고 출처/포인터 계약을 보존한다.
 
 - `src/main/kotlin/com/livteam/jsoninja/ui/component/editor/JsonEditorView.kt` — Children: `docs/briefs/2026-09-16-fix-json-integrity-01-undo-routing.md`, `docs/briefs/2026-09-16-fix-json-integrity-07-tree-view.md`; Access: serialized; Owner: `docs/briefs/2026-09-16-fix-json-integrity-01-undo-routing.md`; Rule: child 01 completes editor data ownership before tree subscriptions before child 07 writes and records integration verification.
 - `src/main/kotlin/com/livteam/jsoninja/services/JsonFormatterService.kt` — Children: `docs/briefs/2026-09-16-fix-json-integrity-02-json-input.md`, `docs/briefs/2026-09-16-fix-json-integrity-03-format-safety.md`; Access: serialized; Owner: `docs/briefs/2026-09-16-fix-json-integrity-02-json-input.md`; Rule: child 02 completes input numeric preservation before escape and formatting-state edits before child 03 writes and records integration verification.
