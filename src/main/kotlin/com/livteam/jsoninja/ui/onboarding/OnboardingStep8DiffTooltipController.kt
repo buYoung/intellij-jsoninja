@@ -1,20 +1,22 @@
 package com.livteam.jsoninja.ui.onboarding
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.popup.Balloon
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.GotItTooltip
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.actions.ShowJsonDiffAction
-import com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction
+import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
+import com.livteam.jsoninja.settings.JsoninjaSettingsState
+import com.livteam.jsoninja.ui.diff.JsonDiffWindowDialog
+import com.livteam.jsoninja.utils.JsonHelperUtils
 import java.awt.Component
 import java.awt.Container
-import java.awt.Window
 import javax.swing.JComponent
 import javax.swing.Timer
 import kotlinx.coroutines.cancel
@@ -35,12 +37,12 @@ class OnboardingStep8DiffTooltipController(
     private var retryTimer: Timer? = null
     private val tooltipSessionId = System.nanoTime()
     private var tooltipSequence = 0
-    private var openedDiffWindow: Window? = null
+    private var ownedDiffDialog: JsonDiffWindowDialog? = null
     private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
 
     init {
         Disposer.register(tooltipParent) {
-            coroutineScope.cancel()
+            dispose()
         }
     }
 
@@ -53,14 +55,38 @@ class OnboardingStep8DiffTooltipController(
     ) {
         if (!showTooltip || !stepChanged || anchorTargetName == null) return
 
-        val sequence = tooltipSequence++
+        closeDiffWindow()
+        val sequence = ++tooltipSequence
         val actionTooltipId = "com.livteam.jsoninja.onboarding.step8.action.$tooltipSessionId.$sequence"
         val sortTooltipId = "com.livteam.jsoninja.onboarding.step8.sort.$tooltipSessionId.$sequence"
 
         coroutineScope.launch {
+            val input = withContext(Dispatchers.EDT) {
+                if (isDisposed() || project.isDisposed || !isStep8Active()) return@withContext null
+                Pair(
+                    JsonHelperUtils.getCurrentJsonFromToolWindow(project) ?: "{}",
+                    JsoninjaSettingsState.getInstance(project).diffSortKeys,
+                )
+            } ?: return@launch
+            val diffService = project.service<JsonDiffService>()
+            val leftText = withContext(Dispatchers.Default) {
+                diffService.validateAndFormat(input.first, input.second).second ?: input.first
+            }
             withContext(Dispatchers.EDT) {
-                if (isDisposed() || project.isDisposed || !isStep8Active()) return@withContext
-                ShowJsonDiffAction.openDiffForCurrentJson(project, forceWindow = true)
+                if (isDisposed() || project.isDisposed || !isStep8Active() || sequence != tooltipSequence) {
+                    return@withContext
+                }
+                val request = diffService.createDiffRequest(
+                    leftDocument = EditorFactory.getInstance().createDocument(leftText),
+                    rightDocument = EditorFactory.getInstance().createDocument("{}"),
+                    semantic = input.second,
+                )
+                lateinit var dialog: JsonDiffWindowDialog
+                dialog = JsonDiffWindowDialog(project, request) {
+                    if (ownedDiffDialog === dialog) ownedDiffDialog = null
+                }
+                ownedDiffDialog = dialog
+                dialog.showOrFocus()
                 showTooltips(
                     stepTitleKey = stepTitleKey,
                     stepBodyKey = stepBodyKey,
@@ -123,8 +149,6 @@ class OnboardingStep8DiffTooltipController(
             notifyUiUpdated()
             return
         }
-
-        openedDiffWindow = findWindowAncestor(sortButton)
 
         val actionGuideTooltip = GotItTooltip(
             actionTooltipId,
@@ -202,28 +226,15 @@ class OnboardingStep8DiffTooltipController(
     }
 
     private fun closeDiffWindow() {
-        val stepWindow = openedDiffWindow
-        if (stepWindow != null && stepWindow.isShowing) {
-            stepWindow.dispose()
-            openedDiffWindow = null
-            return
-        }
-
-        val currentSortButton = findSortKeysActionButton()
-        val detectedWindow = currentSortButton?.let { findWindowAncestor(it) }
-        if (detectedWindow != null && detectedWindow.isShowing) {
-            detectedWindow.dispose()
-        }
-        openedDiffWindow = null
+        tooltipSequence++
+        val dialog = ownedDiffDialog ?: return
+        ownedDiffDialog = null
+        dialog.close(DialogWrapper.CANCEL_EXIT_CODE)
     }
 
     private fun findSortKeysActionButton(): JComponent? {
-        Window.getWindows().forEach { window ->
-            if (!window.isShowing) return@forEach
-            val found = findSortKeysActionButton(window)
-            if (found != null) return found
-        }
-        return null
+        val window = ownedDiffDialog?.window ?: return null
+        return if (window.isShowing) findSortKeysActionButton(window) else null
     }
 
     private fun findSortKeysActionButton(component: Component): JComponent? {
@@ -240,7 +251,6 @@ class OnboardingStep8DiffTooltipController(
     }
 
     private fun isSortKeysActionButton(component: JComponent): Boolean {
-        if (!component.javaClass.name.contains("ActionButton")) return false
         val sortLabel = LocalizationBundle.message("action.diff.sort.keys.once")
         val sortDescription = LocalizationBundle.message("action.diff.sort.keys.once.description")
         val tooltipText = component.toolTipText?.trim()
@@ -250,49 +260,7 @@ class OnboardingStep8DiffTooltipController(
             if (tooltipText.contains(sortDescription, ignoreCase = true)) return true
         }
 
-        val action = extractAction(component) as? AnAction ?: return false
-
-        if (action.javaClass.name == SortJsonDiffKeysOnceAction::class.java.name) return true
-
-        val actionText = action.templatePresentation.text?.trim() ?: return false
-        return actionText == sortLabel
-    }
-
-    private fun extractAction(component: JComponent): Any? {
-        val publicMethod = component.javaClass.methods.firstOrNull {
-            it.name == "getAction" && it.parameterCount == 0
-        }
-        if (publicMethod != null) {
-            return runCatching { publicMethod.invoke(component) }.getOrNull()
-        }
-
-        val declaredMethod = component.javaClass.declaredMethods.firstOrNull {
-            it.name == "getAction" && it.parameterCount == 0
-        }
-        if (declaredMethod != null) {
-            return runCatching {
-                declaredMethod.isAccessible = true
-                declaredMethod.invoke(component)
-            }.getOrNull()
-        }
-
-        val declaredField = component.javaClass.declaredFields.firstOrNull {
-            it.name == "myAction" || it.name == "action"
-        } ?: return null
-
-        return runCatching {
-            declaredField.isAccessible = true
-            declaredField.get(component)
-        }.getOrNull()
-    }
-
-    private fun findWindowAncestor(component: Component): Window? {
-        var current: Component? = component
-        while (current != null) {
-            if (current is Window) return current
-            current = current.parent
-        }
-        return null
+        return false
     }
 
     private fun notifyUiUpdated() {
