@@ -71,20 +71,15 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
                 // 엔터 키 처리
                 if (e.keyCode == VK_ENTER) {
                     val query = view.query
-                    // 쿼리가 비어있으면 원본 JSON으로 돌아감
-                    if (query.isEmpty()) {
+                    if (query.isBlank()) {
+                        val shouldRestoreSource = model.lastQuery.isNotEmpty() && hasOriginalJson()
                         model.lastQuery = ""
-                        val sequenceNumber = searchSequence.incrementAndGet()
-
-                        coroutineScope.launch {
-                            withContext(Dispatchers.EDT) {
-                                if (isDisposed) return@withContext
-                                if (searchSequence.get() != sequenceNumber) return@withContext
-                                onSearchCallback?.invoke(model.originalJson, model.originalJson)
-                            }
+                        invalidatePendingSearch()
+                        onBeforeSearchCallback?.invoke()
+                        if (shouldRestoreSource) {
+                            onSearchCallback?.invoke(model.originalJson, model.originalJson)
                         }
                     } else {
-                        model.lastQuery = query
                         performSearch(query)
                     }
                 }
@@ -99,6 +94,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
         if (isDisposed) return
         // 검색 전 콜백 호출
         onBeforeSearchCallback?.invoke()
+        model.lastQuery = query
         val sequenceNumber = searchSequence.incrementAndGet()
         val originalJson = model.originalJson
         val originalJsonTrim = originalJson.trim()
@@ -113,40 +109,19 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
         coroutineScope.launch {
             try {
                 if (isDisposed) return@launch
-                if (!isValidJson(originalJson)) {
-                    LOG.warn("원본 JSON이 비어있거나 유효하지 않습니다.")
-                    return@launch
-                }
-
-                if (query.isEmpty()) {
-                    withContext(Dispatchers.EDT) {
-                        if (isDisposed) return@withContext
-                        if (searchSequence.get() != sequenceNumber) return@withContext
-                        onSearchCallback?.invoke(originalJson, originalJson)
-                    }
-                    return@launch
-                }
-
-                // 쿼리 유효성 먼저 검사
-                if (!jsonQueryService.isValidExpression(query)) {
-                    LOG.warn("유효하지 않은 쿼리 표현식: $query")
-                    return@launch
-                }
-
                 val result = withContext(Dispatchers.Default) {
-                    jsonQueryService.query(originalJson, query)
+                    if (!isValidJson(originalJson) || !jsonQueryService.isValidExpression(query)) {
+                        null
+                    } else {
+                        jsonQueryService.query(originalJson, query)
+                    }
                 }
 
                 withContext(Dispatchers.EDT) {
                     if (isDisposed) return@withContext
                     if (searchSequence.get() != sequenceNumber) return@withContext
-                    if (result == null) {
+                    if (result.isNullOrEmpty()) {
                         return@withContext
-                    }
-
-                    if (result.isEmpty()) {
-                        // 결과가 비어있어도 콜백은 호출하여 UI가 현재 결과를 반영하도록 함
-                        LOG.warn("쿼리 결과가 없습니다: $query")
                     }
 
                     onSearchCallback?.invoke(originalJson, result)
@@ -199,40 +174,10 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
      */
     fun setOriginalJson(json: String) {
         if (isDisposed) return
-        // 원본 JSON이 변경되지 않았으면 아무 작업도 하지 않음
-        if (model.originalJson == json) {
-            return
-        }
-
+        // Query display writes are excluded by the tab owner. Every other revision becomes the source.
         model.originalJson = json
-        val sequenceNumber = searchSequence.incrementAndGet()
-
-        // 원본 JSON이 변경되면 현재 쿼리를 다시 실행
-        val currentQuery = view.query
-        if (currentQuery.isNotEmpty()) {
-            model.lastQuery = currentQuery
-            performSearch(currentQuery)
-        } else if (json.isNotEmpty()) {
-            coroutineScope.launch {
-                try {
-                    val isJsonValid = withContext(Dispatchers.Default) {
-                        isValidJson(json)
-                    }
-
-                    if (!isJsonValid) return@launch
-
-                    withContext(Dispatchers.EDT) {
-                        if (isDisposed) return@withContext
-                        if (model.originalJson != json) return@withContext
-                        if (searchSequence.get() != sequenceNumber) return@withContext
-                        // 쿼리가 비어있으면 원본 JSON을 표시
-                        onSearchCallback?.invoke(json, json)
-                    }
-                } catch (cancellationException: CancellationException) {
-                    throw cancellationException
-                }
-            }
-        }
+        model.lastQuery = ""
+        invalidatePendingSearch()
     }
 
     /**

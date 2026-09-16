@@ -95,7 +95,7 @@ class JsonTabContextFactory(
         editor.editor.document.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
                 if (!isApplyingQueryResult) {
-                    jsonQueryPresenter.invalidatePendingSearch()
+                    jsonQueryPresenter.setOriginalJson(event.document.text)
                     queryResultFormatJob?.cancel()
                 }
             }
