@@ -4,6 +4,29 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **JSON Editing**: Undo and Redo now apply to the focused JSONinja editor instead of affecting another open file.
+- **JSON Formatting**: Formatting preserves decimal precision and escaped string contents, including file paths, quotes, and line breaks. Sorting keys now also respects the compact-array option.
+- **JSON5 Input**: Formatting, querying, and JSON to type conversion now accept numeric forms such as `+1`, `0x10`, `.5`, and `1.`, as well as string line continuations.
+- **JSON Query**: Queries use the latest edited or replaced JSON, including after Undo and Redo. Submitting an empty query restores that source after a search and leaves a new tab untouched. Successful `null` results are now displayed.
+- **Query Paths**: Copied paths and tooltip paths use the selected JsonPath, JMESPath, or jq syntax, including for templates and keys containing spaces, quotes, or other special characters.
+- **Tree View**: Empty arrays are now visible, and the tree stays in sync with document changes, including Undo and Redo.
+- **JSON Results**: Results from earlier queries, diff formatting, or JSON generation no longer overwrite newer edits or results. Generated JSON is inserted into the tab where generation started, even if you switch tabs before it finishes.
+- **Type Conversion Preview**: Copy and Insert stay disabled until a preview matches the current input, language, and options, preventing outdated output from being copied or inserted.
+- **JSON to Type Conversion**:
+  - Generated types correctly represent mixed-value arrays and TypeScript arrays with nullable elements, and empty JSON objects produce valid Kotlin classes.
+  - TypeScript properties retain the original JSON keys. Java, Kotlin, and Go output handles reserved words and special characters in keys, with Go preserving the original keys when reading and writing JSON.
+- **Type to JSON Conversion**:
+  - TypeScript enums use their declared string or numeric values, including automatically numbered members.
+  - Optional fields remain commented out when that mode is selected, including in compact JSON5 output.
+  - Conversions running in multiple dialogs or projects keep their results separate.
+- **Schema-Based JSON Generation**:
+  - Schemas loaded from a URL resolve relative references from the correct location, including nested schema locations. Unresolvable references report an error instead of producing unrelated sample data.
+  - Constant, enum, default, and example data is preserved even when it contains keys that resemble schema rules.
+  - Generated numbers respect minimum-only or maximum-only limits, narrow decimal ranges, exclusive bounds, and required multiples while preserving large integers and decimal precision.
+- **Onboarding**: Advancing past the tutorial's diff step or ending the tutorial closes only its own comparison window, leaving other diff views and the IDE window open.
+
 ## [1.13.0] - 2026-06-30
 
 ### Added
