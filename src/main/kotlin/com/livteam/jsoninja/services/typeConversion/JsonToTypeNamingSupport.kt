@@ -8,10 +8,25 @@ object JsonToTypeNamingSupport {
     private val camelCaseBoundary = Regex("([a-z0-9])([A-Z])")
     private val leadingDigits = Regex("^[0-9]+")
     private val reservedWordsByLanguage = mapOf(
-        SupportedLanguage.KOTLIN to setOf("class", "object", "interface", "val", "var", "when", "data"),
-        SupportedLanguage.JAVA to setOf("class", "interface", "enum", "public", "private", "package"),
+        SupportedLanguage.KOTLIN to setOf(
+            "as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in", "interface",
+            "is", "null", "object", "package", "return", "super", "this", "throw", "true", "try", "typealias",
+            "typeof", "val", "var", "when", "while", "data",
+        ),
+        SupportedLanguage.JAVA to setOf(
+            "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const",
+            "continue", "default", "do", "double", "else", "enum", "extends", "final", "finally", "float",
+            "for", "goto", "if", "implements", "import", "instanceof", "int", "interface", "long", "native",
+            "new", "package", "private", "protected", "public", "return", "short", "static", "strictfp",
+            "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
+            "volatile", "while", "_", "true", "false", "null",
+        ),
         SupportedLanguage.TYPESCRIPT to setOf("type", "interface", "class", "enum", "extends", "function"),
-        SupportedLanguage.GO to setOf("type", "struct", "interface", "map", "func", "package"),
+        SupportedLanguage.GO to setOf(
+            "break", "default", "func", "interface", "select", "case", "defer", "go", "map", "struct",
+            "chan", "else", "goto", "package", "switch", "const", "fallthrough", "if", "range", "type",
+            "continue", "for", "import", "return", "var",
+        ),
     )
 
     fun toFieldName(
@@ -91,7 +106,8 @@ object JsonToTypeNamingSupport {
         suffix: String,
     ): String {
         val reservedWords = reservedWordsByLanguage[language].orEmpty()
-        if (candidate !in reservedWords) {
+        // Java accessors for a PascalCase `Class` property would override final Object.getClass().
+        if (candidate !in reservedWords && !(language == SupportedLanguage.JAVA && candidate == "Class")) {
             return candidate
         }
         return candidate + suffix

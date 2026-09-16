@@ -6,7 +6,6 @@ import com.livteam.jsoninja.model.typeConversion.TypeDeclarationKind
 import com.livteam.jsoninja.model.typeConversion.TypeField
 import com.livteam.jsoninja.model.typeConversion.TypePrimitiveKind
 import com.livteam.jsoninja.model.typeConversion.TypeReference
-import java.util.Locale
 
 class JsonToTypeRenderer {
     fun render(
@@ -15,11 +14,7 @@ class JsonToTypeRenderer {
         options: JsonToTypeConversionOptions,
         warningMessages: List<String> = emptyList(),
     ): String {
-        val importLines = if (language == SupportedLanguage.JAVA) {
-            ""
-        } else {
-            collectImports(declarations, language, options)
-        }
+        val importLines = collectImports(declarations, language, options)
         val declarationBlocks = declarations.joinToString("\n\n") { declaration ->
             renderDeclaration(declaration, language, options)
         }
@@ -38,7 +33,11 @@ class JsonToTypeRenderer {
         options: JsonToTypeConversionOptions,
     ): String {
         val importStatements = linkedSetOf<String>()
+        if (language == SupportedLanguage.GO && declarations.any { JsonToTypeGoJsonSupport.requiresCodec(it, options) }) {
+            importStatements += "import \"encoding/json\""
+        }
         declarations.forEach { declaration ->
+            declaration.aliasedTypeReference?.let { collectImports(it, language, importStatements) }
             declaration.fields.forEach { field ->
                 collectImports(field.typeReference, language, importStatements)
                 if (field.sourceName != field.name || options.annotationStyle != JsonToTypeAnnotationStyle.NONE) {
@@ -131,7 +130,7 @@ class JsonToTypeRenderer {
             return "export enum ${declaration.name} {\n$enumBody\n}"
         }
         val fieldsText = declaration.fields.joinToString("\n") { field ->
-            "  ${field.name}${if (field.isOptional) "?" else ""}: ${renderTypescriptType(field.typeReference, options)};"
+            "  ${renderTypescriptFieldName(field.sourceName)}${if (field.isOptional) "?" else ""}: ${renderTypescriptType(field.typeReference, options)};"
         }
         return "export interface ${declaration.name} {\n$fieldsText\n}"
     }
@@ -144,20 +143,18 @@ class JsonToTypeRenderer {
             return "type ${declaration.name} = ${renderGoType(declaration.aliasedTypeReference ?: TypeReference.AnyValue, options)}"
         }
         val fieldsText = declaration.fields.joinToString("\n") { field ->
-            val exportedName = JsonToTypeNamingSupport.toFieldName(
-                rawName = field.name,
-                namingConvention = NamingConvention.PASCAL_CASE,
-                language = SupportedLanguage.GO,
-            )
+            val exportedName = JsonToTypeGoJsonSupport.exportedName(field)
             val tag = if (options.annotationStyle == JsonToTypeAnnotationStyle.GO_JSON_TAG) {
-                val omitemptySuffix = if (field.isOptional) ",omitempty" else ""
-                " `json:\"${field.sourceName}$omitemptySuffix\"`"
+                " " + JsonToTypeLiteralSupport.goJsonTag(field.sourceName, field.isOptional)
             } else {
                 ""
             }
             "    $exportedName ${renderGoType(field.typeReference, options)}$tag"
         }
-        return "type ${declaration.name} struct {\n$fieldsText\n}"
+        val declarationText = "type ${declaration.name} struct {\n$fieldsText\n}"
+        return if (JsonToTypeGoJsonSupport.requiresCodec(declaration, options)) {
+            declarationText + "\n\n" + JsonToTypeGoJsonSupport.renderCodec(declaration, options)
+        } else declarationText
     }
 
     private fun renderJavaDeclaration(
@@ -214,6 +211,7 @@ class JsonToTypeRenderer {
         if (declaration.declarationKind == TypeDeclarationKind.TYPE_ALIAS) {
             return "typealias ${declaration.name} = ${renderKotlinType(declaration.aliasedTypeReference ?: TypeReference.AnyValue, options)}"
         }
+        if (declaration.fields.isEmpty()) return "class ${declaration.name}"
         val constructorFields = declaration.fields.joinToString(",\n") { field ->
             val annotationText = renderKotlinFieldAnnotation(field, options)
             val typeText = renderKotlinType(field.typeReference, options)
@@ -230,9 +228,16 @@ class JsonToTypeRenderer {
         return when (typeReference) {
             TypeReference.AnyValue -> "any"
             is TypeReference.InlineObject -> "{ " + typeReference.fields.joinToString("; ") {
-                "${it.name}${if (it.isOptional) "?" else ""}: ${renderTypescriptType(it.typeReference, options)}"
+                "${renderTypescriptFieldName(it.sourceName)}${if (it.isOptional) "?" else ""}: ${renderTypescriptType(it.typeReference, options)}"
             } + " }"
-            is TypeReference.ListReference -> "${renderTypescriptType(typeReference.elementType, options)}[]"
+            is TypeReference.ListReference -> {
+                val elementType = renderTypescriptType(typeReference.elementType, options)
+                if (typeReference.elementType is TypeReference.Nullable || typeReference.elementType is TypeReference.Union) {
+                    "($elementType)[]"
+                } else {
+                    "$elementType[]"
+                }
+            }
             is TypeReference.MapReference -> "{ [key: ${renderTypescriptType(typeReference.keyType, options)}]: ${renderTypescriptType(typeReference.valueType, options)} }"
             is TypeReference.Named -> typeReference.name
             is TypeReference.Nullable -> "${renderTypescriptType(typeReference.wrappedType, options)} | null"
@@ -269,6 +274,10 @@ class JsonToTypeRenderer {
             }
         }
     }
+
+    private fun renderTypescriptFieldName(sourceName: String): String =
+        if (sourceName.matches(Regex("[A-Za-z_$][A-Za-z0-9_$]*"))) sourceName
+        else JsonToTypeLiteralSupport.quote(sourceName, SupportedLanguage.TYPESCRIPT)
 
     private fun renderJavaType(
         typeReference: TypeReference,
@@ -322,8 +331,8 @@ class JsonToTypeRenderer {
         options: JsonToTypeConversionOptions,
     ): String? {
         return when (options.annotationStyle) {
-            JsonToTypeAnnotationStyle.GSON_SERIALIZED_NAME -> "    @SerializedName(\"${field.sourceName}\")"
-            JsonToTypeAnnotationStyle.JACKSON_JSON_PROPERTY -> "    @JsonProperty(\"${field.sourceName}\")"
+            JsonToTypeAnnotationStyle.GSON_SERIALIZED_NAME -> "    @SerializedName(${JsonToTypeLiteralSupport.quote(field.sourceName, SupportedLanguage.JAVA)})"
+            JsonToTypeAnnotationStyle.JACKSON_JSON_PROPERTY -> "    @JsonProperty(${JsonToTypeLiteralSupport.quote(field.sourceName, SupportedLanguage.JAVA)})"
             else -> null
         }
     }
@@ -333,8 +342,8 @@ class JsonToTypeRenderer {
         options: JsonToTypeConversionOptions,
     ): String? {
         return when (options.annotationStyle) {
-            JsonToTypeAnnotationStyle.JACKSON_JSON_PROPERTY -> "@JsonProperty(\"${field.sourceName}\")"
-            JsonToTypeAnnotationStyle.KOTLIN_SERIAL_NAME -> "@SerialName(\"${field.sourceName}\")"
+            JsonToTypeAnnotationStyle.JACKSON_JSON_PROPERTY -> "@JsonProperty(${JsonToTypeLiteralSupport.quote(field.sourceName, SupportedLanguage.KOTLIN)})"
+            JsonToTypeAnnotationStyle.KOTLIN_SERIAL_NAME -> "@SerialName(${JsonToTypeLiteralSupport.quote(field.sourceName, SupportedLanguage.KOTLIN)})"
             else -> null
         }
     }

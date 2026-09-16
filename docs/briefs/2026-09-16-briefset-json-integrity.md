@@ -16,7 +16,7 @@
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-07-tree-view.md` — Render empty arrays and current document state; exists because audit items R2.3a, R2.3b share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-08-wasm-runtime.md` — Isolate complete WASM analysis transactions; exists because audit items R1.4 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-09-preview-state.md` — Apply only previews for the current input; exists because audit items R1.6, M1b share one independent behavior/acceptance boundary.
-- [ ] `docs/briefs/2026-09-16-fix-json-integrity-10-json-to-type.md` — Generate types that admit the source JSON; exists because audit items R1.7, R1.8, R1.9a, R1.9b, R2.9 share one independent behavior/acceptance boundary.
+- [x] `docs/briefs/2026-09-16-fix-json-integrity-10-json-to-type.md` — Generate types that admit the source JSON; exists because audit items R1.7, R1.8, R1.9a, R1.9b, R2.9 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-11-type-to-json.md` — Preserve enum literals and optional-field modes; exists because audit items R2.5, R2.6 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-12-schema-refs.md` — Resolve schema references in their source context; exists because audit items R1.10, R1.11 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-13-schema-numbers.md` — Generate numbers within actual schema bounds; exists because audit items R2.4a, R2.4b share one independent behavior/acceptance boundary.
