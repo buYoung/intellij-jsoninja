@@ -20,7 +20,7 @@
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-11-type-to-json.md` — Preserve enum literals and optional-field modes; exists because audit items R2.5, R2.6 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-12-schema-refs.md` — Resolve schema references in their source context; exists because audit items R1.10, R1.11 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-13-schema-numbers.md` — Generate numbers within actual schema bounds; exists because audit items R2.4a, R2.4b share one independent behavior/acceptance boundary.
-- [ ] `docs/briefs/2026-09-16-fix-json-integrity-14-onboarding.md` — 구현·기존 검증·커밋 완료, 네이티브 창 관찰 대기. Close only diff UI owned by the tutorial; exists because audit items R1.3 share one independent behavior/acceptance boundary.
+- [x] `docs/briefs/2026-09-16-fix-json-integrity-14-onboarding.md` — 구현·기존 검증·커밋 및 후속 사용자 확인 완료. Close only diff UI owned by the tutorial; exists because audit items R1.3 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-refactor-json-integrity-15-http-lifecycle.md` — Bound and share JSON HTTP request cleanup; exists because audit items M2 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-ci-json-integrity-16-ci-artifacts.md` — Verify pull requests and preserve release artifacts; exists because audit items M3a, M3b share one independent behavior/acceptance boundary.
 
@@ -32,9 +32,9 @@
 
 ## 16 로컬 작업의 시작 조건 보정 (2026-09-16)
 
-- 01–13/15의 구현과 수용 기록이 통합됐고 14는 구현/기존 검증/커밋 완료, 네이티브 창 관찰만 대기 중이다. 14의 대기를 수용 완료로 바꾸지 않는다.
+- 16 착수 당시 01–13/15의 구현과 수용 기록이 통합됐고 14는 구현/기존 검증/커밋 완료, 네이티브 창 관찰 대기였다. 당시에는 14를 수용 완료로 바꾸지 않았다.
 - 16의 PR 경로, 아카이브 전달, 로컬 패키징/호환성 확인은 창 관찰과 독립적으로 실행한다. 14의 승인되지 않은 네이티브 조작이나 외부 CI/배포는 실행하지 않는다.
-- 16의 로컬 수용과 부모 전체 수용을 구분한다. 부모의 모든 child ready 조건은 14의 실제 관찰 전까지 미충족으로 남긴다.
+- 당시 16의 로컬 수용과 부모 전체 수용을 구분했다. 이후 14에 대한 사용자 확인을 받아 부모 전체 수용에 반영한 경과는 아래 최종 결과에 기록했다.
 
 ## Execution Order
 
@@ -181,7 +181,7 @@
 ## Global Acceptance Criteria
 
 - [x] Child 02 records strict-JSON conversion attempts for `Infinity`, `-Infinity`, and `NaN` at the root and in objects/arrays: conversion fails recoverably and the original text remains unchanged, without partial output or null/string substitution. Quoted strings such as `"Infinity"` continue to convert normally.
-- [ ] Every child has a ready/no-change Acceptance record at its declared path, with each allocated audit ID accounted for, matching final source state, mandatory behavior evidence, side-effect results, and no hidden prerequisite. Only then tick its parent checkbox.
+- [x] Every child has a ready/no-change Acceptance record at its declared path, with each allocated audit ID accounted for, matching final source state, mandatory behavior evidence, side-effect results, and no hidden prerequisite. Only then tick its parent checkbox.
 - [x] From the repository root, run `./gradlew compileKotlin` and `./gradlew test` after integration; expected exit 0, all discovered JVM cases executed with zero failures/errors and no unexplained skips. The original eight Undo/Redo cases all pass. Record discovered counts rather than assuming the historical 68-case total remains current.
 - [x] From `tree-sitter-wasm`, run `cargo test` with expected exit 0. From the root, run `./gradlew buildPlugin` and `./gradlew verifyPlugin` with expected exit 0; record tested IDE builds, toolchains, archive/WASM hashes, and any unavailable verification separately. Host Rust tests are not bundled-WASM proof.
 - [x] Inspect the generated plugin ZIP and its bundled WASM against the artifact used by the three existing TypeConversionWasmIntegration suites; expected matching SHA-256 values and producer source stamp. Inspect child 16 workflow wiring for the same verified archive at the publisher input. Actual external publication is excluded from this set and not reported as observed.
@@ -195,7 +195,7 @@
 
 - [통합 검증 기록](evidence/json-integrity-16.md): JVM 76개/Rust 12개, 플러그인 패키징, 7개 IDE Compatible, 산출물 해시/입력 연결, 헤드리스 통합 동작과 65개 계약 파일의 기록 연결을 확인했다.
 - 각 하위 작업 구현을 사용자 요청에 따라 별도 커밋했다. 브리프의 기존 커밋 금지 문구보다 현재 대화의 명시적 커밋 요청을 우선했다. 기존 커밋 이력의 `type(한국어 설명)`과 번호 목록 본문 형식을 유지했다.
-- 14는 구현·기존 검증·커밋 완료지만 네이티브 창 관찰 대기다. 따라서 모든 child ready 조건과 부모 전체 수용은 아직 완료로 표시하지 않는다. 16의 ready는 로컬 구현/정적 검증의 수용이며 외부 PR/서명/배포 관찰을 포함하지 않는다.
+- 후속 대화에서 사용자가 “온보딩 확인됐어”라고 확인 완료를 알렸다. 이를 14의 사용자 확인으로 수용해 모든 child ready 조건과 정의된 작업 범위의 전체 수용을 완료 처리했다. 16의 ready는 로컬 구현/정적 검증의 수용이며 외부 PR/서명/배포 관찰을 포함하지 않는다.
 - 기존 .codemap/.antigravitycli 및 별도 2026-05-31 브리프는 커밋에 포함하지 않았다. 테스트 변경은 승인된 01의 Undo/Redo 파일뿐이다.
 
 ## Open Questions
