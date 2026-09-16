@@ -9,6 +9,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -21,7 +23,7 @@ class ConvertPreviewExecutor(
     fun submit(
         delayMs: Int,
         onLoading: () -> Unit,
-        computePreview: () -> String,
+        computePreview: (() -> Unit) -> String,
         onSuccess: (String) -> Unit,
         onError: (Throwable) -> Unit,
     ) {
@@ -40,7 +42,8 @@ class ConvertPreviewExecutor(
             val previewResult = try {
                 Result.success(
                     withContext(Dispatchers.Default) {
-                        computePreview()
+                        val context = currentCoroutineContext()
+                        computePreview { context.ensureActive() }
                     }
                 )
             } catch (cancellationException: CancellationException) {

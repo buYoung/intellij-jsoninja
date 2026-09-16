@@ -10,6 +10,8 @@ import com.dylibso.chicory.wasm.Parser
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 
 object TreeSitterWasmRuntime {
     private const val WASM_RESOURCE_PATH = "wasm/tree-sitter/tree-sitter.wasm"
@@ -21,7 +23,23 @@ object TreeSitterWasmRuntime {
         val dealloc: ExportFunction,
         val analyzeSource: ExportFunction,
         val getLastError: ExportFunction,
-    )
+    ) {
+        private val transactionLock = ReentrantLock()
+
+        fun <T> withTransaction(checkCancellation: () -> Unit, action: () -> T): T {
+            checkCancellation()
+            while (!transactionLock.tryLock(50, TimeUnit.MILLISECONDS)) {
+                checkCancellation()
+            }
+            try {
+                checkCancellation()
+                // Once started, synchronous WASM work must finish buffer cleanup before releasing ownership.
+                return action()
+            } finally {
+                transactionLock.unlock()
+            }
+        }
+    }
 
     private val runtimeHandleReference = AtomicReference<RuntimeHandle?>()
 

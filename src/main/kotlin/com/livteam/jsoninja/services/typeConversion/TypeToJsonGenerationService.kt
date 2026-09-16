@@ -20,11 +20,19 @@ class TypeToJsonGenerationService(
         language: SupportedLanguage,
         options: TypeToJsonGenerationOptions,
         rootTypeName: String? = null,
+    ): String = generate(sourceCode, language, options, rootTypeName) {}
+
+    fun generate(
+        sourceCode: String,
+        language: SupportedLanguage,
+        options: TypeToJsonGenerationOptions,
+        rootTypeName: String? = null,
+        checkCancellation: () -> Unit,
     ): String {
         require(sourceCode.isNotBlank()) { "Type declaration source code must not be blank." }
         require(options.outputCount in 1..100) { "Output count must be between 1 and 100." }
 
-        val analysisResult = analyzerService.analyzeSource(sourceCode, language)
+        val analysisResult = analyzerService.analyzeSource(sourceCode, language, checkCancellation)
         if (analysisResult.declarations.isEmpty()) {
             val diagnosticMessage = analysisResult.diagnostics.firstOrNull()?.message
             throw IllegalStateException(diagnosticMessage ?: "No type declarations found.")

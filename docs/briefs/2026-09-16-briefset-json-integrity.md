@@ -14,7 +14,7 @@
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-05-query-state.md` — Keep query source and successful null results; exists because audit items R2.1, R2.2, R2.8 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-06-query-paths.md` — Generate executable paths for every query engine; exists because audit items R1.12 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-07-tree-view.md` — Render empty arrays and current document state; exists because audit items R2.3a, R2.3b share one independent behavior/acceptance boundary.
-- [ ] `docs/briefs/2026-09-16-fix-json-integrity-08-wasm-runtime.md` — Isolate complete WASM analysis transactions; exists because audit items R1.4 share one independent behavior/acceptance boundary.
+- [x] `docs/briefs/2026-09-16-fix-json-integrity-08-wasm-runtime.md` — Isolate complete WASM analysis transactions; exists because audit items R1.4 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-09-preview-state.md` — Apply only previews for the current input; exists because audit items R1.6, M1b share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-10-json-to-type.md` — Generate types that admit the source JSON; exists because audit items R1.7, R1.8, R1.9a, R1.9b, R2.9 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-11-type-to-json.md` — Preserve enum literals and optional-field modes; exists because audit items R2.5, R2.6 share one independent behavior/acceptance boundary.
@@ -103,6 +103,8 @@
 - `src/main/kotlin/com/livteam/jsoninja/services/schema/JsonSchemaNormalizer.kt` — Children: `docs/briefs/2026-09-16-fix-json-integrity-12-schema-refs.md`, `docs/briefs/2026-09-16-refactor-json-integrity-15-http-lifecycle.md`; Access: serialized; Owner: `docs/briefs/2026-09-16-fix-json-integrity-12-schema-refs.md`; Rule: child 12 completes schema context before HTTP lifecycle extraction before child 15 writes and records integration verification.
 - `src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/schema/GenerateSchemaJsonTabPresenter.kt` — Children: `docs/briefs/2026-09-16-fix-json-integrity-12-schema-refs.md`, `docs/briefs/2026-09-16-refactor-json-integrity-15-http-lifecycle.md`; Access: serialized; Owner: `docs/briefs/2026-09-16-fix-json-integrity-12-schema-refs.md`; Rule: child 12 completes retrieval provenance before fetch consolidation before child 15 writes and records integration verification.
 - `build.gradle.kts` — Children: `docs/briefs/2026-09-16-fix-json-integrity-02-json-input.md`, `docs/briefs/2026-09-16-ci-json-integrity-16-ci-artifacts.md`; Access: serialized; Owner: `docs/briefs/2026-09-16-fix-json-integrity-02-json-input.md`; Rule: child 02 completes any justified input dependency before final package/workflow wiring before child 16 writes and records integration verification.
+
+- `TypeToJsonDialogPresenter.kt` / `TypeToJsonGenerationService.kt` — 08이 대기 취소 확인 콜백을 analyzer까지 전달하는 최소 경로를 소유한다. 09/11은 08의 결과를 통합한 뒤 해당 콜백을 보존한다. 기존 동기 호출에는 기본 콜백을 유지하고 WASM ABI와 옵션을 변경하지 않는다. Chicory의 스레드 interrupt가 인터프리터 상태를 남길 수 있다는 1.5.1 소스 확인에 따른 실행 경계 보완이다.
 
 ## Shared Constraints
 

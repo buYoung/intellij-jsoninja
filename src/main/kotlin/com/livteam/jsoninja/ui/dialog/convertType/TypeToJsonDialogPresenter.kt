@@ -107,7 +107,7 @@ class TypeToJsonDialogPresenter(
         previewExecutor.submit(
             delayMs = 500,
             onLoading = { view.showLoadingPreview() },
-            computePreview = {
+            computePreview = { checkCancellation ->
                 generationService.generate(
                     sourceCode = inputText,
                     language = previewConfig.language,
@@ -118,6 +118,7 @@ class TypeToJsonDialogPresenter(
                         outputCount = previewConfig.outputCount,
                         formatState = previewConfig.formatState,
                     ),
+                    checkCancellation = checkCancellation,
                 )
             },
             onSuccess = { previewText ->
