@@ -7,6 +7,7 @@ import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFileFactory
 import com.intellij.util.LocalTimeCounter
+import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.services.PlaceholderMapping
 import com.livteam.jsoninja.services.TemplatePlaceholderSupport
 
@@ -20,19 +21,18 @@ object JsonPathHelper {
     private val IDENTIFIER_REGEX = Regex("^[a-zA-Z_][a-zA-Z0-9_]*$")
 
     fun getJsonPath(element: PsiElement): String? {
-        return buildPath(element, isJmes = false)
+        return getPath(element, JsonQueryType.JAYWAY_JSONPATH)
     }
 
     fun getJmesPath(element: PsiElement): String? {
-        return buildPath(element, isJmes = true)
+        return getPath(element, JsonQueryType.JMESPATH)
     }
 
     fun getJqPath(element: PsiElement): String? {
-        val jmesPath = buildPath(element, isJmes = true) ?: return null
-        return if (jmesPath == "@") "." else ".$jmesPath"
+        return getPath(element, JsonQueryType.JACKSON_JQ)
     }
 
-    private fun buildPath(element: PsiElement, isJmes: Boolean): String? {
+    fun getPath(element: PsiElement, queryType: JsonQueryType): String? {
         var current: PsiElement? = element
         
         // Navigate up from leaf tokens to a structural JSON element
@@ -41,7 +41,7 @@ object JsonPathHelper {
         }
         
         if (current == null) return null
-        if (current is JsonFile) return if (isJmes) "@" else "$"
+        if (current is JsonFile) return rootPath(queryType)
 
         val parts = mutableListOf<String>()
         
@@ -53,7 +53,7 @@ object JsonPathHelper {
             if (current is JsonProperty) {
                 // We are at a property. This edge (Parent -> Property) defines the key.
                 val name = current.name
-                addPropertyPath(parts, name, isJmes)
+                addPropertyPath(parts, name, queryType)
             } else if (parent is JsonArray && current is JsonValue) {
                 // We are a value in an array. This edge (Array -> Value) defines the index.
                 val index = parent.valueList.indexOf(current)
@@ -65,26 +65,27 @@ object JsonPathHelper {
             current = parent
         }
         
-        if (parts.isEmpty()) return if (isJmes) "@" else "$"
+        if (parts.isEmpty()) return rootPath(queryType)
 
         val path = parts.asReversed().joinToString("")
         
-        return if (isJmes) {
-             if (path.startsWith(".")) path.substring(1) else path
-        } else {
-             if (path.startsWith("[")) "$" + path else "$." + path.removePrefix(".")
+        return when (queryType) {
+            JsonQueryType.JMESPATH -> path.removePrefix(".")
+            JsonQueryType.JACKSON_JQ -> "." + path.removePrefix(".")
+            JsonQueryType.JAYWAY_JSONPATH -> "$" + path
         }
     }
 
-    private fun addPropertyPath(parts: MutableList<String>, name: String, isJmes: Boolean) {
+    private fun rootPath(queryType: JsonQueryType): String = when (queryType) {
+        JsonQueryType.JAYWAY_JSONPATH -> "$"
+        JsonQueryType.JMESPATH -> "@"
+        JsonQueryType.JACKSON_JQ -> "."
+    }
+
+    private fun addPropertyPath(parts: MutableList<String>, name: String, queryType: JsonQueryType) {
         if (needsQuotes(name)) {
-            val escapedName = StringUtil.escapeStringCharacters(name)
-            if (isJmes) {
-                parts.add(".\\\"$escapedName\\\"")
-            } else {
-                // JsonPath: Use bracket notation with double quotes ["key"] for consistency and robust escaping
-                parts.add("[\"$escapedName\"]")
-            }
+            val quotedName = "\"${StringUtil.escapeStringCharacters(name)}\""
+            parts.add(if (queryType == JsonQueryType.JAYWAY_JSONPATH) "[$quotedName]" else ".$quotedName")
         } else {
             parts.add(".$name")
         }
@@ -94,7 +95,7 @@ object JsonPathHelper {
         documentText: String,
         offset: Int,
         project: Project,
-        isJmes: Boolean
+        queryType: JsonQueryType
     ): TemplatePathResult? {
         val result = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(documentText)
         if (!result.isSuccessful || result.mappings.isEmpty()) return null
@@ -121,7 +122,7 @@ object JsonPathHelper {
         )
 
         val element = psiFile.findElementAt(targetOffset) ?: return null
-        val path = buildPath(element, isJmes) ?: return null
+        val path = getPath(element, queryType) ?: return null
         return TemplatePathResult(path, isInsidePlaceholder)
     }
 
