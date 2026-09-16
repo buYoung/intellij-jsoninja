@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.ui.Messages
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
@@ -19,6 +20,8 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 class GenerateRandomJsonAction : AnAction(
@@ -51,7 +54,8 @@ class GenerateRandomJsonAction : AnAction(
                             JsonGenerationMode.SCHEMA -> {
                                 val schemaDataGenerationService =
                                     project.getService(JsonSchemaDataGenerationService::class.java)
-                                schemaDataGenerationService.generateFromSchema(config)
+                                val generationContext = currentCoroutineContext()
+                                schemaDataGenerationService.generateFromSchema(config) { generationContext.ensureActive() }
                             }
                         }
 
@@ -74,6 +78,8 @@ class GenerateRandomJsonAction : AnAction(
                         )
                     }
                 } catch (cancellationException: CancellationException) {
+                    throw cancellationException
+                } catch (cancellationException: ProcessCanceledException) {
                     throw cancellationException
                 } catch (generationException: JsonSchemaGenerationException) {
                     LOG.error(

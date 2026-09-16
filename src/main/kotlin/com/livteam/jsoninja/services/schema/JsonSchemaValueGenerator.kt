@@ -3,8 +3,8 @@ package com.livteam.jsoninja.services.schema
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.BooleanNode
+import com.fasterxml.jackson.databind.node.BigIntegerNode
 import com.fasterxml.jackson.databind.node.DecimalNode
-import com.fasterxml.jackson.databind.node.IntNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import com.fasterxml.jackson.databind.node.NullNode
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -14,8 +14,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import net.datafaker.Faker
-import java.math.BigDecimal
-import java.math.RoundingMode
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -296,29 +294,29 @@ class JsonSchemaValueGenerator(private val project: Project) {
     }
 
     private fun generateNumberValue(constraint: NumberSchemaConstraint): JsonNode {
-        val generatedValue = generateNumericValue(
+        val generatedValue = JsonSchemaNumericGenerator.generate(
             minimumValue = constraint.minimumValue,
             maximumValue = constraint.maximumValue,
             exclusiveMinimumValue = constraint.exclusiveMinimumValue,
             exclusiveMaximumValue = constraint.exclusiveMaximumValue,
             multipleOfValue = constraint.multipleOfValue,
-            integerOnly = false,
+            isInteger = false,
             jsonPointer = constraint.jsonPointer
         )
         return DecimalNode(generatedValue)
     }
 
     private fun generateIntegerValue(constraint: IntegerSchemaConstraint): JsonNode {
-        val generatedValue = generateNumericValue(
+        val generatedValue = JsonSchemaNumericGenerator.generate(
             minimumValue = constraint.minimumValue,
             maximumValue = constraint.maximumValue,
             exclusiveMinimumValue = constraint.exclusiveMinimumValue,
             exclusiveMaximumValue = constraint.exclusiveMaximumValue,
             multipleOfValue = constraint.multipleOfValue,
-            integerOnly = true,
+            isInteger = true,
             jsonPointer = constraint.jsonPointer
         )
-        return IntNode(generatedValue.toInt())
+        return BigIntegerNode(generatedValue.toBigIntegerExact())
     }
 
     private fun generateCompositeValue(
@@ -544,101 +542,6 @@ class JsonSchemaValueGenerator(private val project: Project) {
         }
 
         return generateRandomFakerString()
-    }
-
-    private fun generateNumericValue(
-        minimumValue: BigDecimal?,
-        maximumValue: BigDecimal?,
-        exclusiveMinimumValue: BigDecimal?,
-        exclusiveMaximumValue: BigDecimal?,
-        multipleOfValue: BigDecimal?,
-        integerOnly: Boolean,
-        jsonPointer: String
-    ): BigDecimal {
-        var lowerBound = exclusiveMinimumValue ?: minimumValue ?: BigDecimal.ZERO
-        var upperBound = exclusiveMaximumValue ?: maximumValue ?: BigDecimal.valueOf(100)
-
-        if (exclusiveMinimumValue != null) {
-            lowerBound = lowerBound.add(if (integerOnly) BigDecimal.ONE else BigDecimal("0.1"))
-        }
-        if (exclusiveMaximumValue != null) {
-            upperBound = upperBound.subtract(if (integerOnly) BigDecimal.ONE else BigDecimal("0.1"))
-        }
-
-        if (lowerBound > upperBound) {
-            throw JsonSchemaGenerationException(
-                message = "Numeric bounds are contradictory.",
-                jsonPointer = jsonPointer
-            )
-        }
-
-        val candidateValue = if (multipleOfValue != null && multipleOfValue.compareTo(BigDecimal.ZERO) > 0) {
-            val minimumMultiplier = lowerBound.divide(multipleOfValue, 0, RoundingMode.CEILING)
-            val maximumMultiplier = upperBound.divide(multipleOfValue, 0, RoundingMode.FLOOR)
-            if (minimumMultiplier > maximumMultiplier) {
-                throw JsonSchemaGenerationException(
-                    message = "Unable to satisfy multipleOf with the given bounds.",
-                    jsonPointer = jsonPointer
-                )
-            }
-            val selectedMultiplier = pickRandomMultiplier(minimumMultiplier, maximumMultiplier)
-            selectedMultiplier.multiply(multipleOfValue)
-        } else if (integerOnly) {
-            val lowerIntegerBound = lowerBound.setScale(0, RoundingMode.CEILING)
-            val upperIntegerBound = upperBound.setScale(0, RoundingMode.FLOOR)
-            if (lowerIntegerBound > upperIntegerBound) {
-                throw JsonSchemaGenerationException(
-                    message = "Numeric bounds are contradictory.",
-                    jsonPointer = jsonPointer
-                )
-            }
-            pickRandomMultiplier(lowerIntegerBound, upperIntegerBound)
-        } else {
-            val lowerDouble = lowerBound.toDouble()
-            val upperDouble = upperBound.toDouble()
-            if (!lowerDouble.isFinite() || !upperDouble.isFinite() || lowerDouble == upperDouble) {
-                lowerBound
-            } else {
-                val randomValue = Random.nextDouble(lowerDouble, upperDouble)
-                BigDecimal.valueOf(randomValue)
-            }
-        }
-
-        if (candidateValue > upperBound) {
-            throw JsonSchemaGenerationException(
-                message = "Unable to satisfy multipleOf with the given bounds.",
-                jsonPointer = jsonPointer
-            )
-        }
-
-        if (integerOnly) {
-            return candidateValue.setScale(0, RoundingMode.CEILING)
-        }
-
-        return if (candidateValue.scale() > 6) {
-            candidateValue.setScale(6, RoundingMode.HALF_UP)
-        } else {
-            candidateValue
-        }
-    }
-
-    private fun pickRandomMultiplier(minimumValue: BigDecimal, maximumValue: BigDecimal): BigDecimal {
-        val minimumLongValue = runCatching { minimumValue.longValueExact() }.getOrNull()
-        val maximumLongValue = runCatching { maximumValue.longValueExact() }.getOrNull()
-        if (minimumLongValue == null || maximumLongValue == null || minimumLongValue > maximumLongValue) {
-            return minimumValue
-        }
-
-        if (minimumLongValue == maximumLongValue) {
-            return BigDecimal.valueOf(minimumLongValue)
-        }
-
-        if (maximumLongValue == Long.MAX_VALUE) {
-            return minimumValue
-        }
-
-        val selectedLongValue = Random.nextLong(minimumLongValue, maximumLongValue + 1)
-        return BigDecimal.valueOf(selectedLongValue)
     }
 
     private fun generateRandomFakerString(): String {

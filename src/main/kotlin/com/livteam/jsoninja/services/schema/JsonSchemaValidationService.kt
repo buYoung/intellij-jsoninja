@@ -3,6 +3,7 @@ package com.livteam.jsoninja.services.schema
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.intellij.openapi.components.Service
@@ -17,6 +18,7 @@ import com.networknt.schema.ValidationMessage
 class JsonSchemaValidationService(private val project: Project) {
     private val strictObjectMapper: ObjectMapper = ObjectMapper()
         .registerModule(KotlinModule.Builder().build())
+        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
         .apply {
             configure(JsonParser.Feature.ALLOW_COMMENTS, false)
             configure(JsonReadFeature.ALLOW_TRAILING_COMMA.mappedFeature(), false)

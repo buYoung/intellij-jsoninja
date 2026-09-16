@@ -10,6 +10,9 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.progress.ProcessCanceledException
+import kotlinx.coroutines.CancellationException
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.RandomJsonDataCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
@@ -65,7 +68,10 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         )
     }
 
-    fun generateFromSchema(config: JsonGenerationConfig): String {
+    fun generateFromSchema(config: JsonGenerationConfig): String = generateFromSchema(config) { ProgressManager.checkCanceled() }
+
+    fun generateFromSchema(config: JsonGenerationConfig, checkCancellation: () -> Unit): String {
+        checkCancellation()
         if (config.generationMode != JsonGenerationMode.SCHEMA) {
             throw JsonSchemaGenerationException("Schema generation mode is required for generateFromSchema.")
         }
@@ -75,13 +81,16 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         }
 
         val preparedSchema = prepareSchema(config.schemaText, config.schemaRetrievalUri)
+        checkCancellation()
         if (config.schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED) {
-            return generateCommentedSchemaOutput(preparedSchema, config.schemaOutputCount)
+            return generateCommentedSchemaOutput(preparedSchema, config.schemaOutputCount, checkCancellation)
         }
 
         val generatedNodes = mutableListOf<JsonNode>()
         repeat(config.schemaOutputCount) {
+            checkCancellation()
             val generatedNode = generateSingleNode(preparedSchema, config.schemaPropertyGenerationMode)
+            checkCancellation()
             generatedNodes.add(generatedNode)
         }
 
@@ -97,6 +106,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
             .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .writeValueAsString(resultNode)
 
+        checkCancellation()
         return if (config.isJson5) {
             randomJsonDataCreator.applyJson5Features(generatedJsonString)
         } else {
@@ -118,18 +128,28 @@ class JsonSchemaDataGenerationService(private val project: Project) {
                 )
             }
             generatedNode
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (cancellationException: ProcessCanceledException) {
+            throw cancellationException
         } catch (generationException: Exception) {
             LOG.warn("Primary generation failed. Trying fallback strategy.", generationException)
             generateFallbackNode(preparedSchema, generationException)
         }
     }
 
-    private fun generateCommentedSchemaOutput(preparedSchema: PreparedSchema, schemaOutputCount: Int): String {
+    private fun generateCommentedSchemaOutput(
+        preparedSchema: PreparedSchema,
+        schemaOutputCount: Int,
+        checkCancellation: () -> Unit
+    ): String {
         val commentedSchemaNodes = mutableListOf<CommentedSchemaNodes>()
         repeat(schemaOutputCount) {
+            checkCancellation()
             val activeNode = generateSingleNode(preparedSchema, SchemaPropertyGenerationMode.REQUIRED_ONLY)
             val completeNode = generateCompleteNodeForCommentedMode(preparedSchema, activeNode)
             val mergedCompleteNode = mergeActiveValuesIntoCompleteNode(activeNode, completeNode)
+            checkCancellation()
             commentedSchemaNodes.add(
                 CommentedSchemaNodes(
                     activeNode = activeNode,
@@ -582,7 +602,11 @@ class JsonSchemaDataGenerationService(private val project: Project) {
     }
 
     private fun generateFallbackNode(preparedSchema: PreparedSchema, cause: Exception): JsonNode {
-        val fallbackCandidates = buildFallbackCandidates(preparedSchema.resolvedSchemaNode)
+        val fallbackCandidates = try {
+            buildFallbackCandidates(preparedSchema.resolvedSchemaNode)
+        } catch (fallbackException: JsonSchemaGenerationException) {
+            throw (cause as? JsonSchemaGenerationException ?: fallbackException)
+        }
         for (candidateNode in fallbackCandidates) {
             val instanceValidationResult = validationService.validateInstance(preparedSchema.compiledSchema, candidateNode)
             if (instanceValidationResult.isValid) {
@@ -594,7 +618,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
         LOG.error("Fallback generation failed. No schema-compliant candidate was found.", cause)
         throw JsonSchemaGenerationException(
             message = "Unable to generate schema-compliant data.",
-            jsonPointer = "#",
+            jsonPointer = (cause as? JsonSchemaGenerationException)?.jsonPointer ?: "#",
             cause = cause
         )
     }
@@ -641,13 +665,12 @@ class JsonSchemaDataGenerationService(private val project: Project) {
                     candidates.add(TextNode(""))
                     candidates.add(TextNode("value"))
                 }
-                "integer" -> {
-                    candidates.add(objectMapper.nodeFactory.numberNode(0))
-                    candidates.add(objectMapper.nodeFactory.numberNode(1))
-                }
-                "number" -> {
-                    candidates.add(objectMapper.nodeFactory.numberNode(0))
-                    candidates.add(objectMapper.nodeFactory.numberNode(0.1))
+                "integer", "number" -> {
+                    try {
+                        candidates.add(JsonSchemaNumericGenerator.fromSchema(schemaNode, typeName == "integer", "#"))
+                    } catch (_: JsonSchemaGenerationException) {
+                        // Other allowed types may still admit a valid fallback.
+                    }
                 }
                 "boolean" -> {
                     candidates.add(objectMapper.nodeFactory.booleanNode(false))
@@ -699,8 +722,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
             "object" -> buildMinimalObjectCandidate(schemaNode, depth)
             "array" -> objectMapper.createArrayNode()
             "string" -> TextNode("value")
-            "integer" -> objectMapper.nodeFactory.numberNode(0)
-            "number" -> objectMapper.nodeFactory.numberNode(0)
+            "integer", "number" -> JsonSchemaNumericGenerator.fromSchema(schemaNode, primaryTypeName == "integer", "#")
             "boolean" -> objectMapper.nodeFactory.booleanNode(false)
             "null" -> NullNode.instance
             else -> TextNode("value")

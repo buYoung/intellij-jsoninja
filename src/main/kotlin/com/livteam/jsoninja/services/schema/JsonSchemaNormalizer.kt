@@ -1,6 +1,7 @@
 package com.livteam.jsoninja.services.schema
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
@@ -23,6 +24,7 @@ import java.util.IdentityHashMap
 class JsonSchemaNormalizer(private val project: Project) {
     private val strictObjectMapper: ObjectMapper = ObjectMapper()
         .registerModule(KotlinModule.Builder().build())
+        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
 
     data class NormalizedJsonSchema(
         val resolvedSchemaNode: JsonNode,
@@ -608,7 +610,7 @@ class JsonSchemaNormalizer(private val project: Project) {
         val keywordArrayNode = schemaNode.path(keyword)
         if (!keywordArrayNode.isArray) return emptyList()
         return keywordArrayNode.mapIndexed { index, elementNode ->
-            createConstraint(elementNode, buildJsonPointer(jsonPointer, "$keyword/$index"))
+            createConstraint(elementNode, buildJsonPointer(jsonPointer, keyword, index.toString()))
         }
     }
 
@@ -639,7 +641,7 @@ class JsonSchemaNormalizer(private val project: Project) {
             ?.forEach { field ->
                 propertyConstraints[field.key] = createConstraint(
                     field.value,
-                    buildJsonPointer(jsonPointer, "properties/${field.key}")
+                    buildJsonPointer(jsonPointer, "properties", field.key)
                 )
             }
 
@@ -650,7 +652,7 @@ class JsonSchemaNormalizer(private val project: Project) {
             ?.forEach { field ->
                 patternPropertyConstraints[field.key] = createConstraint(
                     field.value,
-                    buildJsonPointer(jsonPointer, "patternProperties/${field.key}")
+                    buildJsonPointer(jsonPointer, "patternProperties", field.key)
                 )
             }
 
@@ -696,7 +698,7 @@ class JsonSchemaNormalizer(private val project: Project) {
             ?.forEach { field ->
                 dependentSchemaConstraints[field.key] = createConstraint(
                     field.value,
-                    buildJsonPointer(jsonPointer, "dependentSchemas/${field.key}")
+                    buildJsonPointer(jsonPointer, "dependentSchemas", field.key)
                 )
             }
 
@@ -721,7 +723,7 @@ class JsonSchemaNormalizer(private val project: Project) {
         val prefixItemConstraints = schemaNode.path("prefixItems")
             .takeIf { it.isArray }
             ?.mapIndexed { index, itemSchemaNode ->
-                createConstraint(itemSchemaNode, buildJsonPointer(jsonPointer, "prefixItems/$index"))
+                createConstraint(itemSchemaNode, buildJsonPointer(jsonPointer, "prefixItems", index.toString()))
             }
             ?: emptyList()
 
@@ -840,14 +842,10 @@ class JsonSchemaNormalizer(private val project: Project) {
         return null
     }
 
-    private fun buildJsonPointer(parentPointer: String, nextToken: String): String {
-        val escapedToken = nextToken
-            .replace("~", "~0")
-            .replace("/", "~1")
-        return if (parentPointer == "#") {
-            "#/$escapedToken"
-        } else {
-            "$parentPointer/$escapedToken"
+    private fun buildJsonPointer(parentPointer: String, vararg nextTokens: String): String {
+        return nextTokens.fold(parentPointer) { pointer, token ->
+            val escapedToken = token.replace("~", "~0").replace("/", "~1")
+            "$pointer/$escapedToken"
         }
     }
 
