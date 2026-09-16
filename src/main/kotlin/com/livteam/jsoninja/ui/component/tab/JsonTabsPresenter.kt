@@ -191,6 +191,8 @@ class JsonTabsPresenter(
         return tabContexts[currentSelectedComponent]?.editor
     }
 
+    fun hasEditor(editor: JsonEditorView): Boolean = tabContexts.values.any { it.editor === editor }
+
     fun setOnTabSelectedListener(listener: (JsonEditorView?) -> Unit) {
         this.onTabSelectedListener = listener
     }

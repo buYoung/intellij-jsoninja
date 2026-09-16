@@ -28,6 +28,7 @@ import com.livteam.jsoninja.ui.dialog.LargeFileWarningDialog
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
@@ -66,8 +67,11 @@ class JsonDiffExtension : DiffExtension() {
         var lastChangeTime: Long = 0L,
         var lastEditSize: Int = 0,
         val isSelfUpdate: AtomicBoolean = AtomicBoolean(false),
+        val formatSequence: AtomicInteger = AtomicInteger(),
         var detectionResult: JsonDetectionResult = JsonDetectionResult.UNKNOWN
     )
+
+    private data class FormattingResult(val text: String?, val modificationStamp: Long, val sourceHash: Int)
 
     private enum class JsonDetectionResult {
         YES, NO, UNKNOWN
@@ -116,9 +120,11 @@ class JsonDiffExtension : DiffExtension() {
         val settings = JsoninjaSettingsState.getInstance(project)
         val diffSortKeys = request.getUserData(JsonDiffKeys.JSON_DIFF_SORT_KEYS) ?: settings.diffSortKeys
         val projectName = project.name
+        val isViewerDisposed = AtomicBoolean(false)
+        Disposer.register(viewer) { isViewerDisposed.set(true) }
 
         project.service<JsoninjaCoroutineScopeService>().launch {
-            if (project.isDisposed) return@launch
+            if (project.isDisposed || isViewerDisposed.get()) return@launch
 
             val startTime = System.currentTimeMillis()
             val jsonContentResults = withContext(Dispatchers.Default) {
@@ -129,7 +135,7 @@ class JsonDiffExtension : DiffExtension() {
             val detectionTime = System.currentTimeMillis() - startTime
 
             withContext(Dispatchers.EDT) {
-                if (project.isDisposed) return@withContext
+                if (project.isDisposed || isViewerDisposed.get() || editors.any { it.isDisposed }) return@withContext
 
                 if (LOG.isDebugEnabled) {
                     LOG.debug("JSON detection completed in ${detectionTime}ms for project '$projectName'")
@@ -299,6 +305,7 @@ class JsonDiffExtension : DiffExtension() {
                     LOG.debug("Skipping self-update (atomic flag) for '$fileName'")
                     return
                 }
+                state.formatSequence.incrementAndGet()
 
                 val currentTime = System.currentTimeMillis()
                 val editSize = abs(event.newLength - event.oldLength)
@@ -357,13 +364,13 @@ class JsonDiffExtension : DiffExtension() {
         coroutineScope: CoroutineScope,
     ) {
         if (project.isDisposed) return
-
+        val sequence = getDocumentState(document).formatSequence.incrementAndGet()
         coroutineScope.launch {
             val formattedResult = formatJsonInBackground(document, formatterService, fileName, sortKeys)
             if (formattedResult != null && !project.isDisposed) {
                 withContext(Dispatchers.EDT) {
                     if (project.isDisposed) return@withContext
-                    applyJsonFormatting(project, document, formattedResult, fileName)
+                    applyJsonFormatting(project, document, formattedResult, fileName, sequence)
                 }
             }
         }
@@ -378,7 +385,7 @@ class JsonDiffExtension : DiffExtension() {
         formatterService: JsonFormatterService,
         fileName: String,
         sortKeys: Boolean
-    ): String? {
+    ): FormattingResult? {
         return try {
             // 재진입 update 방지
             if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
@@ -392,7 +399,7 @@ class JsonDiffExtension : DiffExtension() {
                 return null
             }
 
-            val text = readAction { document.text }
+            val (text, modificationStamp) = readAction { document.text to document.modificationStamp }
             val trimmed = text.trim()
             if (trimmed.isEmpty()) {
                 LOG.debug("Document '$fileName' is empty, skipping formatting")
@@ -413,13 +420,11 @@ class JsonDiffExtension : DiffExtension() {
             }
             val formatTime = System.currentTimeMillis() - startTime
 
-            state.lastContentHash = contentHash
-
             if (LOG.isDebugEnabled) {
                 LOG.debug("JSON formatting completed in ${formatTime}ms for '$fileName'")
             }
 
-            if (formatted != trimmed) formatted else null
+            FormattingResult(formatted.takeIf { it != trimmed }, modificationStamp, contentHash)
 
         } catch (cancellationException: CancellationException) {
             throw cancellationException
@@ -449,12 +454,19 @@ class JsonDiffExtension : DiffExtension() {
     private fun applyJsonFormatting(
         project: Project,
         document: Document,
-        formatted: String,
-        fileName: String
+        formatted: FormattingResult,
+        fileName: String,
+        sequence: Int,
     ) {
         if (project.isDisposed) return
 
         val state = getDocumentState(document)
+        if (document.modificationStamp != formatted.modificationStamp || state.formatSequence.get() != sequence) return
+        val text = formatted.text
+        if (text == null) {
+            state.lastContentHash = formatted.sourceHash
+            return
+        }
 
         // EDT에서의 최종 guard 확인
         if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true || state.isSelfUpdate.get()) {
@@ -462,15 +474,21 @@ class JsonDiffExtension : DiffExtension() {
             return
         }
 
+        var isApplied = false
         try {
             document.putUserData(Constants.CHANGE_GUARD_KEY, true)
             state.isSelfUpdate.set(true)
 
             WriteCommandAction.runWriteCommandAction(project) {
-                document.setText(formatted)
+                if (document.modificationStamp != formatted.modificationStamp || state.formatSequence.get() != sequence) {
+                    return@runWriteCommandAction
+                }
+                document.setText(text)
+                state.lastContentHash = formatted.sourceHash
+                isApplied = true
             }
 
-            LOG.debug("Applied JSON formatting to '$fileName'")
+            if (isApplied) LOG.debug("Applied JSON formatting to '$fileName'")
 
         } finally {
             document.putUserData(Constants.CHANGE_GUARD_KEY, false)

@@ -56,6 +56,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
     }
 
     fun refreshQueryType() {
+        invalidatePendingSearch()
         val settings = JsoninjaSettingsState.getInstance(project)
         val queryType = JsonQueryType.fromString(settings.jsonQueryType)
         view.updatePlaceholder(queryType)
@@ -184,6 +185,14 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
         onBeforeSearchCallback = callback
     }
 
+    fun getCurrentRequestId(): Int = searchSequence.get()
+
+    fun isCurrentRequest(requestId: Int): Boolean = !isDisposed && searchSequence.get() == requestId
+
+    fun invalidatePendingSearch() {
+        searchSequence.incrementAndGet()
+    }
+
     /**
      * 원본 JSON 설정
      * @param json 원본 JSON 문자열
@@ -196,6 +205,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
         }
 
         model.originalJson = json
+        val sequenceNumber = searchSequence.incrementAndGet()
 
         // 원본 JSON이 변경되면 현재 쿼리를 다시 실행
         val currentQuery = view.query
@@ -214,6 +224,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
                     withContext(Dispatchers.EDT) {
                         if (isDisposed) return@withContext
                         if (model.originalJson != json) return@withContext
+                        if (searchSequence.get() != sequenceNumber) return@withContext
                         // 쿼리가 비어있으면 원본 JSON을 표시
                         onSearchCallback?.invoke(json, json)
                     }
@@ -241,6 +252,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
 
     override fun dispose() {
         isDisposed = true
+        invalidatePendingSearch()
         coroutineScope.cancel()
         messageBusConnection.disconnect()
     }

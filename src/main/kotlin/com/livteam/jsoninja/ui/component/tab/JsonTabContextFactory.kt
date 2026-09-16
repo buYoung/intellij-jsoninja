@@ -3,6 +3,8 @@ package com.livteam.jsoninja.ui.component.tab
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.event.DocumentEvent
+import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.util.ui.JBUI
@@ -14,6 +16,7 @@ import com.livteam.jsoninja.ui.component.jsonQuery.JsonQueryPresenter
 import com.livteam.jsoninja.ui.component.model.JsonQueryUiState
 import com.livteam.jsoninja.ui.component.model.TabUiState
 import java.awt.BorderLayout
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JPanel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -87,7 +90,18 @@ class JsonTabContextFactory(
     ) {
         val queryResultFormatScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
         var queryResultFormatJob: Job? = null
+        var isApplyingQueryResult = false
+        val isTabDisposed = AtomicBoolean(false)
+        editor.editor.document.addDocumentListener(object : DocumentListener {
+            override fun documentChanged(event: DocumentEvent) {
+                if (!isApplyingQueryResult) {
+                    jsonQueryPresenter.invalidatePendingSearch()
+                    queryResultFormatJob?.cancel()
+                }
+            }
+        }, tabDisposable)
         Disposer.register(tabDisposable) {
+            isTabDisposed.set(true)
             queryResultFormatJob?.cancel()
             queryResultFormatScope.cancel()
         }
@@ -97,6 +111,7 @@ class JsonTabContextFactory(
         }
 
         jsonQueryPresenter.setOnBeforeSearchCallback {
+            queryResultFormatJob?.cancel()
             if (!jsonQueryPresenter.hasOriginalJson()) {
                 val editorText = editor.getText()
                 if (editorText.isNotBlank()) {
@@ -109,13 +124,24 @@ class JsonTabContextFactory(
 
         jsonQueryPresenter.setOnSearchCallback { _, resultJson ->
             queryResultFormatJob?.cancel()
+            val requestId = jsonQueryPresenter.getCurrentRequestId()
+            val document = editor.editor.document
+            val modificationStamp = document.modificationStamp
             val jsonFormatState = helperService.getJsonFormatState()
             queryResultFormatJob = queryResultFormatScope.launch {
                 try {
                     val formattedJson = formatterService.formatJsonOnDefault(resultJson, jsonFormatState)
                     withContext(Dispatchers.EDT) {
-                        if (project.isDisposed) return@withContext
-                        editor.setText(formattedJson)
+                        if (project.isDisposed || isTabDisposed.get()) return@withContext
+                        if (!jsonQueryPresenter.isCurrentRequest(requestId) || editor.editor.document !== document ||
+                            document.modificationStamp != modificationStamp
+                        ) return@withContext
+                        isApplyingQueryResult = true
+                        try {
+                            editor.setText(formattedJson)
+                        } finally {
+                            isApplyingQueryResult = false
+                        }
                     }
                 } catch (cancellationException: CancellationException) {
                     throw cancellationException

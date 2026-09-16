@@ -5,6 +5,8 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.editor.Document
+import java.util.WeakHashMap
 import com.livteam.jsoninja.ui.component.tab.JsonTabsPresenter
 import com.livteam.jsoninja.ui.component.tab.JsonTabsView
 import com.intellij.openapi.wm.ToolWindowManager
@@ -31,11 +33,20 @@ class JsoninjaPanelPresenter(
     private val helperService = project.getService(JsonHelperService::class.java)
     private val coroutineScope: CoroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
     private var textProcessingJob: Job? = null
+    private val generationRequests = WeakHashMap<Document, Any>()
+
+    class GenerationTarget internal constructor(
+        internal val editor: JsonEditorView,
+        internal val document: Document,
+        internal val modificationStamp: Long,
+        internal val request: Any,
+    )
 
     init {
         Disposer.register(parentDisposable) {
             textProcessingJob?.cancel()
             coroutineScope.cancel()
+            generationRequests.clear()
         }
 
         tabsPresenter.setOnLastJsonTabClosedListener {
@@ -79,7 +90,26 @@ class JsoninjaPanelPresenter(
     }
 
     fun setRandomJsonData(data: String, skipFormatting: Boolean = false) {
-        val currentEditor = getCurrentEditor() ?: return
+        val target = captureGenerationTarget() ?: return
+        setRandomJsonData(data, target, skipFormatting)
+    }
+
+    fun captureGenerationTarget(): GenerationTarget? {
+        val editor = getCurrentEditor() ?: return null
+        val document = editor.editor.document
+        val request = Any()
+        generationRequests[document] = request
+        return GenerationTarget(editor, document, document.modificationStamp, request)
+    }
+
+    fun isGenerationTargetCurrent(target: GenerationTarget): Boolean =
+        !project.isDisposed && tabsPresenter.hasEditor(target.editor) &&
+            generationRequests[target.document] === target.request &&
+            target.editor.editor.document === target.document &&
+            target.document.modificationStamp == target.modificationStamp
+
+    fun setRandomJsonData(data: String, target: GenerationTarget, skipFormatting: Boolean = false): Boolean {
+        if (!isGenerationTargetCurrent(target)) return false
 
         val processedJson = if (skipFormatting) {
             data
@@ -87,7 +117,10 @@ class JsoninjaPanelPresenter(
             formatterService.formatJson(data, getJsonFormatState())
         }
 
-        currentEditor.setText(processedJson)
+        if (!isGenerationTargetCurrent(target)) return false
+        generationRequests.remove(target.document)
+        target.editor.setText(processedJson)
+        return true
     }
 
     private fun processCurrentEditorTextAsync(processor: (String) -> String) {
