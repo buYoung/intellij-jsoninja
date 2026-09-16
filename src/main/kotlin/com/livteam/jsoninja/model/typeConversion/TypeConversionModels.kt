@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.model.typeConversion
 
+
 sealed interface TypeReference {
     data class Primitive(
         val primitiveKind: TypePrimitiveKind,
@@ -48,7 +49,14 @@ data class TypeDeclaration(
     val superTypeNames: List<String> = emptyList(),
     val enumValues: List<String> = emptyList(),
     val aliasedTypeReference: TypeReference? = null,
+    val enumLiteralValues: List<TypeEnumValue> = emptyList(),
 )
+
+sealed interface TypeEnumValue {
+    data class StringValue(val value: String) : TypeEnumValue
+    data class NumberValue(val value: Double) : TypeEnumValue
+    data class Unresolved(val expression: String?) : TypeEnumValue
+}
 
 enum class TypeDeclarationKind {
     CLASS,

@@ -9,6 +9,7 @@ import com.livteam.jsoninja.services.typeConversion.TypeToJsonGenerationOptions
 import com.livteam.jsoninja.services.typeConversion.TypeToJsonGenerationService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.dialog.convertType.model.TypeToJsonDialogConfig
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import com.livteam.jsoninja.utils.ConvertResultUtils
 import kotlinx.coroutines.cancel
 
@@ -64,7 +65,8 @@ class TypeToJsonDialogPresenter(
         onPreviewStateChanged = callback
     }
 
-    fun getOutputFileExtension(): String = "json"
+    fun getOutputFileExtension(): String =
+        if (currentConfig.propertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED) "json5" else "json"
 
     fun copyPreview() {
         val text = getCurrentPreviewText()
@@ -140,7 +142,7 @@ class TypeToJsonDialogPresenter(
             onSuccess = { previewText ->
                 if (inputText == view.getInputText() && previewConfig == view.collectConfig()) {
                     updatePreviewState(ConvertPreviewState.Ready(inputText, previewConfig, previewText))
-                    view.showSuccessPreview(previewText)
+                    view.showSuccessPreview(previewText, getOutputFileExtension())
                 }
             },
             onError = { error ->

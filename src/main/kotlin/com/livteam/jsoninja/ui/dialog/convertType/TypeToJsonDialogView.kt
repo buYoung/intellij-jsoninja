@@ -128,7 +128,11 @@ class TypeToJsonDialogView(
     }
 
     fun showSuccessPreview(text: String) {
-        previewPanel.setSuccess(text, "json")
+        showSuccessPreview(text, "json")
+    }
+
+    fun showSuccessPreview(text: String, fileExtension: String) {
+        previewPanel.setSuccess(text, fileExtension)
     }
 
     fun getValidationComponent(): JComponent = outputCountSpinner
