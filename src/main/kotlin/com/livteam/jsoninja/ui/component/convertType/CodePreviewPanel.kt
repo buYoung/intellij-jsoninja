@@ -46,14 +46,17 @@ class CodePreviewPanel(
     }
 
     fun setEmpty() {
+        copyButton.isEnabled = false
         cardLayout.show(cardPanel, EMPTY_CARD)
     }
 
     fun setLoading() {
+        copyButton.isEnabled = false
         cardLayout.show(cardPanel, LOADING_CARD)
     }
 
     fun setError(message: String) {
+        copyButton.isEnabled = false
         errorLabel.text = LocalizationBundle.message("common.convert.error", message)
         cardLayout.show(cardPanel, ERROR_CARD)
     }
@@ -64,6 +67,7 @@ class CodePreviewPanel(
     ) {
         ensureViewer(fileExtension)
         setEditorTextAndRefreshCodeFolding(project, viewerField, text)
+        copyButton.isEnabled = text.isNotBlank()
         cardLayout.show(cardPanel, SUCCESS_CARD)
     }
 

@@ -8,6 +8,7 @@ import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.typeConversion.TypeToJsonGenerationOptions
 import com.livteam.jsoninja.services.typeConversion.TypeToJsonGenerationService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
+import com.livteam.jsoninja.ui.dialog.convertType.model.TypeToJsonDialogConfig
 import com.livteam.jsoninja.utils.ConvertResultUtils
 import kotlinx.coroutines.cancel
 
@@ -22,7 +23,8 @@ class TypeToJsonDialogPresenter(
     private val previewExecutor = ConvertPreviewExecutor(coroutineScope)
     private val view = TypeToJsonDialogView(project)
     private var currentConfig = settingsAdapter.load()
-    private var currentPreviewText: String = ""
+    private var previewState: ConvertPreviewState<TypeToJsonDialogConfig> = ConvertPreviewState.Invalid()
+    private var onPreviewStateChanged: (() -> Unit)? = null
     private var isApplyingState = false
 
     init {
@@ -36,6 +38,7 @@ class TypeToJsonDialogPresenter(
         get() = view.component
 
     fun updateLanguage(language: SupportedLanguage) {
+        invalidatePreview()
         currentConfig = currentConfig.copy(language = language)
         applyConfig()
         settingsAdapter.save(currentConfig)
@@ -47,20 +50,31 @@ class TypeToJsonDialogPresenter(
             sourceCode = view.getInputText(),
             outputCount = view.collectConfig().outputCount,
             validationComponent = view.getValidationComponent(),
-        )
+        ) ?: (previewState as? ConvertPreviewState.Invalid)?.message?.let {
+            ValidationInfo(it, view.getValidationComponent())
+        }
     }
 
-    fun getCurrentPreviewText(): String = currentPreviewText
+    fun getCurrentPreviewText(): String {
+        val ready = previewState as? ConvertPreviewState.Ready<*> ?: return ""
+        return if (ready.input == view.getInputText() && ready.config == view.collectConfig()) ready.text else ""
+    }
+
+    fun setOnPreviewStateChanged(callback: () -> Unit) {
+        onPreviewStateChanged = callback
+    }
 
     fun getOutputFileExtension(): String = "json"
 
     fun copyPreview() {
-        if (currentPreviewText.isNotBlank()) {
-            ConvertResultUtils.copyToClipboard(currentPreviewText, project)
+        val text = getCurrentPreviewText()
+        if (text.isNotBlank()) {
+            ConvertResultUtils.copyToClipboard(text, project)
         }
     }
 
     fun dispose() {
+        updatePreviewState(ConvertPreviewState.Invalid())
         previewExecutor.dispose()
         coroutineScope.cancel()
         view.dispose()
@@ -71,6 +85,7 @@ class TypeToJsonDialogPresenter(
             if (isApplyingState) {
                 return@setOnStateChanged
             }
+            invalidatePreview()
             val updatedConfig = view.collectConfig()
             val previousLanguage = currentConfig.language
             currentConfig = updatedConfig
@@ -90,20 +105,21 @@ class TypeToJsonDialogPresenter(
     }
 
     private fun schedulePreview() {
-        val validationInfo = validate()
-        if (validationInfo != null) {
-            currentPreviewText = ""
-            view.showErrorPreview(validationInfo.message)
-            return
-        }
-        if (view.getInputText().isBlank()) {
-            currentPreviewText = ""
+        invalidatePreview()
+        val inputText = view.getInputText()
+        if (inputText.isBlank()) {
+            updatePreviewState(ConvertPreviewState.Invalid())
             view.showEmptyPreview()
             return
         }
-
-        val inputText = view.getInputText()
+        val validationInfo = validate()
+        if (validationInfo != null) {
+            updatePreviewState(ConvertPreviewState.Invalid(validationInfo.message))
+            view.showErrorPreview(validationInfo.message)
+            return
+        }
         val previewConfig = currentConfig
+        view.showLoadingPreview()
         previewExecutor.submit(
             delayMs = 500,
             onLoading = { view.showLoadingPreview() },
@@ -122,13 +138,28 @@ class TypeToJsonDialogPresenter(
                 )
             },
             onSuccess = { previewText ->
-                currentPreviewText = previewText
-                view.showSuccessPreview(previewText)
+                if (inputText == view.getInputText() && previewConfig == view.collectConfig()) {
+                    updatePreviewState(ConvertPreviewState.Ready(inputText, previewConfig, previewText))
+                    view.showSuccessPreview(previewText)
+                }
             },
             onError = { error ->
-                currentPreviewText = ""
-                view.showErrorPreview(error.message ?: error.javaClass.simpleName)
+                if (inputText == view.getInputText() && previewConfig == view.collectConfig()) {
+                    val message = error.message ?: error.javaClass.simpleName
+                    updatePreviewState(ConvertPreviewState.Invalid(message))
+                    view.showErrorPreview(message)
+                }
             },
         )
+    }
+
+    private fun invalidatePreview() {
+        previewExecutor.cancel()
+        updatePreviewState(ConvertPreviewState.Pending)
+    }
+
+    private fun updatePreviewState(state: ConvertPreviewState<TypeToJsonDialogConfig>) {
+        previewState = state
+        onPreviewStateChanged?.invoke()
     }
 }

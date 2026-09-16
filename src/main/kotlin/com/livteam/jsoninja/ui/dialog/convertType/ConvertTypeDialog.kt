@@ -23,11 +23,21 @@ class ConvertTypeDialog(
         seedText = seedText,
         forcedTabIndex = forcedTabIndex,
     )
+    private val copyAction = object : DialogWrapperAction(LocalizationBundle.message("common.convert.copy")) {
+        override fun doAction(event: java.awt.event.ActionEvent?) {
+            presenter.copyCurrentPreview()
+        }
+    }
 
     init {
         title = LocalizationBundle.message("dialog.type.conversion.title")
         setOKButtonText(LocalizationBundle.message("common.convert.insert"))
         init()
+        presenter.setOnPreviewStateChanged {
+            val canConsumePreview = presenter.hasCurrentPreview()
+            isOKActionEnabled = canConsumePreview
+            copyAction.isEnabled = canConsumePreview
+        }
     }
 
     override fun createCenterPanel(): JComponent {
@@ -38,31 +48,26 @@ class ConvertTypeDialog(
     }
 
     override fun createLeftSideActions(): Array<Action> {
-        return arrayOf(
-            object : DialogWrapperAction(LocalizationBundle.message("common.convert.copy")) {
-                override fun doAction(event: java.awt.event.ActionEvent?) {
-                    presenter.copyCurrentPreview()
-                }
-            },
-        )
+        return arrayOf(copyAction)
     }
 
     override fun doValidate(): ValidationInfo? {
-        return presenter.validateCurrentTab()
+        return presenter.validateCurrentTab() ?: if (!presenter.hasCurrentPreview()) {
+            ValidationInfo(LocalizationBundle.message("common.convert.generating"), presenter.component)
+        } else {
+            null
+        }
     }
 
     override fun doOKAction() {
-        val previewText = presenter.getCurrentPreviewText()
-        if (previewText.isBlank()) {
-            return
+        val isConsumed = presenter.consumeCurrentPreview { previewText, fileExtension ->
+            when {
+                targetEditor != null -> ConvertResultUtils.insertToEditor(previewText, project, targetEditor)
+                panelPresenter != null -> ConvertResultUtils.insertToNewTab(previewText, panelPresenter, fileExtension)
+                else -> ConvertResultUtils.copyToClipboard(previewText, project)
+            }
         }
-
-        when {
-            targetEditor != null -> ConvertResultUtils.insertToEditor(previewText, project, targetEditor)
-            panelPresenter != null -> ConvertResultUtils.insertToNewTab(previewText, panelPresenter, presenter.getCurrentOutputFileExtension())
-            else -> ConvertResultUtils.copyToClipboard(previewText, project)
-        }
-        super.doOKAction()
+        if (isConsumed) super.doOKAction()
     }
 
     override fun dispose() {

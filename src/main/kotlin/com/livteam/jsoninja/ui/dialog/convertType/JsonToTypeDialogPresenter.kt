@@ -12,6 +12,7 @@ import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.typeConversion.JsonToTypeConversionOptions
 import com.livteam.jsoninja.services.typeConversion.JsonToTypeConversionService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
+import com.livteam.jsoninja.ui.dialog.convertType.model.JsonToTypeDialogConfig
 import com.livteam.jsoninja.utils.ConvertResultUtils
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +32,8 @@ class JsonToTypeDialogPresenter(
     private val previewExecutor = ConvertPreviewExecutor(coroutineScope)
     private val view = JsonToTypeDialogView(project)
     private var currentConfig = settingsAdapter.load()
-    private var currentPreviewText: String = ""
+    private var previewState: ConvertPreviewState<JsonToTypeDialogConfig> = ConvertPreviewState.Invalid()
+    private var onPreviewStateChanged: (() -> Unit)? = null
     private var isApplyingState = false
 
     init {
@@ -45,6 +47,7 @@ class JsonToTypeDialogPresenter(
         get() = view.component
 
     fun updateLanguage(language: SupportedLanguage) {
+        invalidatePreview()
         currentConfig = settingsAdapter.applyLanguageDefaults(currentConfig, language)
         applyConfig()
         settingsAdapter.save(currentConfig)
@@ -52,24 +55,35 @@ class JsonToTypeDialogPresenter(
     }
 
     fun validate(): ValidationInfo? {
-        return validator.validate(
+        return validator.validateFields(
             jsonText = view.getInputText(),
             rootTypeName = view.collectConfig().rootTypeName,
             validationComponent = view.getValidationComponent(),
-        )
+        ) ?: (previewState as? ConvertPreviewState.Invalid)?.message?.let {
+            ValidationInfo(it, view.getValidationComponent())
+        }
     }
 
-    fun getCurrentPreviewText(): String = currentPreviewText
+    fun getCurrentPreviewText(): String {
+        val ready = previewState as? ConvertPreviewState.Ready<*> ?: return ""
+        return if (ready.input == view.getInputText() && ready.config == view.collectConfig()) ready.text else ""
+    }
+
+    fun setOnPreviewStateChanged(callback: () -> Unit) {
+        onPreviewStateChanged = callback
+    }
 
     fun getOutputFileExtension(): String = currentConfig.language.fileExtension
 
     fun copyPreview() {
-        if (currentPreviewText.isNotBlank()) {
-            ConvertResultUtils.copyToClipboard(currentPreviewText, project)
+        val text = getCurrentPreviewText()
+        if (text.isNotBlank()) {
+            ConvertResultUtils.copyToClipboard(text, project)
         }
     }
 
     fun dispose() {
+        updatePreviewState(ConvertPreviewState.Invalid())
         previewExecutor.dispose()
         coroutineScope.cancel()
         view.dispose()
@@ -80,6 +94,7 @@ class JsonToTypeDialogPresenter(
             if (isApplyingState) {
                 return@setOnStateChanged
             }
+            invalidatePreview()
             val updatedConfig = view.collectConfig()
             val previousLanguage = currentConfig.language
             currentConfig = updatedConfig
@@ -110,24 +125,29 @@ class JsonToTypeDialogPresenter(
     }
 
     private fun schedulePreview() {
-        val validationInfo = validate()
-        if (validationInfo != null) {
-            currentPreviewText = ""
-            view.showErrorPreview(validationInfo.message)
-            return
-        }
-        if (view.getInputText().isBlank()) {
-            currentPreviewText = ""
+        invalidatePreview()
+        val inputText = view.getInputText()
+        if (inputText.isBlank()) {
+            updatePreviewState(ConvertPreviewState.Invalid())
             view.showEmptyPreview()
             return
         }
+        val validationInfo = validator.validateFields(inputText, currentConfig.rootTypeName, view.getValidationComponent())
+        if (validationInfo != null) {
+            updatePreviewState(ConvertPreviewState.Invalid(validationInfo.message))
+            view.showErrorPreview(validationInfo.message)
+            return
+        }
 
-        val inputText = view.getInputText()
         val previewConfig = currentConfig
+        view.showLoadingPreview()
         previewExecutor.submit(
             delayMs = 300,
             onLoading = { view.showLoadingPreview() },
-            computePreview = {
+            computePreview = { checkCancellation ->
+                checkCancellation()
+                validator.getJsonErrorMessage(inputText)?.let { throw IllegalArgumentException(it) }
+                checkCancellation()
                 conversionService.convert(
                     jsonText = inputText,
                     language = previewConfig.language,
@@ -141,13 +161,28 @@ class JsonToTypeDialogPresenter(
                 )
             },
             onSuccess = { previewText ->
-                currentPreviewText = previewText
-                view.showSuccessPreview(previewText, previewConfig.language.fileExtension)
+                if (inputText == view.getInputText() && previewConfig == view.collectConfig()) {
+                    updatePreviewState(ConvertPreviewState.Ready(inputText, previewConfig, previewText))
+                    view.showSuccessPreview(previewText, previewConfig.language.fileExtension)
+                }
             },
             onError = { error ->
-                currentPreviewText = ""
-                view.showErrorPreview(error.message ?: error.javaClass.simpleName)
+                if (inputText == view.getInputText() && previewConfig == view.collectConfig()) {
+                    val message = error.message ?: error.javaClass.simpleName
+                    updatePreviewState(ConvertPreviewState.Invalid(message))
+                    view.showErrorPreview(message)
+                }
             },
         )
+    }
+
+    private fun invalidatePreview() {
+        previewExecutor.cancel()
+        updatePreviewState(ConvertPreviewState.Pending)
+    }
+
+    private fun updatePreviewState(state: ConvertPreviewState<JsonToTypeDialogConfig>) {
+        previewState = state
+        onPreviewStateChanged?.invoke()
     }
 }

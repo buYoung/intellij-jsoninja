@@ -27,4 +27,8 @@ class ConvertTypeDialogView(
     }
 
     fun getSelectedTabIndex(): Int = tabbedPane.selectedIndex
+
+    fun setOnTabChanged(callback: () -> Unit) {
+        tabbedPane.addChangeListener { callback() }
+    }
 }
