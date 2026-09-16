@@ -5,9 +5,11 @@ import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonObjectMapperService
+import com.livteam.jsoninja.services.JsonHttpConnection
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiLoadRequest
 import java.io.IOException
@@ -69,6 +71,8 @@ class LoadJsonFromApiDialogPresenter(
                     }
                 )
             } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            } catch (cancellationException: ProcessCanceledException) {
                 throw cancellationException
             } catch (throwable: Throwable) {
                 Result.failure(throwable)
@@ -161,55 +165,62 @@ class LoadJsonFromApiDialogPresenter(
     }
 
     private fun loadJsonResponse(apiLoadRequest: ApiLoadRequest): String {
-        val httpURLConnection = URI(apiLoadRequest.requestUrl).toURL().openConnection() as HttpURLConnection
-        httpURLConnection.requestMethod = apiLoadRequest.requestMethod.name
-        httpURLConnection.connectTimeout = 10_000
-        httpURLConnection.readTimeout = 15_000
-        httpURLConnection.instanceFollowRedirects = true
-        httpURLConnection.useCaches = false
-        httpURLConnection.setRequestProperty("Accept", "application/json")
-        httpURLConnection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+        return JsonHttpConnection.withConnection(apiLoadRequest.requestUrl) { httpURLConnection ->
+            httpURLConnection.requestMethod = apiLoadRequest.requestMethod.name
+            httpURLConnection.connectTimeout = 10_000
+            httpURLConnection.readTimeout = 15_000
+            httpURLConnection.instanceFollowRedirects = true
+            httpURLConnection.useCaches = false
+            httpURLConnection.setRequestProperty("Accept", "application/json")
+            httpURLConnection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
 
-        configureAuthorizationHeader(httpURLConnection, apiLoadRequest)
-        writeRequestBodyIfNeeded(httpURLConnection, apiLoadRequest)
-
-        return try {
-            val responseCode = httpURLConnection.responseCode
-            val responseBody = readResponseBody(httpURLConnection, responseCode)
-
-            if (responseCode !in 200..299) {
-                throw IOException(createHttpStatusErrorMessage(responseCode, responseBody))
-            }
-
-            if (responseBody.trim().isEmpty()) {
-                throw IOException(LocalizationBundle.message("dialog.load.json.api.error.response.empty"))
-            }
+            configureAuthorizationHeader(httpURLConnection, apiLoadRequest)
+            writeRequestBodyIfNeeded(httpURLConnection, apiLoadRequest)
 
             try {
-                objectMapper.readTree(responseBody)
-            } catch (jsonParseException: Exception) {
+                val responseCode = httpURLConnection.responseCode
+                val responseBody = readResponseBody(httpURLConnection, responseCode)
+
+                if (responseCode !in 200..299) {
+                    throw IOException(createHttpStatusErrorMessage(responseCode, responseBody))
+                }
+
+                if (responseBody.trim().isEmpty()) {
+                    throw IOException(LocalizationBundle.message("dialog.load.json.api.error.response.empty"))
+                }
+
+                try {
+                    objectMapper.readTree(responseBody)
+                } catch (cancellationException: CancellationException) {
+                    throw cancellationException
+                } catch (cancellationException: ProcessCanceledException) {
+                    throw cancellationException
+                } catch (jsonParseException: Exception) {
+                    throw IOException(
+                        LocalizationBundle.message(
+                            "dialog.load.json.api.error.response.invalid.json",
+                            jsonParseException.message ?: jsonParseException.javaClass.simpleName
+                        ),
+                        jsonParseException
+                    )
+                }
+
+                responseBody
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            } catch (cancellationException: ProcessCanceledException) {
+                throw cancellationException
+            } catch (ioException: IOException) {
+                throw ioException
+            } catch (exception: Exception) {
                 throw IOException(
                     LocalizationBundle.message(
-                        "dialog.load.json.api.error.response.invalid.json",
-                        jsonParseException.message ?: jsonParseException.javaClass.simpleName
+                        "dialog.load.json.api.error.request.failed",
+                        exception.message ?: exception.javaClass.simpleName
                     ),
-                    jsonParseException
+                    exception
                 )
             }
-
-            responseBody
-        } catch (ioException: IOException) {
-            throw ioException
-        } catch (exception: Exception) {
-            throw IOException(
-                LocalizationBundle.message(
-                    "dialog.load.json.api.error.request.failed",
-                    exception.message ?: exception.javaClass.simpleName
-                ),
-                exception
-            )
-        } finally {
-            httpURLConnection.disconnect()
         }
     }
 
@@ -246,8 +257,8 @@ class LoadJsonFromApiDialogPresenter(
         }
 
         httpURLConnection.doOutput = true
-        httpURLConnection.outputStream.bufferedWriter(StandardCharsets.UTF_8).use { writer ->
-            writer.write(apiLoadRequest.requestBodyText)
+        httpURLConnection.outputStream.use { outputStream ->
+            outputStream.write(apiLoadRequest.requestBodyText.toByteArray(StandardCharsets.UTF_8))
         }
     }
 

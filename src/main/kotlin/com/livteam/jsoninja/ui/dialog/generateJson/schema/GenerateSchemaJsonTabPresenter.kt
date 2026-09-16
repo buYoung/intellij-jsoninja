@@ -7,6 +7,7 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.ValidationInfo
 import com.livteam.jsoninja.LocalizationBundle
@@ -19,8 +20,7 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import io.burt.jmespath.jackson.JacksonRuntime
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URI
+import com.livteam.jsoninja.services.JsonHttpConnection
 import javax.swing.JComponent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -158,6 +158,8 @@ class GenerateSchemaJsonTabPresenter(
                     filterSchemaStoreCatalogItemsByInput()
                 }
             } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            } catch (cancellationException: ProcessCanceledException) {
                 throw cancellationException
             } catch (exception: Exception) {
                 LOG.warn("Failed to load SchemaStore catalog.", exception)
@@ -437,6 +439,8 @@ class GenerateSchemaJsonTabPresenter(
                 }
             } catch (cancellationException: CancellationException) {
                 throw cancellationException
+            } catch (cancellationException: ProcessCanceledException) {
+                throw cancellationException
             } catch (exception: Exception) {
                 val message = exception.message
                     ?: LocalizationBundle.message("dialog.generate.json.schema.url.fetch.failed")
@@ -454,26 +458,22 @@ class GenerateSchemaJsonTabPresenter(
     }
 
     private fun fetchSchemaText(schemaUrl: String): String {
-        val connection = URI(schemaUrl).toURL().openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 15_000
-        connection.instanceFollowRedirects = true
-        connection.setRequestProperty("Accept", "application/schema+json, application/json;q=0.9, */*;q=0.8")
+        return JsonHttpConnection.withConnection(schemaUrl) { connection ->
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.instanceFollowRedirects = true
+            connection.setRequestProperty("Accept", "application/schema+json, application/json;q=0.9, */*;q=0.8")
 
-        return try {
             val responseCode = connection.responseCode
             if (responseCode !in 200..299) {
-                throw IOException(
-                    LocalizationBundle.message("dialog.generate.json.schema.url.http.status", responseCode)
-                )
+                connection.errorStream.use {
+                    throw IOException(LocalizationBundle.message("dialog.generate.json.schema.url.http.status", responseCode))
+                }
             }
-
             connection.inputStream.bufferedReader().use { reader ->
                 reader.readText()
             }
-        } finally {
-            connection.disconnect()
         }
     }
 

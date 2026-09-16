@@ -9,11 +9,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.progress.ProcessCanceledException
+import kotlinx.coroutines.CancellationException
 import com.networknt.schema.SpecVersion.VersionFlag
 import com.livteam.jsoninja.LocalizationBundle
 import java.io.IOException
 import java.math.BigDecimal
-import java.net.HttpURLConnection
+import com.livteam.jsoninja.services.JsonHttpConnection
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -173,6 +175,10 @@ class JsonSchemaNormalizer(private val project: Project) {
                 referenceValue, referencedContext, loadedDocumentContextByPath,
                 fragment, loadedRemoteDocumentContextByUri, resolutionStack
             )
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (cancellationException: ProcessCanceledException) {
+            throw cancellationException
         } catch (exception: JsonSchemaGenerationException) {
             throw exception
         } catch (exception: Exception) {
@@ -349,23 +355,22 @@ class JsonSchemaNormalizer(private val project: Project) {
     }
 
     private fun fetchRemoteSchemaText(referenceUri: String): String {
-        val connection = URI(referenceUri).toURL().openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 15_000
-        connection.instanceFollowRedirects = true
-        connection.setRequestProperty("Accept", "application/schema+json, application/json;q=0.9, */*;q=0.8")
+        return JsonHttpConnection.withConnection(referenceUri) { connection ->
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.instanceFollowRedirects = true
+            connection.setRequestProperty("Accept", "application/schema+json, application/json;q=0.9, */*;q=0.8")
 
-        return try {
             val responseCode = connection.responseCode
             if (responseCode !in 200..299) {
-                throw IOException("Remote schema request failed with status code: $responseCode")
+                connection.errorStream.use {
+                    throw IOException("Remote schema request failed with status code: $responseCode")
+                }
             }
             connection.inputStream.bufferedReader().use { reader ->
                 reader.readText()
             }
-        } finally {
-            connection.disconnect()
         }
     }
 

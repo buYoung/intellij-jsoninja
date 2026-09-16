@@ -21,7 +21,7 @@
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-12-schema-refs.md` — Resolve schema references in their source context; exists because audit items R1.10, R1.11 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-13-schema-numbers.md` — Generate numbers within actual schema bounds; exists because audit items R2.4a, R2.4b share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-14-onboarding.md` — 구현·기존 검증·커밋 완료, 네이티브 창 관찰 대기. Close only diff UI owned by the tutorial; exists because audit items R1.3 share one independent behavior/acceptance boundary.
-- [ ] `docs/briefs/2026-09-16-refactor-json-integrity-15-http-lifecycle.md` — Bound and share JSON HTTP request cleanup; exists because audit items M2 share one independent behavior/acceptance boundary.
+- [x] `docs/briefs/2026-09-16-refactor-json-integrity-15-http-lifecycle.md` — Bound and share JSON HTTP request cleanup; exists because audit items M2 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-ci-json-integrity-16-ci-artifacts.md` — Verify pull requests and preserve release artifacts; exists because audit items M3a, M3b share one independent behavior/acceptance boundary.
 
 ## Execution Order
