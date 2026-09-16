@@ -15,6 +15,7 @@ import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 
 /**
@@ -126,13 +127,13 @@ class JsonFormatterService(private val project: Project) {
      * @return 포맷팅된 JSON 문자열, 포맷팅 실패 시 원본 반환
      */
     fun formatJson(json: String, formatState: JsonFormatState, sortOverride: Boolean? = null): String {
-        var formatState = formatState
         val trimedJson = json.trim()
         val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
 
         if (isEmptyJson) return json
 
-        val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(json)
+        val inputToFormat = fullyUnescapeJson(json)
+        val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(inputToFormat)
         if (!replacementResult.isSuccessful) {
             LOG.debug("Invalid placeholder syntax detected, returning original input")
             return json
@@ -149,40 +150,23 @@ class JsonFormatterService(private val project: Project) {
         return try {
             // 포맷 상태에 따라 설정 조정
             // UGLIFY 상태일 때는 설정에 관계없이 항상 UGLIFY 유지
-            val usesSorting = if (formatState == JsonFormatState.PRETTIFY_SORTED) {
-                true
-            } else if (formatState == JsonFormatState.UGLIFY) {
+            val usesSorting = if (formatState == JsonFormatState.UGLIFY) {
                 false // UGLIFY 상태에서는 정렬하지 않음
             } else if (sortOverride != null) {
                 sortOverride
             } else {
-                settings.sortKeys // 다른 상태에서는 설정값 사용
-            }
-
-            // UGLIFY가 아니고 정렬이 필요한 경우에만 PRETTIFY_SORTED로 변경
-            if (formatState != JsonFormatState.UGLIFY && usesSorting) {
-                formatState = JsonFormatState.PRETTIFY_SORTED
+                formatState.usesSorting() || settings.sortKeys
             }
 
             // 매퍼 설정
             val mapper = getConfiguredMapper(usesSorting)
             val jsonNode = mapper.readTree(jsonForParsing)
 
-            val formattedJson = when (formatState) {
-                JsonFormatState.PRETTIFY,
-                JsonFormatState.PRETTIFY_COMPACT -> {
-                    val prettyPrinter = createConfiguredPrettyPrinter(formatState)
-                    mapper.writer(prettyPrinter).writeValueAsString(jsonNode)
-                }
-
-                JsonFormatState.PRETTIFY_SORTED -> {
-                    val prettyPrinter = createConfiguredPrettyPrinter(formatState)
-                    mapper.writer(prettyPrinter).writeValueAsString(mapper.treeToValue(jsonNode, Object::class.java))
-                }
-
-                JsonFormatState.UGLIFY -> {
-                    mapper.writeValueAsString(jsonNode)
-                }
+            val valueToWrite = if (usesSorting) mapper.treeToValue(jsonNode, Any::class.java) else jsonNode
+            val formattedJson = if (formatState.usesPrettyPrinting()) {
+                mapper.writer(createConfiguredPrettyPrinter(formatState)).writeValueAsString(valueToWrite)
+            } else {
+                mapper.writeValueAsString(valueToWrite)
             }
 
             if (replacementResult.mappings.isEmpty()) {
@@ -201,6 +185,8 @@ class JsonFormatterService(private val project: Project) {
                     restoredJson
                 }
             }
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
         } catch (e: Exception) {
             // 포맷팅 실패 시 원본 반환
             LOG.warn("JSON 포맷팅 실패 (${e.javaClass.simpleName})")
@@ -494,26 +480,18 @@ class JsonFormatterService(private val project: Project) {
 
     /**
      * 다중 이스케이프된 JSON 문자열을 완전히 언이스케이프 처리합니다.
-     * 더 이상 이스케이프 문자가 없을 때까지 반복적으로 언이스케이프를 수행합니다.
+     * 유효한 문서를 만나면 중단하여 문자열 값의 이스케이프를 보존합니다.
      *
      * @param json 다중 이스케이프 처리된 JSON 문자열
      * @return 완전히 언이스케이프된 JSON 문자열
      */
     fun fullyUnescapeJson(json: String): String {
         var result = json
-        var previousResult: String
-
-        // 이스케이프 문자가 더 이상 없을 때까지 반복
-        do {
-            previousResult = result
-            result = unescapeJson(result)
-
-            // 변화가 없으면 더 이상 언이스케이프할 것이 없는 것
-            if (result == previousResult) {
-                break
-            }
-        } while (containsEscapeCharacters(result))
-
+        while (!isValidJson(result)) {
+            val decoded = unescapeJson(result)
+            if (decoded == result) return json
+            result = decoded
+        }
         return result
     }
 

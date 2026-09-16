@@ -66,12 +66,7 @@ class JsoninjaPanelPresenter(
     fun formatJson(formatState: JsonFormatState? = null) {
         val state = formatState ?: getJsonFormatState()
         processCurrentEditorTextAsync { jsonText ->
-            val textToFormat = if (formatterService.containsEscapeCharacters(jsonText)) {
-                formatterService.fullyUnescapeJson(jsonText)
-            } else {
-                jsonText
-            }
-            formatterService.formatJson(textToFormat, state)
+            formatterService.formatJson(jsonText, state)
         }
     }
 
@@ -98,6 +93,7 @@ class JsoninjaPanelPresenter(
     private fun processCurrentEditorTextAsync(processor: (String) -> String) {
         val currentEditor = getCurrentEditor() ?: return
         val jsonText = currentEditor.getText()
+        val documentModificationStamp = currentEditor.editor.document.modificationStamp
         val trimmedJsonText = jsonText.trim()
         val isJsonTextEmpty = trimmedJsonText.isBlank() || trimmedJsonText.isEmpty()
 
@@ -113,6 +109,7 @@ class JsoninjaPanelPresenter(
                 withContext(Dispatchers.EDT) {
                     if (project.isDisposed) return@withContext
                     if (getCurrentEditor() !== currentEditor) return@withContext
+                    if (currentEditor.editor.document.modificationStamp != documentModificationStamp) return@withContext
                     if (currentEditor.getText() != jsonText) return@withContext
                     currentEditor.setText(processedJson)
                 }
