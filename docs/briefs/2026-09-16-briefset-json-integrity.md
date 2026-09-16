@@ -13,7 +13,7 @@
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-04-async-writes.md` — Reject stale background document replacements; exists because audit items R1.2a, R1.2b, R1.2c share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-05-query-state.md` — Keep query source and successful null results; exists because audit items R2.1, R2.2, R2.8 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-06-query-paths.md` — Generate executable paths for every query engine; exists because audit items R1.12 share one independent behavior/acceptance boundary.
-- [ ] `docs/briefs/2026-09-16-fix-json-integrity-07-tree-view.md` — Render empty arrays and current document state; exists because audit items R2.3a, R2.3b share one independent behavior/acceptance boundary.
+- [x] `docs/briefs/2026-09-16-fix-json-integrity-07-tree-view.md` — Render empty arrays and current document state; exists because audit items R2.3a, R2.3b share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-08-wasm-runtime.md` — Isolate complete WASM analysis transactions; exists because audit items R1.4 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-09-preview-state.md` — Apply only previews for the current input; exists because audit items R1.6, M1b share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-10-json-to-type.md` — Generate types that admit the source JSON; exists because audit items R1.7, R1.8, R1.9a, R1.9b, R2.9 share one independent behavior/acceptance boundary.
