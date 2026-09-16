@@ -13,7 +13,7 @@ import com.intellij.openapi.components.Service
  */
 @Service(Service.Level.APP)
 class JsonObjectMapperService {
-    val objectMapper: ObjectMapper = ObjectMapper()
+    val objectMapper: ObjectMapper = ObjectMapper(Json5Factory())
         .registerModule(KotlinModule.Builder().build())
         .apply {
         // Serialization settings
@@ -23,6 +23,7 @@ class JsonObjectMapperService {
         configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
         configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
+        configure(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS, true)
         
         // Parser settings
         configure(JsonReadFeature.ALLOW_TRAILING_COMMA.mappedFeature(), true)

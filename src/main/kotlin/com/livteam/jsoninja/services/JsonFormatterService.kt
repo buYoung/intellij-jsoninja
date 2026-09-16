@@ -134,7 +134,7 @@ class JsonFormatterService(private val project: Project) {
 
         val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(json)
         if (!replacementResult.isSuccessful) {
-            LOG.debug("Invalid placeholder syntax detected, returning original: $json")
+            LOG.debug("Invalid placeholder syntax detected, returning original input")
             return json
         }
 
@@ -142,7 +142,7 @@ class JsonFormatterService(private val project: Project) {
 
         // Check if JSON is valid before attempting to format
         if (!isValidJsonText(jsonForParsing)) {
-            LOG.debug("Invalid JSON detected, returning original: $json")
+            LOG.debug("Invalid JSON detected, returning original input")
             return json
         }
 
@@ -203,7 +203,7 @@ class JsonFormatterService(private val project: Project) {
             }
         } catch (e: Exception) {
             // 포맷팅 실패 시 원본 반환
-            LOG.warn("JSON 포맷팅 실패: ${e.message}")
+            LOG.warn("JSON 포맷팅 실패 (${e.javaClass.simpleName})")
             json
         }
     }
@@ -247,7 +247,7 @@ class JsonFormatterService(private val project: Project) {
                 parser.nextToken() == null
             }
         } catch (e: Exception) {
-            LOG.debug("유효하지 않은 JSON: ${e.message}")
+            LOG.debug("유효하지 않은 JSON (${e.javaClass.simpleName})")
             false
         }
     }

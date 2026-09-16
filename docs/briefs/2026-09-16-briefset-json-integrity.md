@@ -8,7 +8,7 @@
 ## Child Briefs
 
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-01-undo-routing.md` — Route Undo and Redo to the JSON editor; exists because audit items U1 share one independent behavior/acceptance boundary.
-- [ ] `docs/briefs/2026-09-16-fix-json-integrity-02-json-input.md` — Preserve JSON numbers and JSON5 input; exists because audit items R1.5, R2.10 share one independent behavior/acceptance boundary.
+- [x] `docs/briefs/2026-09-16-fix-json-integrity-02-json-input.md` — Preserve JSON numbers and JSON5 input; exists because audit items R1.5, R2.10 share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-03-format-safety.md` — Preserve strings and combined formatting options; exists because audit items R1.1, R2.7, M1a share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-04-async-writes.md` — Reject stale background document replacements; exists because audit items R1.2a, R1.2b, R1.2c share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-05-query-state.md` — Keep query source and successful null results; exists because audit items R2.1, R2.2, R2.8 share one independent behavior/acceptance boundary.
