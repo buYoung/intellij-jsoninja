@@ -22,13 +22,19 @@
 - [x] `docs/briefs/2026-09-16-fix-json-integrity-13-schema-numbers.md` — Generate numbers within actual schema bounds; exists because audit items R2.4a, R2.4b share one independent behavior/acceptance boundary.
 - [ ] `docs/briefs/2026-09-16-fix-json-integrity-14-onboarding.md` — 구현·기존 검증·커밋 완료, 네이티브 창 관찰 대기. Close only diff UI owned by the tutorial; exists because audit items R1.3 share one independent behavior/acceptance boundary.
 - [x] `docs/briefs/2026-09-16-refactor-json-integrity-15-http-lifecycle.md` — Bound and share JSON HTTP request cleanup; exists because audit items M2 share one independent behavior/acceptance boundary.
-- [ ] `docs/briefs/2026-09-16-ci-json-integrity-16-ci-artifacts.md` — Verify pull requests and preserve release artifacts; exists because audit items M3a, M3b share one independent behavior/acceptance boundary.
+- [x] `docs/briefs/2026-09-16-ci-json-integrity-16-ci-artifacts.md` — Verify pull requests and preserve release artifacts; exists because audit items M3a, M3b share one independent behavior/acceptance boundary.
 
 ## 실행 순서 보정 (2026-09-16)
 
 - 10의 실제 변경 목록에서 TypeConversionModels.kt는 변경되지 않았다. 원본 키 정책은 JSON→타입 렌더링에만 영향을 주며 11의 enum 원문/선택 필드 생성은 그 출력을 소비하지 않는다.
 - 따라서 11의 시작 전제는 수용된 08/09로 좁힌다. 11은 기존 enumValues 이름 목록을 보존하고 별도의 리터럴 정보를 기본값과 함께 확장한다. 10은 기존 이름/필드 계약을 그대로 사용하고 최종 통합에서 이 확장과 다시 검증한다.
 - 공유 모델의 실제 작성자는 11로 재배정한다. 10의 전체 수용 조건은 그대로 남으며 완료 체크로 대체하지 않는다. 사용자는 원본 키 보존 우선(TypeScript 원래 키, Go 필요 시 JSON 변환 메서드)을 확정했다.
+
+## 16 로컬 작업의 시작 조건 보정 (2026-09-16)
+
+- 01–13/15의 구현과 수용 기록이 통합됐고 14는 구현/기존 검증/커밋 완료, 네이티브 창 관찰만 대기 중이다. 14의 대기를 수용 완료로 바꾸지 않는다.
+- 16의 PR 경로, 아카이브 전달, 로컬 패키징/호환성 확인은 창 관찰과 독립적으로 실행한다. 14의 승인되지 않은 네이티브 조작이나 외부 CI/배포는 실행하지 않는다.
+- 16의 로컬 수용과 부모 전체 수용을 구분한다. 부모의 모든 child ready 조건은 14의 실제 관찰 전까지 미충족으로 남긴다.
 
 ## Execution Order
 
@@ -174,16 +180,24 @@
 
 ## Global Acceptance Criteria
 
-- [ ] Child 02 records strict-JSON conversion attempts for `Infinity`, `-Infinity`, and `NaN` at the root and in objects/arrays: conversion fails recoverably and the original text remains unchanged, without partial output or null/string substitution. Quoted strings such as `"Infinity"` continue to convert normally.
+- [x] Child 02 records strict-JSON conversion attempts for `Infinity`, `-Infinity`, and `NaN` at the root and in objects/arrays: conversion fails recoverably and the original text remains unchanged, without partial output or null/string substitution. Quoted strings such as `"Infinity"` continue to convert normally.
 - [ ] Every child has a ready/no-change Acceptance record at its declared path, with each allocated audit ID accounted for, matching final source state, mandatory behavior evidence, side-effect results, and no hidden prerequisite. Only then tick its parent checkbox.
-- [ ] From the repository root, run `./gradlew compileKotlin` and `./gradlew test` after integration; expected exit 0, all discovered JVM cases executed with zero failures/errors and no unexplained skips. The original eight Undo/Redo cases all pass. Record discovered counts rather than assuming the historical 68-case total remains current.
-- [ ] From `tree-sitter-wasm`, run `cargo test` with expected exit 0. From the root, run `./gradlew buildPlugin` and `./gradlew verifyPlugin` with expected exit 0; record tested IDE builds, toolchains, archive/WASM hashes, and any unavailable verification separately. Host Rust tests are not bundled-WASM proof.
-- [ ] Inspect the generated plugin ZIP and its bundled WASM against the artifact used by the three existing TypeConversionWasmIntegration suites; expected matching SHA-256 values and producer source stamp. Inspect child 16 workflow wiring for the same verified archive at the publisher input. Actual external publication is excluded from this set and not reported as observed.
-- [ ] Perform the bounded integrated flow: exact-number/escaped-string input → format with compact+sort → query/clear/edit/query including null → Undo/Redo → visible tree → type conversion preview and copy/insert. Expected preserved values, current output, correct action target, and the per-child fixture results. Record actual authorized UI evidence and pending surfaces separately; a missing mandatory behavior observation prevents that behavior from being called verified.
-- [ ] For every declared hotspot, inspect the final changed symbols and both writer records; expected preserved predecessor contract with no stale overwrite or duplicate lifecycle ownership. Confirm source and evidence populations are non-empty before accepting a no-match inspection.
-- [ ] Child 16 records PR/tag trigger, job trust, artifact hash/provenance, and local package checks; external workflow execution remains an explicit limitation unless separately authorized. No release/tag/credential action is part of accepting the local source/workflow change.
-- [ ] Inspect final scope with `git diff --name-only` plus the known untracked Undo test and new handoff records; expected only planned changes, preserved user work, and no silently modified tests outside the Undo/Redo authorization.
+- [x] From the repository root, run `./gradlew compileKotlin` and `./gradlew test` after integration; expected exit 0, all discovered JVM cases executed with zero failures/errors and no unexplained skips. The original eight Undo/Redo cases all pass. Record discovered counts rather than assuming the historical 68-case total remains current.
+- [x] From `tree-sitter-wasm`, run `cargo test` with expected exit 0. From the root, run `./gradlew buildPlugin` and `./gradlew verifyPlugin` with expected exit 0; record tested IDE builds, toolchains, archive/WASM hashes, and any unavailable verification separately. Host Rust tests are not bundled-WASM proof.
+- [x] Inspect the generated plugin ZIP and its bundled WASM against the artifact used by the three existing TypeConversionWasmIntegration suites; expected matching SHA-256 values and producer source stamp. Inspect child 16 workflow wiring for the same verified archive at the publisher input. Actual external publication is excluded from this set and not reported as observed.
+- [x] Perform the bounded integrated flow: exact-number/escaped-string input → format with compact+sort → query/clear/edit/query including null → Undo/Redo → visible tree → type conversion preview and copy/insert. Expected preserved values, current output, correct action target, and the per-child fixture results. Record actual authorized UI evidence and pending surfaces separately; a missing mandatory behavior observation prevents that behavior from being called verified.
+- [x] For every declared hotspot, inspect the final changed symbols and both writer records; expected preserved predecessor contract with no stale overwrite or duplicate lifecycle ownership. Confirm source and evidence populations are non-empty before accepting a no-match inspection.
+- [x] Child 16 records PR/tag trigger, job trust, artifact hash/provenance, and local package checks; external workflow execution remains an explicit limitation unless separately authorized. No release/tag/credential action is part of accepting the local source/workflow change.
+- [x] Inspect final scope with `git diff --name-only` plus the known untracked Undo test and new handoff records; expected only planned changes, preserved user work, and no silently modified tests outside the Undo/Redo authorization.
+
+
+## 최종 통합 결과 (2026-09-16)
+
+- [통합 검증 기록](evidence/json-integrity-16.md): JVM 76개/Rust 12개, 플러그인 패키징, 7개 IDE Compatible, 산출물 해시/입력 연결, 헤드리스 통합 동작과 65개 계약 파일의 기록 연결을 확인했다.
+- 각 하위 작업 구현을 사용자 요청에 따라 별도 커밋했다. 브리프의 기존 커밋 금지 문구보다 현재 대화의 명시적 커밋 요청을 우선했다. 기존 커밋 이력의 `type(한국어 설명)`과 번호 목록 본문 형식을 유지했다.
+- 14는 구현·기존 검증·커밋 완료지만 네이티브 창 관찰 대기다. 따라서 모든 child ready 조건과 부모 전체 수용은 아직 완료로 표시하지 않는다. 16의 ready는 로컬 구현/정적 검증의 수용이며 외부 PR/서명/배포 관찰을 포함하지 않는다.
+- 기존 .codemap/.antigravitycli 및 별도 2026-05-31 브리프는 커밋에 포함하지 않았다. 테스트 변경은 승인된 01의 Undo/Redo 파일뿐이다.
 
 ## Open Questions
 
-- None — the user confirmed rejection of non-finite strict-JSON conversion with unchanged source text; no policy reconfirmation is required.
+- 정책 질문 없음. 비유한 숫자 변환은 원문을 보존하고 회복 가능한 오류로 거부한다. 타입 생성은 사용자가 확정한 원본 키 보존 우선(TypeScript 원래 키, Go 필요 시 JSON 변환 메서드)을 따른다.

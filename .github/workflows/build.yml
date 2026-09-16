@@ -1,185 +1,142 @@
-# GitHub Actions Workflow is created for testing and preparing the plugin release in the following steps:
-# - Validate Gradle Wrapper.
-# - Run 'test' and 'verifyPlugin' tasks.
-# - Run Qodana inspections.
-# - Run the 'buildPlugin' task and prepare artifact for further tests.
-# - Run the 'runPluginVerifier' task.
-# - Create a draft release.
-#
-# The workflow is triggered on push and pull_request events.
-#
-# GitHub Actions reference: https://help.github.com/en/actions
-#
-## JBIJPPTPL
-
 name: Build
 on:
-  # Trigger the workflow on version tags following semantic versioning
+  pull_request:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'          # v1.0.0
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'        # v1.0.0-beta.1, v1.0.0-rc.1
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: read
 
 env:
-  ORG_GRADLE_PROJECT_skipWasmBuild: true
+  ORG_GRADLE_PROJECT_skipWasmBuild: 'true'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-
-  # Prepare environment and build the plugin
   build:
-    name: Build
+    name: Build and verify
     runs-on: ubuntu-latest
     env:
-      ORG_GRADLE_PROJECT_skipWasmBuild: false
+      ORG_GRADLE_PROJECT_skipWasmBuild: 'false'
     outputs:
       version: ${{ steps.properties.outputs.version }}
       changelog: ${{ steps.properties.outputs.changelog }}
-      pluginVerifierHomeDir: ${{ steps.properties.outputs.pluginVerifierHomeDir }}
     steps:
-
-      # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      # Validate wrapper
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          large-packages: false
+
       - name: Gradle Wrapper Validation
         uses: gradle/actions/wrapper-validation@v6
 
-      # Set up Java environment for the next steps
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: zulu
           java-version: 17
 
-      # Set up Rust and C toolchains used by the bundled tree-sitter WASM module
       - name: Setup WASM Toolchain
         shell: bash
         run: |
           rustup target add wasm32-wasip1
-
           WASI_VERSION=33
-          WASI_VERSION_FULL="${WASI_VERSION}.0"
-          WASI_ARCH=x86_64
-          WASI_OS=linux
-          WASI_SDK_NAME="wasi-sdk-${WASI_VERSION_FULL}-${WASI_ARCH}-${WASI_OS}"
+          WASI_SDK_NAME="wasi-sdk-${WASI_VERSION}.0-x86_64-linux"
           WASI_SDK_ARCHIVE="${WASI_SDK_NAME}.tar.gz"
-          WASI_SDK_URL="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/${WASI_SDK_ARCHIVE}"
-          curl -fsSL "$WASI_SDK_URL" -o "$RUNNER_TEMP/$WASI_SDK_ARCHIVE"
+          curl -fsSL "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/${WASI_SDK_ARCHIVE}" -o "$RUNNER_TEMP/$WASI_SDK_ARCHIVE"
           tar -xzf "$RUNNER_TEMP/$WASI_SDK_ARCHIVE" -C "$RUNNER_TEMP"
-
           WASI_SDK_PATH="$RUNNER_TEMP/$WASI_SDK_NAME"
           echo "CC_wasm32_wasip1=$WASI_SDK_PATH/bin/clang" >> "$GITHUB_ENV"
           echo "AR_wasm32_wasip1=$WASI_SDK_PATH/bin/llvm-ar" >> "$GITHUB_ENV"
           echo "WASI_SYSROOT=$WASI_SDK_PATH/share/wasi-sysroot" >> "$GITHUB_ENV"
           echo "CFLAGS_wasm32_wasip1=--sysroot=$WASI_SDK_PATH/share/wasi-sysroot" >> "$GITHUB_ENV"
 
-      # Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # Set environment variables
       - name: Export Properties
         id: properties
         shell: bash
         run: |
-          PROPERTIES="$(./gradlew properties --console=plain -q)"
-          VERSION="$(echo "$PROPERTIES" | grep "^version:" | cut -f2- -d ' ')"
-          CHANGELOG="$(./gradlew getChangelog --unreleased --no-header --console=plain -q)"
+          ./gradlew properties --console=plain -q > "$RUNNER_TEMP/properties.txt"
+          ./gradlew getChangelog --unreleased --no-header --console=plain -q > "$RUNNER_TEMP/changelog.txt"
+          python3 - <<'PY'
+          import os, pathlib, uuid
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          version = next(line.split(': ', 1)[1] for line in (root / 'properties.txt').read_text().splitlines() if line.startswith('version: '))
+          delimiter = str(uuid.uuid4())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'version={version}\nchangelog<<{delimiter}\n{(root / "changelog.txt").read_text()}\n{delimiter}\n')
+          PY
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "pluginVerifierHomeDir=~/.pluginVerifier" >> $GITHUB_OUTPUT
-          
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Compile, test, check, and package
+        run: ./gradlew compileKotlin check buildPlugin --no-build-cache --no-configuration-cache
 
-      # Build plugin
-      - name: Build plugin
-        run: ./gradlew buildPlugin
+      - name: Rust Tests
+        working-directory: tree-sitter-wasm
+        run: cargo test
 
-      # Prepare plugin archive content for creating artifact
-      - name: Prepare Plugin Artifact
-        id: artifact
+      - name: Verify packaged plugin
+        run: ./gradlew verifyPlugin --no-configuration-cache
+
+      - name: Record toolchains
         shell: bash
         run: |
-          cd ${{ github.workspace }}/build/distributions
-          FILENAME=`ls *.zip`
-          unzip "$FILENAME" -d content
+          {
+            java -version
+            ./gradlew --version
+            cat gradle/libs.versions.toml
+            rustc --version --verbose
+            cargo --version
+            rustup target list --installed
+            "$CC_wasm32_wasip1" --version
+          } > build/toolchains.txt 2>&1
 
-          echo "filename=${FILENAME:0:-4}" >> $GITHUB_OUTPUT
-
-      # Store already-built plugin as an artifact for downloading
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ steps.artifact.outputs.filename }}
-          path: ./build/distributions/content/*/*
-
-  # Run tests and upload a code coverage report
-  test:
-    name: Test
-    needs: [ build ]
-    runs-on: ubuntu-latest
-    env:
-      ORG_GRADLE_PROJECT_skipWasmBuild: false
-    steps:
-
-      # Check out the current repository
-      - name: Fetch Sources
-        uses: actions/checkout@v6
-
-      # Set up Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 17
-
-      # Set up Rust and C toolchains used by the bundled tree-sitter WASM module
-      - name: Setup WASM Toolchain
+      - name: Record verified artifact
         shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
-          rustup target add wasm32-wasip1
+          mapfile -t ARCHIVES < <(find build/distributions -maxdepth 1 -name '*.zip')
+          test "${#ARCHIVES[@]}" -eq 1
+          mapfile -t TESTED_PLUGIN_DIRS < <(find build/idea-sandbox -maxdepth 2 -type d -name plugins-test)
+          test "${#TESTED_PLUGIN_DIRS[@]}" -eq 1
+          python3 .github/scripts/plugin_artifact.py create \
+            --archive "${ARCHIVES[0]}" --output build/verified \
+            --commit "$(git rev-parse HEAD)" --tag "$RELEASE_TAG" \
+            --tested-plugin-dir "${TESTED_PLUGIN_DIRS[0]}" \
+            --wasm src/main/resources/wasm/tree-sitter/tree-sitter.wasm \
+            --toolchains build/toolchains.txt --verifier-reports build/reports/pluginVerifier
 
-          WASI_VERSION=33
-          WASI_VERSION_FULL="${WASI_VERSION}.0"
-          WASI_ARCH=x86_64
-          WASI_OS=linux
-          WASI_SDK_NAME="wasi-sdk-${WASI_VERSION_FULL}-${WASI_ARCH}-${WASI_OS}"
-          WASI_SDK_ARCHIVE="${WASI_SDK_NAME}.tar.gz"
-          WASI_SDK_URL="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/${WASI_SDK_ARCHIVE}"
-          curl -fsSL "$WASI_SDK_URL" -o "$RUNNER_TEMP/$WASI_SDK_ARCHIVE"
-          tar -xzf "$RUNNER_TEMP/$WASI_SDK_ARCHIVE" -C "$RUNNER_TEMP"
-
-          WASI_SDK_PATH="$RUNNER_TEMP/$WASI_SDK_NAME"
-          echo "CC_wasm32_wasip1=$WASI_SDK_PATH/bin/clang" >> "$GITHUB_ENV"
-          echo "AR_wasm32_wasip1=$WASI_SDK_PATH/bin/llvm-ar" >> "$GITHUB_ENV"
-          echo "WASI_SYSROOT=$WASI_SDK_PATH/share/wasi-sysroot" >> "$GITHUB_ENV"
-          echo "CFLAGS_wasm32_wasip1=--sysroot=$WASI_SDK_PATH/share/wasi-sysroot" >> "$GITHUB_ENV"
-
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
-
-      # Run tests
-      - name: Run Tests
-        run: ./gradlew check
-
-      # Collect Tests Result of failed tests
-      - name: Collect Tests Result
-        if: ${{ failure() }}
+      - name: Upload verified artifact
         uses: actions/upload-artifact@v7
         with:
-          name: tests-result
-          path: ${{ github.workspace }}/build/reports/tests
+          name: verified-plugin-${{ github.sha }}
+          path: build/verified
+          if-no-files-found: error
 
-      # Upload the Kover report to CodeCov
+      - name: Collect verification results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: verification-results-${{ github.sha }}
+          path: |
+            build/reports/tests
+            build/reports/pluginVerifier
+            build/test-results/test
+
       - name: Upload Code Coverage Report
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         uses: codecov/codecov-action@v6
         with:
           files: ${{ github.workspace }}/build/reports/kover/report.xml
@@ -187,6 +144,7 @@ jobs:
   # Run Qodana inspections and provide report
   inspectCode:
     name: Inspect code
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [ build ]
     runs-on: ubuntu-latest
     permissions:
@@ -222,94 +180,68 @@ jobs:
         with:
           cache-default-branch-only: true
 
-  # Run plugin structure verification along with IntelliJ Plugin Verifier
-  verify:
-    name: Verify plugin
-    needs: [ build ]
+  # Only trusted tag jobs receive signing credentials or write access.
+  releaseDraft:
+    name: Sign verified artifact and create draft
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [ build, inspectCode ]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
-      ORG_GRADLE_PROJECT_skipWasmBuild: false
+      RELEASE_TAG: ${{ github.ref_name }}
     steps:
-
-      # Free GitHub Actions Environment Disk Space
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          large-packages: false
-
-      # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      # Set up Java environment for the next steps
+      - name: Download verified artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-plugin-${{ github.sha }}
+          path: verified
+
+      - name: Check artifact identity
+        run: python3 .github/scripts/plugin_artifact.py check --bundle verified --commit "$(git rev-parse HEAD)" --tag "$RELEASE_TAG"
+
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: zulu
           java-version: 17
 
-      # Set up Rust and C toolchains used by the bundled tree-sitter WASM module
-      - name: Setup WASM Toolchain
-        shell: bash
-        run: |
-          rustup target add wasm32-wasip1
-
-          WASI_VERSION=33
-          WASI_VERSION_FULL="${WASI_VERSION}.0"
-          WASI_ARCH=x86_64
-          WASI_OS=linux
-          WASI_SDK_NAME="wasi-sdk-${WASI_VERSION_FULL}-${WASI_ARCH}-${WASI_OS}"
-          WASI_SDK_ARCHIVE="${WASI_SDK_NAME}.tar.gz"
-          WASI_SDK_URL="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/${WASI_SDK_ARCHIVE}"
-          curl -fsSL "$WASI_SDK_URL" -o "$RUNNER_TEMP/$WASI_SDK_ARCHIVE"
-          tar -xzf "$RUNNER_TEMP/$WASI_SDK_ARCHIVE" -C "$RUNNER_TEMP"
-
-          WASI_SDK_PATH="$RUNNER_TEMP/$WASI_SDK_NAME"
-          echo "CC_wasm32_wasip1=$WASI_SDK_PATH/bin/clang" >> "$GITHUB_ENV"
-          echo "AR_wasm32_wasip1=$WASI_SDK_PATH/bin/llvm-ar" >> "$GITHUB_ENV"
-          echo "WASI_SYSROOT=$WASI_SDK_PATH/share/wasi-sysroot" >> "$GITHUB_ENV"
-          echo "CFLAGS_wasm32_wasip1=--sysroot=$WASI_SDK_PATH/share/wasi-sysroot" >> "$GITHUB_ENV"
-
-      # Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # Cache Plugin Verifier IDEs
-      - name: Setup Plugin Verifier IDEs Cache
-        uses: actions/cache@v5
-        with:
-          path: ${{ needs.build.outputs.pluginVerifierHomeDir }}/ides
-          key: plugin-verifier-${{ hashFiles('build/listProductsReleases.txt') }}
+      - name: Sign verified plugin when configured
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+        run: ./gradlew signPlugin -PverifiedPluginArchive=verified/verified-plugin.zip --no-configuration-cache
 
-      # Run Verify Plugin task and IntelliJ Plugin Verifier tool
-      - name: Run Plugin Verification tasks
-        run: ./gradlew verifyPlugin -Dplugin.verifier.home.dir=${{ needs.build.outputs.pluginVerifierHomeDir }}
+      - name: Verify final release bytes
+        shell: bash
+        run: |
+          ARCHIVE=verified/verified-plugin.zip
+          if [[ -f verified/verified-plugin-signed.zip ]]; then
+            ARCHIVE=verified/verified-plugin-signed.zip
+          fi
+          ./gradlew verifyPlugin -PverifiedPluginArchive="$ARCHIVE" --no-configuration-cache
+          {
+            java -version
+            ./gradlew --version
+            cat gradle/libs.versions.toml
+          } > build/release-toolchains.txt 2>&1
+          python3 .github/scripts/plugin_artifact.py create \
+            --archive "$ARCHIVE" --prior-bundle verified --output release-bundle \
+            --commit "$(git rev-parse HEAD)" --tag "$RELEASE_TAG" \
+            --toolchains build/release-toolchains.txt \
+            --verifier-reports build/reports/pluginVerifier
+          cd release-bundle
+          zip -qr ../verified-plugin-bundle.zip .
 
-      # Collect Plugin Verifier Result
-      - name: Collect Plugin Verifier Result
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: pluginVerifier-result
-          path: ${{ github.workspace }}/build/reports/pluginVerifier
-
-  # Prepare a draft release for GitHub Releases page for the manual verification
-  # If accepted and published, release workflow would be triggered
-  releaseDraft:
-    name: Release draft
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ build, test, inspectCode, verify ]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-
-      # Check out the current repository
-      - name: Fetch Sources
-        uses: actions/checkout@v6
-
-      # Remove old release drafts by using the curl request for the available releases with a draft flag
       - name: Remove Old Release Drafts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -318,15 +250,11 @@ jobs:
             --jq '.[] | select(.draft == true) | .id' \
             | xargs -I '{}' gh api -X DELETE repos/{owner}/{repo}/releases/{}
 
-      # Create a new release draft which is not publicly visible and requires manual acceptance
       - name: Create Release Draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ needs.build.outputs.changelog }}
         run: |
-          gh release create "v${{ needs.build.outputs.version }}" \
-            --draft \
-            --title "v${{ needs.build.outputs.version }}" \
-            --notes "$(cat << 'EOM'
-          ${{ needs.build.outputs.changelog }}
-          EOM
-          )"
+          printf '%s\n' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+          gh release create "$RELEASE_TAG" release-bundle/verified-plugin.zip verified-plugin-bundle.zip \
+            --draft --title "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/release-notes.md"

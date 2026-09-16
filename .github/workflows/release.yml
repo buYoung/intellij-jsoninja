@@ -1,5 +1,5 @@
 # GitHub Actions Workflow created for handling the release process based on the draft release prepared with the Build workflow.
-# Running the publishPlugin task requires all following secrets to be provided: PUBLISH_TOKEN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, CERTIFICATE_CHAIN.
+# The tag Build workflow signs and verifies the archive; publication only requires PUBLISH_TOKEN.
 # See https://plugins.jetbrains.com/docs/intellij/plugin-signing.html for more information.
 
 name: Release
@@ -8,7 +8,7 @@ on:
     types: [prereleased, released]
 
 env:
-  ORG_GRADLE_PROJECT_skipWasmBuild: true
+  ORG_GRADLE_PROJECT_skipWasmBuild: 'true'
 
 jobs:
 
@@ -19,6 +19,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
     steps:
 
       # Check out the current repository
@@ -26,6 +28,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name }}
+
+      - name: Download verified release bundle
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$RELEASE_TAG" --pattern verified-plugin-bundle.zip --dir bundle-download
+          unzip -q bundle-download/verified-plugin-bundle.zip -d verified
+          python3 .github/scripts/plugin_artifact.py check --bundle verified --commit "$(git rev-parse HEAD)" --tag "$RELEASE_TAG"
 
       # Set up Java environment for the next steps
       - name: Setup Java
@@ -43,14 +53,14 @@ jobs:
         id: properties
         shell: bash
         run: |
-          CHANGELOG="$(cat << 'EOM' | sed -e 's/^[[:space:]]*$//g' -e '/./,$!d'
-          ${{ github.event.release.body }}
-          EOM
-          )"
-          
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          python3 - <<'PYTHON'
+          import json, os, uuid
+          with open(os.environ['GITHUB_EVENT_PATH']) as source:
+              changelog = (json.load(source)['release'].get('body') or '').strip()
+          delimiter = str(uuid.uuid4())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'changelog<<{delimiter}\n{changelog}\n{delimiter}\n')
+          PYTHON
 
       # Update the Unreleased section with the current release note
       - name: Patch Changelog
@@ -64,24 +74,18 @@ jobs:
       - name: Publish Plugin
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
-        run: ./gradlew publishPlugin
-
-      # Upload artifact as a release asset
-      - name: Upload Release Asset
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.event.release.tag_name }} ./build/distributions/*
+        run: |
+          python3 .github/scripts/plugin_artifact.py check --bundle verified --commit "$(git rev-parse HEAD)" --tag "$RELEASE_TAG"
+          ./gradlew publishPlugin -PverifiedPluginArchive=verified/verified-plugin.zip --no-configuration-cache
 
       # Create a pull request
       - name: Create Pull Request
         if: ${{ steps.properties.outputs.changelog != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGELOG: ${{ steps.properties.outputs.changelog }}
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="$RELEASE_TAG"
           BRANCH="changelog-update-$VERSION"
           LABEL="release changelog"
 
@@ -97,18 +101,18 @@ jobs:
             --force \
             || true
 
-          gh pr create \
-            --title "Changelog update - \`$VERSION\`" \
-            --body "$(cat << 'EOM'
+          cat > "$RUNNER_TEMP/changelog-pr.md" <<EOM
           ## Changelog update for $VERSION
-          
+
           This pull request updates the CHANGELOG.md file with the following changes:
-          
+
           $CHANGELOG
-          
+
           ---
           *This PR was automatically created by the release workflow.*
           EOM
-          )" \
+          gh pr create \
+            --title "Changelog update - $VERSION" \
+            --body-file "$RUNNER_TEMP/changelog-pr.md" \
             --label "$LABEL" \
-            --head $BRANCH
+            --head "$BRANCH"
