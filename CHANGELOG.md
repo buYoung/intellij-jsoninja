@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-09-17
+
 ### Fixed
 
 - **JSON Editing**: Undo and Redo now apply to the focused JSONinja editor instead of affecting another open file.
@@ -426,7 +428,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.2...v1.13.0
 [1.12.2]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.1...v1.12.2
 [1.12.1]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.0...v1.12.1
