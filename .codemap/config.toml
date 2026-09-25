@@ -1,119 +1,87 @@
-# codemap-config-version: 13
+# codemap-config-version: 23
 # codemap-search settings for this repository.
-# Initial exclusions use common folders and recursive globs for detected project types; other values are built-in defaults.
-# Per-key precedence: repo > global > built-in default. Delete or comment out a key to inherit it.
-# Numeric settings require positive integers; grep_max_columns also accepts 0.
-# Invalid values warn on stderr and inherit a lower-priority value. Malformed TOML discards that file's layer.
-# MCP watches config directories present at startup and reloads after about 1000ms.
-# Restart if a config directory was absent or watching could not start.
+# Active values override global settings. Delete or comment out a key to inherit.
+# Lists replace inherited lists; [] clears them.
+# Numeric settings must be positive; output.grep.max_columns also accepts 0.
+# Byte sizes accept b/kb/mb/gb (powers of 1024), e.g. "50mb".
+# MCP watches config directories present at startup; restart if watching is unavailable.
 
-[update]
-# Create missing `.codemap/config.toml` on MCP startup and add new settings as comments.
-# Pre-v6 exclusion arrays migrate once; version 6 and later arrays remain user-managed.
-# false disables automatic writes, including migration, but settings are still read and watched.
-config_auto_update = true
+[output]
+# Mask detected credentials in MCP responses. Set false to disable all output masking.
+# Search uses original content; local files and indexes are unchanged.
+# is_redact_enabled = true
 
-[index]
-# Index directory: an absolute path or a path relative to the workspace root.
-# The default stores the index under `.codemap/`. Restart after changing it.
-index_path = ".codemap/index"
+# Optional shared MCP response limit, in bytes. Per-tool max_bytes in this file takes priority.
+# Limits resolve as repo tool > repo shared > global tool > global shared > built-in default.
+# The value below is an example; no shared limit is set by default.
+# max_bytes = "1mb"
 
-# Maximum indexed file size in bytes. Larger files remain accessible to live read/find/grep.
-# Increasing this includes larger files and can increase CPU, memory, and disk use.
-max_file_size = 1048576 # 1 MiB
+[output.client]
+# Claude Code result limit, in characters (1–500000). Unset leaves the client default.
+# Reconnect MCP after changing this setting so Claude reloads the tool definitions.
+claude_max_result_chars = 100000
 
+# Codex output limit per tool, in tokens. Unset leaves the client default.
+# Run codemap-search codex-config and merge the printed settings into Codex configuration.
+# The command does not write client files; client limits are separate from server byte limits.
+codex_output_token_limit = 100000
 
-[language_support]
-# These switches control indexing, search, overview, codemap, and file-change refreshes.
-# Live read/find/grep and direct parse work even when a group is disabled.
-# Changes request a full index refresh after settings reload.
+[output.overview]
+# Include indexed-file language statistics in repository and monorepo project root overviews.
+# is_stats_enabled = true
 
-# Include Markdown `.md`, `.mdx`.
-is_document_support_enabled = false
-
-# Include `.sh`, `.bash`, `.zsh`.
-is_shell_support_enabled = false
-
-# Include HCL/Terraform `.hcl`, `.tf`, `.tfvars`, Dockerfile, and Nix `.nix`.
-is_infrastructure_support_enabled = false
-
-# Include Protocol Buffers `.proto` and GraphQL `.graphql`, `.gql`.
-is_interface_support_enabled = false
-
-# Include Makefile, `.mk`, CMakeLists.txt, `.cmake`, BUILD, BUILD.bazel, `.bzl`.
-is_build_support_enabled = false
-
-[refresh]
-# Watch file changes and refresh the index in the background.
-# If false or watching is unavailable, search/overview request refreshes using `index_staleness_ms`.
-# Restart after changing this setting.
-watch = true
-
-# Time to batch file changes, in milliseconds.
-# A longer window reduces refresh frequency but delays results. Restart after changing it.
-watch_debounce_ms = 500
-
-# Minimum interval between request-triggered refreshes, in milliseconds.
-# Used only when file watching is off or unavailable; a longer interval can leave results stale longer.
-index_staleness_ms = 5000
-
-# Attempt bounded recovery on the next search/overview if background indexing stops.
-# false keeps results frozen until server restart; read/find/grep still read live files.
-indexer_auto_restart = true
-
-[search]
-# Number of top-ranked files shown with details before the compact list.
-result_threshold = 5
+[output.search]
+# Maximum number of top-ranked files shown in detail. Remaining results use a compact list.
+detail_file_limit = 5
 
 # Maximum files in the compact result list.
-search_overview_file_limit = 12
+overview_file_limit = 12
 
 # Maximum snippet lines per matched symbol.
-search_detail_snippet_max_lines = 80
+snippet_max_lines = 80
 
 # Maximum symbols shown per detailed file.
-search_detail_symbol_limit = 20
+symbol_limit = 20
 
-# Search response size limit in bytes, including the partial-output notice.
-search_detail_byte_cap = 32768 # 32 KiB
+# Search response limit, in bytes, including the partial-output notice.
+# Overrides output.max_bytes in this file; omit this key to use shared or inherited limits.
+max_bytes = 32768 # 32 KiB
 
 # Maximum displayed length of a matched literal, in characters.
-search_literal_max_len = 200
+literal_max_chars = 200
 
 # Maximum matched literals shown per file.
-search_literal_limit = 10
+literal_limit = 10
 
 # Maximum symbols per file shown with full snippets; further matches use short signatures.
-search_anchor_snippet_limit = 3
+anchor_snippet_limit = 3
 
-[caller_context]
-# Show caller/callee context by default in search. The per-call `caller_context` argument wins.
-caller_context_default = true
+[output.read]
 
-# Check source structure, imports, and local bindings to identify call targets.
-# A uniquely confirmed target is marked precise; false uses approximate name matching.
-navigation_context_default = false
+# Read response limit, in bytes, including line numbers and context.
+# Overrides output.max_bytes in this file. Expanded grep also uses this limit when neither
+# grep nor shared limits are set in the same layer. Oversized reads fail; expanded grep
+# paginates complete bodies or reports a body that exceeds the limit.
+max_bytes = 102400
 
-# Maximum call sites checked before using approximate name-based scanning.
-navigation_callsite_budget = 1000
+[output.grep]
+# Maximum columns for a grep content-mode match; 0 disables the limit.
+# Longer lines are replaced with `[Omitted long matching line]`.
+max_columns = 500
 
-# Store reference locations other than function calls; not required to confirm call targets.
-# Some structured formats always store references.
-# Applies during parsing; changing it or restarting may reuse unchanged files without reparsing.
-navigation_store_references = false
-
-# Caller-scan hit limit, shared across scanned names with a minimum of 25 hits per name.
-scan_cap = 500
+[output.context]
+# Show caller/callee context in search. The per-call caller_context argument takes priority.
+is_enabled = true
 
 # Maximum callers or non-call references shown per symbol.
-caller_list_cap = 500
+caller_limit = 500
 
 # Maximum callees shown per symbol.
-callee_list_cap = 500
+callee_limit = 500
 
-# Call-relationship output size limit in bytes within `search_detail_byte_cap`.
+# Call-relationship output size limit in bytes within `output.search.max_bytes`.
 # Source snippets take priority; omitted context is noted.
-annotation_sub_budget = 8192
+max_bytes = 8192
 
 # Definition count for the same name at which approximate relationships are labeled ambiguous.
 common_name_threshold = 2
@@ -122,15 +90,116 @@ common_name_threshold = 2
 # Callees are unaffected. Confirmed targets can still be shown.
 caller_omit_def_threshold = 5
 
-[exclude]
-# Complete optional directory rules for indexing, codemap, caller scans, and find/grep.
-# "build" and "**/build" match at any depth; "./build" matches only at the workspace root.
-# "apps/web/build" and "apps/api/**/__pycache__" are workspace-relative paths/globs.
-# Absolute paths and .. are invalid. [] clears optional rules; omitting the key inherits global/default rules.
-# Ignore files apply independently. Initial creation adds recursive globs such as "**/node_modules" once per pattern.
-# Pre-v6 configs migrate once. From version 6 onward, edit this array manually when new rules are needed.
-# Manual changes request a full index refresh after settings reload.
-# find/grep include_ignored=true bypasses optional rules. VCS internals, .codemap, .codemap-index, and the actual index directory remain excluded.
+[output.navigation]
+
+# Use source structure, imports and local bindings to identify call targets.
+# A confirmed single target is marked precise; false uses name-based estimates.
+is_enabled = false
+
+# Maximum call sites checked before using approximate name-based scanning.
+callsite_budget = 1000
+
+# Caller-scan hit limit, shared across scanned names with a minimum of 25 hits per name.
+scan_limit = 500
+
+[output.macro_expansion]
+# Path to compile_commands.json, its directory, or compile_flags.txt. Relative paths use the workspace root.
+# If unset in both config layers, search parent directories from the source file to the workspace root.
+# compilation_database = "build/compile_commands.json"
+
+# Native macro expansion requires an installed Clang/NASM preprocessor.
+
+# Use installed Clang/NASM for C/C++/ASM preprocessing. Set false to disable these processes.
+# Failed expansion retains source declarations with a notice. Changes to this section
+# request a full index refresh after settings reload.
+is_enabled = false
+# Clang executable name on PATH or a path to the executable.
+clang_path = "clang"
+# NASM executable name on PATH or a path to the executable.
+nasm_path = "nasm"
+# Additional Clang arguments appended after build settings.
+clang_flags = []
+# Additional NASM arguments appended after build settings.
+nasm_flags = []
+# Time limit for each preprocessor process, in milliseconds.
+timeout_ms = 5000
+# Maximum preprocessed text or NASM listing size, in bytes.
+# This limit is independent of the MCP response limit output.max_bytes.
+max_output_bytes = 8388608
+
+[output.event_navigation]
+# Index event/source routes and show related navigation results. Set false to disable analysis.
+# The request argument include_events=false hides event output for that request only.
+# is_enabled = true
+
+# Use built-in event API rules. Custom rules still apply when false.
+# use_builtin_rules = true
+
+# Custom event API rules. Each rule specifies an API, its event argument and its bus.
+# See docs/configuration.md for the rule format and examples.
+# rules = []
+
+[output.redact]
+
+# Additional sensitive field names. Ignore case and separators when comparing names.
+# Built-in sensitive fields remain enabled.
+# sensitive_fields = []
+
+# Masking exceptions: both rule_id and the detected value must match exactly.
+# exceptions = []
+
+# [] disables these types; built-in credential rules and custom rules still apply.
+# pii_entities = []
+
+[output.context.exclude]
+
+# Include tests in search call relationships and read/grep automatic symbol/relationship context.
+# Also applies to event/source-route analysis. Live read/grep source and ordinary search/overview declarations remain available.
+should_include_test_code = false
+
+# Workspace-relative test-file path/name globs. A list replaces inherited defaults; [] disables it.
+test_file_patterns = ["**/tests/**", "**/test/**", "**/__tests__/**", "test_*.py", "*_test.*", "*.test.*", "*_spec.*", "*.spec.*", "*Test.java", "*Tests.java", "*IT.java"]
+
+[output.context.exclude.test_attributes]
+# Lists replace inherited defaults per language; [] disables that list. Omit a key/language to inherit.
+# Names are glob patterns without #[...] or @; cfg(test) also recognizes test-only all/any/not conditions.
+rust = ["test", "tokio::test", "async_std::test", "rstest", "rstest::rstest", "cfg(test)"]
+java = ["Test", "ParameterizedTest", "RepeatedTest", "TestFactory", "TestTemplate", "Nested", "BeforeEach", "AfterEach", "BeforeAll", "AfterAll"]
+kotlin = ["Test", "ParameterizedTest", "RepeatedTest", "BeforeTest", "AfterTest", "BeforeEach", "AfterEach"]
+csharp = ["Fact", "Theory", "Test", "TestCase", "TestCaseSource", "TestFixture", "SetUp", "TearDown", "OneTimeSetUp", "OneTimeTearDown"]
+swift = ["Test", "Suite"]
+php = ["Test"]
+
+[output.context.exclude.test_decorators]
+python = ["pytest.fixture", "pytest.mark.*", "unittest.skip", "unittest.skipIf", "unittest.skipUnless", "unittest.expectedFailure"]
+
+[output.context.exclude.test_calls]
+javascript = ["describe", "describe.*", "it", "it.*", "test", "test.*", "suite", "suite.*"]
+typescript = ["describe", "describe.*", "it", "it.*", "test", "test.*", "suite", "suite.*"]
+dart = ["test", "group", "testWidgets"]
+ruby = ["describe", "context", "it", "specify"]
+powershell = ["Describe", "Context", "It"]
+
+[index]
+# Index directory: an absolute path or a path relative to the workspace root. Restart after changing it.
+path = ".codemap/index"
+
+# Maximum indexed file size in bytes. Larger files remain accessible to live read/find/grep.
+# Increasing this includes larger files and can increase CPU, memory, and disk use.
+max_file_bytes = 1048576 # 1 MiB
+
+# Store reference locations other than function calls; not required to confirm call targets.
+# Some structured formats always store references.
+# Applies during parsing; changing it or restarting may reuse unchanged files without reparsing.
+store_references = false
+
+[index.exclude]
+# Directory exclusions shared by indexing, search/overview, caller scans and find/grep; not direct read.
+# "build" or "**/build" matches any depth; "./build" matches only the workspace root.
+# Paths/globs such as "apps/web/build" are workspace-relative. Absolute paths and .. are invalid.
+# Ignore files apply separately. The initial list includes detected project folders; maintain it as needed.
+# Changes request a full index refresh. find/grep include_ignored=true bypasses optional exclusions.
+# VCS internals, .codemap, .codemap-index and the actual index directory are always excluded from walks.
 excluded_directories = [
     "**/*.egg-info",
     "**/.astro",
@@ -173,71 +242,64 @@ excluded_directories = [
 # Changes request a full index refresh after settings reload.
 use_git_exclude = true
 
-# Include test regions in automatic symbols and caller/callee context; live source is unchanged.
-should_include_test_code = false
+[index.refresh]
+# Watch file changes and refresh the index in the background.
+# If false or watching is unavailable, search/overview request refreshes using `index.refresh.index_staleness_ms`.
+# Restart after changing this setting.
+watch = true
 
-test_file_patterns = ["**/tests/**", "**/test/**", "**/__tests__/**", "test_*.py", "*_test.*", "*.test.*", "*_spec.*", "*.spec.*", "*Test.java", "*Tests.java", "*IT.java"]
+# Time to batch file changes, in milliseconds.
+# A longer window reduces refresh frequency but delays results. Restart after changing it.
+watch_debounce_ms = 500
 
-# Lists replace inherited defaults per language; [] disables that list. Omit a key/language to inherit.
-# Names are glob patterns without #[...] or @; cfg(test) also recognizes test-only all/any/not conditions.
+# Minimum interval between request-triggered refreshes, in milliseconds.
+# Used only when file watching is off or unavailable; a longer interval can leave results stale longer.
+index_staleness_ms = 5000
 
-[exclude.test_attributes]
-rust = ["test", "tokio::test", "async_std::test", "rstest", "rstest::rstest", "cfg(test)"]
-java = ["Test", "ParameterizedTest", "RepeatedTest", "TestFactory", "TestTemplate", "Nested", "BeforeEach", "AfterEach", "BeforeAll", "AfterAll"]
-kotlin = ["Test", "ParameterizedTest", "RepeatedTest", "BeforeTest", "AfterTest", "BeforeEach", "AfterEach"]
-csharp = ["Fact", "Theory", "Test", "TestCase", "TestCaseSource", "TestFixture", "SetUp", "TearDown", "OneTimeSetUp", "OneTimeTearDown"]
-swift = ["Test", "Suite"]
-php = ["Test"]
+# Attempt bounded recovery on the next search/overview if background indexing stops.
+# false keeps results frozen until server restart; read/find/grep still read live files.
+indexer_auto_restart = true
 
-[exclude.test_decorators]
-python = ["pytest.fixture", "pytest.mark.*", "unittest.skip", "unittest.skipIf", "unittest.skipUnless", "unittest.expectedFailure"]
+[index.language_support]
 
-[exclude.test_calls]
-javascript = ["describe", "describe.*", "it", "it.*", "test", "test.*", "suite", "suite.*"]
-typescript = ["describe", "describe.*", "it", "it.*", "test", "test.*", "suite", "suite.*"]
-dart = ["test", "group", "testWidgets"]
-ruby = ["describe", "context", "it", "specify"]
-powershell = ["Describe", "Context", "It"]
+# These switches control indexing, search, overview, codemap, and file-change refreshes.
+# Live read/find/grep and direct parse work even when a group is disabled.
+# Changes request a full index refresh after settings reload.
+# Include Markdown `.md`, `.mdx`.
+is_document_support_enabled = false
 
-[tool_output]
-# Maximum columns for a grep content-mode match; 0 disables the limit.
-# Longer lines are replaced with `[Omitted long matching line]`.
-grep_max_columns = 500
+# Include `.sh`, `.bash`, `.zsh`.
+is_shell_support_enabled = false
 
-# Read response size limit in bytes, including line numbers and context.
-# Oversized output returns an error suggesting a narrower offset/limit.
-read_output_byte_cap = 102400
+# Include HCL/Terraform `.hcl`, `.tf`, `.tfvars`, Dockerfile, and Nix `.nix`.
+is_infrastructure_support_enabled = false
 
-[filesystem_permissions]
-# Policies for find/grep/read: "workspace" (workspace only), "allowed_roots" (workspace plus listed roots),
-# "anywhere" (any path reachable by the process). Prefer allowed_roots for specific external trees.
-find = "workspace"
-grep = "workspace"
-read = "workspace"
+# Include Protocol Buffers `.proto` and GraphQL `.graphql`, `.gql`.
+is_interface_support_enabled = false
 
-# External roots for tools set to "allowed_roots"; entries must be non-empty strings.
-# Relative paths start at the workspace root; absolute paths are allowed.
-# Existing components, including symlinks, resolve to real paths; nonexistent suffixes are retained.
-allowed_roots = []
+# Include Makefile, `.mk`, CMakeLists.txt, `.cmake`, BUILD, BUILD.bazel, `.bzl`.
+is_build_support_enabled = false
 
-# Native macro expansion requires an installed Clang/NASM preprocessor.
-[macro_expansion]
-is_enabled = false
-# compilation_database = "build/compile_commands.json"
-clang_path = "clang"
-nasm_path = "nasm"
-clang_flags = []
-nasm_flags = []
-timeout_ms = 5000
-max_output_bytes = 8388608
-
+[analysis]
 # Explicit Rust analysis target. Omitted/empty stays unknown; never uses the host OS.
-# [analysis]
+# Rust analysis target OS, e.g. "linux", "macos" or "windows". The host OS is never inferred.
+# Omit the key to inherit; "" clears an inherited target and leaves the target unknown.
 # target_os = ""
 
-# Indexed event routes are enabled by default; related navigation output is automatic.
-# Set is_enabled to false to disable event analysis.
-# [event_navigation]
-# is_enabled = true
-# use_builtin_rules = true
-# rules = []
+[filesystem_permissions]
+# Filesystem access for find/grep/read: "workspace" limits access to the workspace,
+# "allowed_roots" adds the roots below, and "anywhere" allows any path the process can access.
+find = "workspace"
+# Access policy for grep: "workspace", "allowed_roots" or "anywhere".
+grep = "workspace"
+# Access policy for read: "workspace", "allowed_roots" or "anywhere".
+read = "workspace"
+
+# Additional roots for tools using "allowed_roots". Relative paths use the workspace root.
+# Absolute paths are allowed; symbolic links are resolved before checking access.
+allowed_roots = []
+
+[update]
+# Create a missing repo config and update older config files on MCP startup.
+# Existing values and inactive settings are preserved. false disables automatic writes only.
+config_auto_update = true
