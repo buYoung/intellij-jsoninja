@@ -209,7 +209,7 @@ data class JsoninjaSettingsData(
     var iconPack: String = JsonIconPack.VERSION_2.name,
     var pasteFormatState: String = JsonFormatState.PRETTIFY.name,
     var diffDisplayMode: String = JsonDiffDisplayMode.WINDOW.name,
-    var diffSortKeys: Boolean = false,
+    var diffSortKeys: Boolean = true,
     var jsonQueryType: String = JsonQueryType.JAYWAY_JSONPATH.name,
     var jsonToTypeLastLanguage: String = SupportedLanguage.KOTLIN.name,
     var jsonToTypeDefaultNaming: String = "AUTO",
