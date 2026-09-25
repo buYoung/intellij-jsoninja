@@ -1,38 +1,32 @@
 package com.livteam.jsoninja.diff
 
-import com.fasterxml.jackson.core.JsonProcessingException
 import com.intellij.diff.DiffContext
 import com.intellij.diff.DiffExtension
 import com.intellij.diff.EditorDiffViewer
 import com.intellij.diff.FrameDiffTool
 import com.intellij.diff.requests.DiffRequest
+import com.intellij.diff.util.Side
 import com.intellij.json.JsonFileType
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.readAction
-import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
-import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.util.Alarm
-import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.dialog.LargeFileWarningDialog
-import java.io.IOException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -43,9 +37,11 @@ import kotlin.math.abs
  * 이 extension은 diff viewer에서 JSON content를 감지하고 다음 성능 최적화를 포함한
  * 자동 포맷팅을 적용합니다:
  * - 조기 종료를 통한 빠른 JSON content 감지
- * - memory leak 방지를 위한 document별 state 추적
+ * - memory leak 방지를 위한 document별 감지 결과 cache
  * - 과도한 처리를 방지하는 debounced 포맷팅
  * - 재진입 update 보호
+ *
+ * 정렬 선택은 viewer 생성 시점 값이 아니라 request의 [JsonDiffSession]에서 매번 읽습니다.
  *
  * Threading: document 변경은 EDT의 WriteCommandAction에서 수행합니다.
  * 무거운 JSON parsing은 background coroutine으로 이동됩니다.
@@ -59,19 +55,12 @@ class JsonDiffExtension : DiffExtension() {
     }
 
     /**
-     * 처리를 최적화하고 memory leak을 방지하기 위한 경량 document별 state.
+     * memory leak을 방지하기 위한 경량 document별 state.
      * documentStates map을 통해 동기화된 access가 이루어져야 합니다.
      */
     private data class DocumentState(
-        var lastContentHash: Int = 0,
-        var lastChangeTime: Long = 0L,
-        var lastEditSize: Int = 0,
-        val isSelfUpdate: AtomicBoolean = AtomicBoolean(false),
-        val formatSequence: AtomicInteger = AtomicInteger(),
         var detectionResult: JsonDetectionResult = JsonDetectionResult.UNKNOWN
     )
-
-    private data class FormattingResult(val text: String?, val modificationStamp: Long, val sourceHash: Int)
 
     private enum class JsonDetectionResult {
         YES, NO, UNKNOWN
@@ -118,7 +107,7 @@ class JsonDiffExtension : DiffExtension() {
 
         val formatterService = project.service<JsonFormatterService>()
         val settings = JsoninjaSettingsState.getInstance(project)
-        val diffSortKeys = request.getUserData(JsonDiffKeys.JSON_DIFF_SORT_KEYS) ?: settings.diffSortKeys
+        val session = resolveSession(request, editors, settings)
         val projectName = project.name
         val isViewerDisposed = AtomicBoolean(false)
         Disposer.register(viewer) { isViewerDisposed.set(true) }
@@ -176,10 +165,8 @@ class JsonDiffExtension : DiffExtension() {
                     }
                 }
 
-                // 양쪽 editor에 listener 설치
-                editors.forEach { editor ->
-                    installAutoFormatter(project, editor, viewer, formatterService, settings, diffSortKeys)
-                }
+                // 양쪽 document를 한 쌍으로 따라가는 listener 설치
+                installSessionAutoFormatter(project, session, editors, viewer, isViewerDisposed)
 
                 LOG.debug("JSON diff extension activated for project '$projectName' with ${editors.size} editors")
             }
@@ -272,227 +259,113 @@ class JsonDiffExtension : DiffExtension() {
     }
 
     /**
-     * 최적화된 debouncing과 소규모 편집 감지를 통해 document 변경 listener를 설치합니다.
+     * request에 담긴 세션을 사용합니다. 세션 없이 표시된 JSONinja request는 기존 Boolean 설정으로 임시 세션을 만듭니다.
+     */
+    private fun resolveSession(
+        request: DiffRequest,
+        editors: List<Editor>,
+        settings: JsoninjaSettingsState
+    ): JsonDiffSession {
+        val leftDocument = editors[0].document
+        val rightDocument = editors[1].document
+        val requestSession = request.getUserData(JsonDiffKeys.JSON_DIFF_SESSION)
+        if (requestSession != null &&
+            requestSession.leftDocument === leftDocument &&
+            requestSession.rightDocument === rightDocument
+        ) {
+            return requestSession
+        }
+
+        val shouldAutoSort = request.getUserData(JsonDiffKeys.JSON_DIFF_SORT_KEYS) ?: settings.diffSortKeys
+        return JsonDiffSession(leftDocument, rightDocument, shouldAutoSort)
+    }
+
+    /**
+     * 양쪽 document 변경을 하나의 debounced 작업으로 모아 세션의 현재 정렬 정책을 적용합니다.
+     * 한쪽 편집이 다른 쪽 정렬 결과를 바꿀 수 있으므로 쪽별 독립 listener를 두지 않습니다.
      *
      * @param project project context
-     * @param editor 모니터링할 editor
+     * @param session 현재 정렬 선택과 작업 세대를 가진 비교 세션
+     * @param editors 왼쪽/오른쪽 diff editor
      * @param viewer disposal 등록을 위한 diff viewer
-     * @param formatterService JSON 포맷팅을 위한 service
      */
-    private fun installAutoFormatter(
+    private fun installSessionAutoFormatter(
         project: Project,
-        editor: Editor,
+        session: JsonDiffSession,
+        editors: List<Editor>,
         viewer: FrameDiffTool.DiffViewer,
-        formatterService: JsonFormatterService,
-        settings: JsoninjaSettingsState,
-        sortKeys: Boolean
+        isViewerDisposed: AtomicBoolean
     ) {
-        val document = editor.document
-        val state = getDocumentState(document)
+        val diffService = project.service<JsonDiffService>()
         val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, viewer)
-        val fileName = editor.virtualFile?.name ?: "<unknown>"
         val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
+        val pendingSides = EnumSet.noneOf(Side::class.java)
+        var formattingJob: Job? = null
+        val isHostActive = { !project.isDisposed && !isViewerDisposed.get() && editors.none { it.isDisposed } }
 
-        val documentListener = object : DocumentListener {
-            override fun documentChanged(event: DocumentEvent) {
-                // 이 변경이 우리 자체 formatter에서 발생한 경우 스킵
-                if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
-                    LOG.debug("Skipping self-update for '$fileName'")
-                    return
-                }
+        // EDT에서만 호출된다.
+        fun launchFormatting() {
+            if (project.isDisposed || pendingSides.isEmpty()) return
+            val changedSides = EnumSet.copyOf(pendingSides)
+            pendingSides.clear()
 
-                if (state.isSelfUpdate.get()) {
-                    LOG.debug("Skipping self-update (atomic flag) for '$fileName'")
-                    return
-                }
-                state.formatSequence.incrementAndGet()
-
-                val currentTime = System.currentTimeMillis()
-                val editSize = abs(event.newLength - event.oldLength)
-                state.lastEditSize = editSize
-                state.lastChangeTime = currentTime
-
-                // 소규모 공백 전용 편집 스킵
-                if (editSize <= Constants.SMALL_EDIT_THRESHOLD) {
-                    val changedText = event.newFragment.toString()
-                    if (changedText.isBlank() || changedText.all { it.isWhitespace() }) {
-                        LOG.debug("Skipping small whitespace edit ($editSize chars) for '$fileName'")
-                        return
-                    }
-                }
-
-                // 대용량 파일은 viewer 생성 시점에서 warning dialog이 처리
-                // 여기서 하드 리미트가 필요 없음 - 사용자가 이미 동의했거나 warning이 비활성화됨
-
-                // 대기 중인 포맷팅 취소
-                alarm.cancelAllRequests()
-
-                // debounce로 새로운 포맷팅 예약
-                alarm.addRequest({
-                    if (!project.isDisposed) {
-                        scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys, coroutineScope)
-                    }
-                }, Constants.DEBOUNCE_DELAY)
+            formattingJob?.cancel()
+            formattingJob = coroutineScope.launch {
+                diffService.formatAutomatically(session, changedSides, isHostActive)
             }
         }
 
-        document.addDocumentListener(documentListener, viewer)
+        fun installDocumentListener(document: Document, side: Side) {
+            val fileName = editors[side.index].virtualFile?.name ?: "<${side.name.lowercase()}>"
+            val documentListener = object : DocumentListener {
+                override fun documentChanged(event: DocumentEvent) {
+                    // 이 변경이 JSONinja 정렬/복원 쓰기에서 발생한 경우 스킵
+                    if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
+                        LOG.debug("Skipping self-update for '$fileName'")
+                        return
+                    }
 
-        // viewer가 dispose될 때 listener 제거 및 정리
+                    // 소규모 공백 전용 편집 스킵
+                    val editSize = abs(event.newLength - event.oldLength)
+                    if (editSize <= Constants.SMALL_EDIT_THRESHOLD) {
+                        val changedText = event.newFragment.toString()
+                        if (changedText.isBlank() || changedText.all { it.isWhitespace() }) {
+                            LOG.debug("Skipping small whitespace edit ($editSize chars) for '$fileName'")
+                            return
+                        }
+                    }
+
+                    // 대용량 파일은 viewer 생성 시점에서 warning dialog이 처리
+                    pendingSides.add(side)
+
+                    // 대기 중인 포맷팅 취소 후 debounce로 새로운 포맷팅 예약
+                    alarm.cancelAllRequests()
+                    alarm.addRequest({ launchFormatting() }, Constants.DEBOUNCE_DELAY)
+                }
+            }
+            document.addDocumentListener(documentListener, viewer)
+        }
+
+        installDocumentListener(session.leftDocument, Side.LEFT)
+        installDocumentListener(session.rightDocument, Side.RIGHT)
+
+        // 옵션 변경, 수동 정렬, 복원, 입력 교체는 대기 중인 이전 정책 작업을 버린다.
+        session.addPendingWorkListener(viewer) {
+            alarm.cancelAllRequests()
+            pendingSides.clear()
+            formattingJob?.cancel()
+        }
+
+        // viewer가 dispose될 때 대기 작업 정리
         Disposer.register(viewer) {
             alarm.cancelAllRequests()
             coroutineScope.cancel()
-            // WeakHashMap이 자연스럽게 document state를 정리하도록 함
-            LOG.debug("Disposed JSON diff extension for '$fileName'")
+            LOG.debug("Disposed JSON diff extension")
         }
 
         // content가 있으면 초기 포맷팅 수행
-        if (document.text.isNotBlank()) {
-            scheduleJsonFormatting(project, document, formatterService, fileName, sortKeys, coroutineScope)
-        }
-    }
-
-    /**
-     * 코루틴으로 JSON 포맷팅 작업을 예약하고, EDT에서 변경사항을 적용합니다.
-     */
-    private fun scheduleJsonFormatting(
-        project: Project,
-        document: Document,
-        formatterService: JsonFormatterService,
-        fileName: String,
-        sortKeys: Boolean,
-        coroutineScope: CoroutineScope,
-    ) {
-        if (project.isDisposed) return
-        val sequence = getDocumentState(document).formatSequence.incrementAndGet()
-        coroutineScope.launch {
-            val formattedResult = formatJsonInBackground(document, formatterService, fileName, sortKeys)
-            if (formattedResult != null && !project.isDisposed) {
-                withContext(Dispatchers.EDT) {
-                    if (project.isDisposed) return@withContext
-                    applyJsonFormatting(project, document, formattedResult, fileName, sequence)
-                }
-            }
-        }
-    }
-
-    /**
-     * background coroutine에서 JSON 포맷팅 연산을 수행합니다.
-     * 포맷팅을 스킵하거나 실패한 경우 null을 반환합니다.
-     */
-    private suspend fun formatJsonInBackground(
-        document: Document,
-        formatterService: JsonFormatterService,
-        fileName: String,
-        sortKeys: Boolean
-    ): FormattingResult? {
-        return try {
-            // 재진입 update 방지
-            if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
-                LOG.debug("Skipping formatting due to change guard for '$fileName'")
-                return null
-            }
-
-            val state = getDocumentState(document)
-            if (state.isSelfUpdate.get()) {
-                LOG.debug("Skipping formatting due to self-update flag for '$fileName'")
-                return null
-            }
-
-            val (text, modificationStamp) = readAction { document.text to document.modificationStamp }
-            val trimmed = text.trim()
-            if (trimmed.isEmpty()) {
-                LOG.debug("Document '$fileName' is empty, skipping formatting")
-                return null
-            }
-
-            // 불필요한 작업을 방지하기 위해 content hash 확인
-            val contentHash = trimmed.hashCode()
-            if (state.lastContentHash == contentHash) {
-                LOG.debug("Document '$fileName' content unchanged, skipping formatting")
-                return null
-            }
-
-            val startTime = System.currentTimeMillis()
-            // JsonFormatterService는 요구사항대로 내부적으로 isValidJson을 통해 검증
-            val formatted = withContext(Dispatchers.Default) {
-                formatterService.formatJson(trimmed, JsonFormatState.PRETTIFY, sortKeys)
-            }
-            val formatTime = System.currentTimeMillis() - startTime
-
-            if (LOG.isDebugEnabled) {
-                LOG.debug("JSON formatting completed in ${formatTime}ms for '$fileName'")
-            }
-
-            FormattingResult(formatted.takeIf { it != trimmed }, modificationStamp, contentHash)
-
-        } catch (cancellationException: CancellationException) {
-            throw cancellationException
-        } catch (e: ProcessCanceledException) {
-            // background task 중단을 적절히 처리하기 위해 취소 예외를 다시 던짐
-            throw e
-        } catch (e: JsonProcessingException) {
-            LOG.debug("JSON processing failed for '$fileName': ${e.message}")
-            null
-        } catch (e: OutOfMemoryError) {
-            LOG.error("OutOfMemoryError during JSON formatting for '$fileName'", e)
-            // 이 document에 대한 재시도를 방지하는 flag 설정
-            getDocumentState(document).detectionResult = JsonDetectionResult.NO
-            null
-        } catch (e: IOException) {
-            LOG.warn("IO error during JSON formatting for '$fileName'", e)
-            null
-        } catch (e: Exception) {
-            LOG.warn("Unexpected error during JSON formatting for '$fileName'", e)
-            null
-        }
-    }
-
-    /**
-     * 적절한 write action과 guard와 함께 EDT에서 포맷팅된 JSON 결과를 document에 적용합니다.
-     */
-    private fun applyJsonFormatting(
-        project: Project,
-        document: Document,
-        formatted: FormattingResult,
-        fileName: String,
-        sequence: Int,
-    ) {
-        if (project.isDisposed) return
-
-        val state = getDocumentState(document)
-        if (document.modificationStamp != formatted.modificationStamp || state.formatSequence.get() != sequence) return
-        val text = formatted.text
-        if (text == null) {
-            state.lastContentHash = formatted.sourceHash
-            return
-        }
-
-        // EDT에서의 최종 guard 확인
-        if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true || state.isSelfUpdate.get()) {
-            LOG.debug("Skipping document update due to guard for '$fileName'")
-            return
-        }
-
-        var isApplied = false
-        try {
-            document.putUserData(Constants.CHANGE_GUARD_KEY, true)
-            state.isSelfUpdate.set(true)
-
-            WriteCommandAction.runWriteCommandAction(project) {
-                if (document.modificationStamp != formatted.modificationStamp || state.formatSequence.get() != sequence) {
-                    return@runWriteCommandAction
-                }
-                document.setText(text)
-                state.lastContentHash = formatted.sourceHash
-                isApplied = true
-            }
-
-            if (isApplied) LOG.debug("Applied JSON formatting to '$fileName'")
-
-        } finally {
-            document.putUserData(Constants.CHANGE_GUARD_KEY, false)
-            state.isSelfUpdate.set(false)
-        }
+        if (session.leftDocument.text.isNotBlank()) pendingSides.add(Side.LEFT)
+        if (session.rightDocument.text.isNotBlank()) pendingSides.add(Side.RIGHT)
+        launchFormatting()
     }
 }

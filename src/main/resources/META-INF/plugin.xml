@@ -126,6 +126,10 @@
                     class="com.livteam.jsoninja.actions.editor.EditorEscapeJsonAction"/>
             <action id="com.livteam.jsoninja.action.editor.EditorUnescapeJsonAction"
                     class="com.livteam.jsoninja.actions.editor.EditorUnescapeJsonAction"/>
+            <separator/>
+            <action id="com.livteam.jsoninja.action.editor.EditorShowJsonDiffAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorShowJsonDiffAction"
+                    icon="/icons/diff.svg"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
 
