@@ -22,7 +22,7 @@ import javax.swing.event.DocumentListener
 class JsonToTypeDialogView(
     project: com.intellij.openapi.project.Project,
 ) {
-    private val languageSelector = LanguageSelectorComponent()
+    private val languageSelector = LanguageSelectorComponent(project)
     private val rootTypeNameTextField = JBTextField(12)
     private val nullableCheckBox = JBCheckBox(LocalizationBundle.message("dialog.json.to.type.nullable"))
     private val namingConventionComboBox = ComboBox(NamingConvention.entries.toTypedArray())

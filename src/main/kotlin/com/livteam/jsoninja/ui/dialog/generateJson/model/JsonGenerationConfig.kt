@@ -11,5 +11,6 @@ data class JsonGenerationConfig(
     val isJson5: Boolean = false, // JSON5 생성 여부
     val schemaText: String = "",
     val schemaOutputCount: Int = 1,
-    val schemaPropertyGenerationMode: SchemaPropertyGenerationMode = SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
+    val schemaPropertyGenerationMode: SchemaPropertyGenerationMode = SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL,
+    val schemaRetrievalUri: String? = null
 )

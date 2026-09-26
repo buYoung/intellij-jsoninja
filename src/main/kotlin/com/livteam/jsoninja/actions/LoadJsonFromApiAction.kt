@@ -1,15 +1,15 @@
 package com.livteam.jsoninja.actions
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.ui.dialog.loadJson.LoadJsonFromApiDialog
 
 class LoadJsonFromApiAction : AnAction(
     LocalizationBundle.messagePointer("action.load.json.api.text"),
     LocalizationBundle.messagePointer("action.load.json.api.description"),
-    AllIcons.Actions.Download
+    JsoninjaIcons.LoadJsonFromApiIconV3
 ) {
     override fun actionPerformed(actionEvent: AnActionEvent) {
         val project = actionEvent.project ?: return
@@ -23,5 +23,6 @@ class LoadJsonFromApiAction : AnAction(
 
     override fun update(actionEvent: AnActionEvent) {
         actionEvent.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(actionEvent) != null
+        actionEvent.presentation.icon = JsoninjaIcons.getLoadJsonFromApiIcon(actionEvent.project)
     }
 }
