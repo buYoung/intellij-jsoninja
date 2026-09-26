@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["identifier", "amount", "enabled", "labels"],
+  "properties": {
+    "identifier": {"const": 123456789012345678901234567890},
+    "amount": {"const": 0.123456789012345678901234567890},
+    "enabled": {"const": true},
+    "labels": {"$ref": "#/$defs/labels"}
+  },
+  "$defs": {
+    "labels": {
+      "type": "array",
+      "prefixItems": [{"const": "한글"}, {"const": null}],
+      "minItems": 2,
+      "maxItems": 2
+    }
+  },
+  "additionalProperties": false
+}

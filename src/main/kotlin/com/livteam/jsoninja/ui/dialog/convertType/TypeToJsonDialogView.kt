@@ -23,7 +23,7 @@ import com.intellij.ui.dsl.builder.panel
 class TypeToJsonDialogView(
     project: com.intellij.openapi.project.Project,
 ) {
-    private val languageSelector = LanguageSelectorComponent()
+    private val languageSelector = LanguageSelectorComponent(project)
     private val fieldsModeComboBox = ComboBox(SchemaPropertyGenerationMode.entries.toTypedArray())
     private val nullableCheckBox = JBCheckBox(LocalizationBundle.message("dialog.type.to.json.nullable"))
     private val realisticDataCheckBox = JBCheckBox(LocalizationBundle.message("dialog.type.to.json.faker"))
@@ -128,7 +128,11 @@ class TypeToJsonDialogView(
     }
 
     fun showSuccessPreview(text: String) {
-        previewPanel.setSuccess(text, "json")
+        showSuccessPreview(text, "json")
+    }
+
+    fun showSuccessPreview(text: String, fileExtension: String) {
+        previewPanel.setSuccess(text, fileExtension)
     }
 
     fun getValidationComponent(): JComponent = outputCountSpinner

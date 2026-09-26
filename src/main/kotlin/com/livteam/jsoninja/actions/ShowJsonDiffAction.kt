@@ -38,18 +38,22 @@ class ShowJsonDiffAction : AnAction(
 
     companion object {
         fun openDiffForCurrentJson(project: Project, forceWindow: Boolean = false) {
-            val settings = JsoninjaSettingsState.getInstance(project)
             val displayMode = if (forceWindow) {
                 JsonDiffDisplayMode.WINDOW
             } else {
-                try {
-                    JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
-                } catch (_: IllegalArgumentException) {
-                    JsonDiffDisplayMode.WINDOW
-                }
+                getDefaultDisplayMode(project)
             }
 
             openDiffForCurrentJson(project, displayMode)
+        }
+
+        fun getDefaultDisplayMode(project: Project): JsonDiffDisplayMode {
+            val settings = JsoninjaSettingsState.getInstance(project)
+            return try {
+                JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
+            } catch (_: IllegalArgumentException) {
+                JsonDiffDisplayMode.WINDOW
+            }
         }
 
         fun openDiffForCurrentJson(project: Project, displayMode: JsonDiffDisplayMode) {
