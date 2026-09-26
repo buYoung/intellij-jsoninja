@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **JSON Diff**:
+  - Compare selected JSON from an editor's context menu, or compare the whole document when nothing is selected. The source opens on the left side of the comparison.
+  - Choose alphabetical object-key order or keep the left side's key order and align the right side to it. You can also align matching array elements when their order differs.
+  - Turn automatic sorting on or off for each comparison, restore both sides to their text before the last sort if neither side has been edited, and rename the left and right side labels.
+
+### Changed
+
+- **JSON Diff**: Automatic object-key sorting is now enabled by default for new settings.
+- **Icon Pack**: The new Version 3 icons are the default for new settings. Versions 1 and 2 remain available in the Icon Pack setting.
+
 ## [1.14.0] - 2026-09-17
 
 ### Fixed
