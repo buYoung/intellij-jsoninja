@@ -5,6 +5,7 @@ import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonObjectMapperService
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 
 @Service(Service.Level.PROJECT)
 class TypeToJsonGenerationService(
@@ -20,11 +21,19 @@ class TypeToJsonGenerationService(
         language: SupportedLanguage,
         options: TypeToJsonGenerationOptions,
         rootTypeName: String? = null,
+    ): String = generate(sourceCode, language, options, rootTypeName) {}
+
+    fun generate(
+        sourceCode: String,
+        language: SupportedLanguage,
+        options: TypeToJsonGenerationOptions,
+        rootTypeName: String? = null,
+        checkCancellation: () -> Unit,
     ): String {
         require(sourceCode.isNotBlank()) { "Type declaration source code must not be blank." }
         require(options.outputCount in 1..100) { "Output count must be between 1 and 100." }
 
-        val analysisResult = analyzerService.analyzeSource(sourceCode, language)
+        val analysisResult = analyzerService.analyzeSource(sourceCode, language, checkCancellation)
         if (analysisResult.declarations.isEmpty()) {
             val diagnosticMessage = analysisResult.diagnostics.firstOrNull()?.message
             throw IllegalStateException(diagnosticMessage ?: "No type declarations found.")
@@ -34,12 +43,19 @@ class TypeToJsonGenerationService(
             throw IllegalStateException(diagnosticMessage ?: "Failed to parse type declaration.")
         }
 
+        checkCancellation()
+        if (options.propertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED) {
+            return documentBuilder.buildCommentedDocument(analysisResult.declarations, options, rootTypeName).also {
+                checkCancellation()
+            }
+        }
         val jsonNode = documentBuilder.buildDocument(
             declarations = analysisResult.declarations,
             options = options,
             rootTypeName = rootTypeName,
         )
         val rawJson = objectMapper.writeValueAsString(jsonNode)
+        checkCancellation()
         return formatterService.formatJson(rawJson, options.formatState)
     }
 }

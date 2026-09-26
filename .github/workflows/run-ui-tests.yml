@@ -1,20 +1,19 @@
-# GitHub Actions Workflow for launching UI tests on Linux, Windows, and Mac in the following steps:
-# - Prepare and launch IDE with your plugin and robot-server plugin, which is needed to interact with the UI.
-# - Wait for IDE to start.
-# - Run UI tests with a separate Gradle task.
-#
-# Please check https://github.com/JetBrains/intellij-ui-test-robot for information about UI tests with IntelliJ Platform.
-#
-# Workflow is triggered manually.
-
-name: Run UI Tests
+# Platform fixtures and diff e2e tests run inside Gradle's IntelliJ test process.
+name: IDE Integration Tests
 on:
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 env:
-  ORG_GRADLE_PROJECT_skipWasmBuild: true
+  ORG_GRADLE_PROJECT_skipWasmBuild: 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
 
@@ -23,16 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            runIde: |
-              export DISPLAY=:99.0
-              Xvfb -ac :99 -screen 0 1920x1080x16 &
-              gradle runIdeForUiTests &
-          - os: windows-latest
-            runIde: start gradlew.bat runIdeForUiTests
-          - os: macos-latest
-            runIde: ./gradlew runIdeForUiTests &
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
 
@@ -49,20 +39,17 @@ jobs:
 
       # Setup Gradle
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.2.0
-
-      # Run IDEA prepared for UI testing
-      - name: Run IDE
-        run: ${{ matrix.runIde }}
-
-      # Wait for IDEA to be started
-      - name: Health Check
-        uses: jtalk/url-health-check-action@v5
-        with:
-          url: http://127.0.0.1:8082
-          max-attempts: 15
-          retry-delay: 30s
+        uses: gradle/actions/setup-gradle@v6.3.0
 
       # Run tests
       - name: Tests
-        run: ./gradlew test
+        run: ./gradlew test --no-configuration-cache
+
+      - name: Collect test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ide-tests-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            build/reports/tests
+            build/test-results/test

@@ -18,15 +18,20 @@ class ConvertTypeDialogPresenter(
         else -> seedResolver.resolve(seedText)
     }
     private var isSynchronizingLanguage = false
+    private var onPreviewStateChanged: (() -> Unit)? = null
     private val jsonToTypePresenter = JsonToTypeDialogPresenter(project, seedResolution.jsonInputText) { syncLanguage(it, sourceTabIndex = 0) }
     private val typeToJsonPresenter = TypeToJsonDialogPresenter(project, seedResolution.typeInputText) { syncLanguage(it, sourceTabIndex = 1) }
     private val view = ConvertTypeDialogView(
         jsonToTypeComponent = jsonToTypePresenter.component,
         typeToJsonComponent = typeToJsonPresenter.component,
+        project = project,
     )
 
     init {
         view.setSelectedTabIndex(forcedTabIndex ?: seedResolution.selectedTabIndex)
+        jsonToTypePresenter.setOnPreviewStateChanged { onPreviewStateChanged?.invoke() }
+        typeToJsonPresenter.setOnPreviewStateChanged { onPreviewStateChanged?.invoke() }
+        view.setOnTabChanged { onPreviewStateChanged?.invoke() }
     }
 
     val component
@@ -44,6 +49,20 @@ class ConvertTypeDialogPresenter(
             0 -> jsonToTypePresenter.getCurrentPreviewText()
             else -> typeToJsonPresenter.getCurrentPreviewText()
         }
+    }
+
+    fun hasCurrentPreview(): Boolean = getCurrentPreviewText().isNotBlank()
+
+    fun consumeCurrentPreview(consumer: (String, String) -> Unit): Boolean {
+        val text = getCurrentPreviewText()
+        if (text.isBlank()) return false
+        consumer(text, getCurrentOutputFileExtension())
+        return true
+    }
+
+    fun setOnPreviewStateChanged(callback: () -> Unit) {
+        onPreviewStateChanged = callback
+        callback()
     }
 
     fun getCurrentOutputFileExtension(): String {
