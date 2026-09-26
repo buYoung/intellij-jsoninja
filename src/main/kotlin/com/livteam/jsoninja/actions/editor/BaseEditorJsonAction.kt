@@ -46,12 +46,6 @@ abstract class BaseEditorJsonAction : AnAction() {
 
         if (inputText.isBlank()) return
 
-        val textToProcess = if (unescapeBeforeTransform && service.containsEscapeCharacters(inputText)) {
-            service.fullyUnescapeJson(inputText)
-        } else {
-            inputText
-        }
-
         val documentModificationStamp = document.modificationStamp
         val selectionStart = selectionModel.selectionStart
         val selectionEnd = selectionModel.selectionEnd
@@ -60,19 +54,23 @@ abstract class BaseEditorJsonAction : AnAction() {
         processingJob = project.service<JsoninjaCoroutineScopeService>().launch(start = CoroutineStart.LAZY) {
             try {
                 val result = withContext(Dispatchers.Default) {
+                    val textToProcess = if (unescapeBeforeTransform) service.fullyUnescapeJson(inputText) else inputText
                     if (requiresJsonValidation && !service.isValidJson(textToProcess)) {
                         return@withContext EditorActionResult.InvalidJson
                     }
 
                     try {
-                        EditorActionResult.Success(transformJson(service, textToProcess))
+                        // Formatting owns decoding and must retain the initial input for its failure fallback.
+                        EditorActionResult.Success(transformJson(service, inputText))
+                    } catch (cancellationException: CancellationException) {
+                        throw cancellationException
                     } catch (_: Exception) {
                         EditorActionResult.InvalidJson
                     }
                 }
 
                 withContext(Dispatchers.EDT) {
-                    if (project.isDisposed) return@withContext
+                    if (project.isDisposed || editor.isDisposed) return@withContext
                     if (synchronized(documentProcessingJobs) { documentProcessingJobs[document] } !== processingJob) {
                         return@withContext
                     }
@@ -85,6 +83,10 @@ abstract class BaseEditorJsonAction : AnAction() {
                         is EditorActionResult.Success -> {
                             if (result.text == inputText) return@withContext
                             if (document.modificationStamp != documentModificationStamp) return@withContext
+                            if (hasSelection != selectionModel.hasSelection() ||
+                                (hasSelection && (selectionStart != selectionModel.selectionStart ||
+                                    selectionEnd != selectionModel.selectionEnd))
+                            ) return@withContext
 
                             WriteCommandAction.runWriteCommandAction(project, getCommandName(), null, {
                                 if (hasSelection) {

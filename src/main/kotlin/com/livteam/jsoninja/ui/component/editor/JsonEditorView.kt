@@ -3,6 +3,8 @@ package com.livteam.jsoninja.ui.component.editor
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.event.DocumentEvent
+import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
@@ -52,12 +54,18 @@ class JsonEditorView(
     private lateinit var treeModeLabel: JBLabel
     private val treePresenter = JsonEditorTreePresenter(project, jsonEditorTreeView)
     private var currentDisplayMode = EditorDisplayMode.TEXT
+    private val treeDocumentListener = object : DocumentListener {
+        override fun documentChanged(event: DocumentEvent) {
+            if (currentDisplayMode == EditorDisplayMode.TREE) refreshVisibleTree()
+        }
+    }
 
     init {
         presenter = JsonEditorTextPresenter(project, jsonEditorTextView)
 
         initializeUI()
         presenter.setupContentChangeListener()
+        editor.addDocumentListener(treeDocumentListener)
         setupMouseListener()
     }
 
@@ -170,10 +178,19 @@ class JsonEditorView(
     }
 
     private fun switchToTreeMode() {
-        treePresenter.refreshTreeFromJson(getText())
         currentDisplayMode = EditorDisplayMode.TREE
         (contentContainer.layout as CardLayout).show(contentContainer, TREE_CARD)
         updateToggleLabelStyles()
+        refreshVisibleTree()
+    }
+
+    private fun refreshVisibleTree() {
+        val document = editor.document
+        val modificationStamp = document.modificationStamp
+        treePresenter.refreshTreeFromJson(document.text) {
+            currentDisplayMode == EditorDisplayMode.TREE && editor.document === document &&
+                document.modificationStamp == modificationStamp
+        }
     }
 
     private fun updateToggleLabelStyles() {
@@ -191,6 +208,7 @@ class JsonEditorView(
     fun setOnContentChangeCallback(callback: (String) -> Unit) = presenter.setOnContentChangeCallback(callback)
 
     override fun dispose() {
+        editor.removeDocumentListener(treeDocumentListener)
         treePresenter.dispose()
         Disposer.dispose(jsonEditorTextView)
         Disposer.dispose(jsonEditorTreeView)

@@ -16,6 +16,7 @@ import com.livteam.jsoninja.model.typeConversion.TypeReference
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.treesitter.TreeSitterWasmRuntime
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
+import java.net.URI
 
 class TypeConversionWasmIntegrationTest : BasePlatformTestCase() {
     private lateinit var jsonToTypeConversionService: JsonToTypeConversionService
@@ -114,6 +115,36 @@ class TypeConversionWasmIntegrationTest : BasePlatformTestCase() {
         assertTrue(buildOptionsNode.path("incremental").isBoolean)
         assertTrue(buildOptionsNode.path("traceResolution").isBoolean)
         assertTrue(buildOptionsNode.path("verbose").isBoolean)
+    }
+
+    fun testRealisticSamplesReachFormattedJsonThroughWasm() {
+        val generatedJson = typeToJsonGenerationService.generate(
+            sourceCode = """
+                interface Contact {
+                  fullName: string;
+                  email: string;
+                  phone: string;
+                  websiteUrl: string;
+                  age: number;
+                  isActive: boolean;
+                }
+            """.trimIndent(),
+            language = SupportedLanguage.TYPESCRIPT,
+            options = TypeToJsonGenerationOptions(usesRealisticSampleData = true),
+            rootTypeName = "Contact",
+        )
+        val result = objectMapper.readTree(generatedJson)
+
+        assertEquals(6, result.size())
+        assertTrue(result.path("fullName").asText().isNotBlank())
+        assertFalse(result.path("fullName").asText() == "fullName")
+        assertTrue(result.path("email").asText().contains('@'))
+        assertTrue(result.path("phone").asText().isNotBlank())
+        val url = URI(result.path("websiteUrl").asText())
+        assertTrue(url.scheme in setOf("http", "https"))
+        assertFalse(url.host.isNullOrBlank())
+        assertTrue(result.path("age").isNumber)
+        assertTrue(result.path("isActive").isBoolean)
     }
 
     private fun createJsonToTypeOptions(language: SupportedLanguage): JsonToTypeConversionOptions {

@@ -14,6 +14,19 @@
         "unescapeIcon-v2-16.svg": "icons/classic/v2/unescapeIcon-v2-16.svg",
         "generateIcon-v2-16.svg": "icons/classic/v2/generateIcon-v2-16.svg",
         "diffIcon-v2-16.svg": "icons/classic/v2/diffIcon-v2-16.svg"
+      },
+      "v3": {
+        "prettyIcon-v3-20.svg": "icons/classic/v3/prettyIcon-v3-20.svg",
+        "uglyIcon-v3-20.svg": "icons/classic/v3/uglyIcon-v3-20.svg",
+        "escapeIcon-v3-20.svg": "icons/classic/v3/escapeIcon-v3-20.svg",
+        "unescapeIcon-v3-20.svg": "icons/classic/v3/unescapeIcon-v3-20.svg",
+        "generateIcon-v3-20.svg": "icons/classic/v3/generateIcon-v3-20.svg",
+        "diffIcon-v3-20.svg": "icons/classic/v3/diffIcon-v3-20.svg",
+        "openJsonFileIcon-v3-20.svg": "icons/classic/v3/openJsonFileIcon-v3-20.svg",
+        "loadJsonFromApiIcon-v3-20.svg": "icons/classic/v3/loadJsonFromApiIcon-v3-20.svg",
+        "convertTypeIcon-v3-20.svg": "icons/classic/v3/convertTypeIcon-v3-20.svg",
+        "jsonToTypeIcon-v3-20.svg": "icons/classic/v3/jsonToTypeIcon-v3-20.svg",
+        "typeToJsonIcon-v3-20.svg": "icons/classic/v3/typeToJsonIcon-v3-20.svg"
       }
     }
   }

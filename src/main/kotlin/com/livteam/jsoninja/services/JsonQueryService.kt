@@ -6,7 +6,6 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.jayway.jsonpath.Configuration
 import com.jayway.jsonpath.JsonPath
-import com.jayway.jsonpath.Option
 import com.jayway.jsonpath.spi.json.JacksonJsonProvider
 import com.jayway.jsonpath.spi.mapper.JacksonMappingProvider
 import com.livteam.jsoninja.model.JsonQueryType
@@ -30,7 +29,6 @@ class JsonQueryService(private val project: Project) {
     private val jsonPathConfiguration = Configuration.builder()
         .jsonProvider(JacksonJsonProvider(objectMapper))
         .mappingProvider(JacksonMappingProvider(objectMapper))
-        .options(Option.SUPPRESS_EXCEPTIONS)
         .build()
 
     // JMESPath 런타임
@@ -69,12 +67,7 @@ class JsonQueryService(private val project: Project) {
         val context = JsonPath.using(jsonPathConfiguration).parse(jsonString)
         
         // 쿼리 실행
-        val result = context.read<Any>(expression)
-        
-        if (result == null) {
-            LOG.warn("JsonPath 쿼리 결과가 null입니다: $expression")
-            return null
-        }
+        val result = context.read<Any?>(expression)
         
         // 결과를 JSON 문자열로 변환
         return objectMapper.writeValueAsString(result)
@@ -90,10 +83,7 @@ class JsonQueryService(private val project: Project) {
         // 검색 실행
         val result = jmesPathExpression.search(jsonNode)
         
-        if (result == null || result.isNull) {
-            LOG.warn("JMESPath 쿼리 결과가 null입니다: $expression")
-            return null
-        }
+        if (result == null) return null
         
         // 결과를 JSON 문자열로 변환
         return objectMapper.writeValueAsString(result)
