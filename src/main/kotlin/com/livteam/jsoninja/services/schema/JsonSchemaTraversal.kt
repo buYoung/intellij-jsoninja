@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.networknt.schema.SpecificationVersion
+import com.livteam.jsoninja.LocalizationBundle
 
 /** Schema positions shared by reference, anchor and constraint traversal. Instance payloads stay opaque. */
 internal object JsonSchemaTraversal {
@@ -27,7 +28,10 @@ internal object JsonSchemaTraversal {
         return SpecificationVersion.entries.firstOrNull {
             val standardPath = it.dialectId.removeSuffix("#").substringAfter("://")
             schemaId.isTextual && (normalizedId == "http://$standardPath" || normalizedId == "https://$standardPath")
-        } ?: throw JsonSchemaGenerationException("Unrecognized schema dialect: $schemaId", "#/\$schema")
+        } ?: throw JsonSchemaGenerationException(
+            LocalizationBundle.message("validation.error.schema.dialect.unsupported", schemaId.asText()),
+            "#/\$schema"
+        )
     }
 
     fun mapChildren(
