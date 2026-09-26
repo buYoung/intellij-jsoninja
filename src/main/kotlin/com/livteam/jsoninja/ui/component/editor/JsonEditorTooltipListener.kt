@@ -13,6 +13,7 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.ui.LightweightHint
 import com.livteam.jsoninja.model.JsonQueryType
@@ -87,21 +88,16 @@ class JsonEditorTooltipListener(
                     val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editorEx.document) ?: return@readAction null
                     val element = psiFile.findElementAt(offset)
                     val queryType = JsonQueryType.fromString(settings.jsonQueryType)
-                    val useDotNotation = queryType == JsonQueryType.JMESPATH || queryType == JsonQueryType.JACKSON_JQ
 
                     val templateResult = JsonPathHelper.getPathFromTemplateText(
                         documentText = editorEx.document.text,
                         offset = offset,
                         project = project,
-                        isJmes = useDotNotation
+                        queryType = queryType
                     )
 
                     val resolvedPath = templateResult?.path ?: if (element != null) {
-                        when (queryType) {
-                            JsonQueryType.JMESPATH -> JsonPathHelper.getJmesPath(element)
-                            JsonQueryType.JAYWAY_JSONPATH -> JsonPathHelper.getJsonPath(element)
-                            JsonQueryType.JACKSON_JQ -> JsonPathHelper.getJqPath(element)
-                        }
+                        JsonPathHelper.getPath(element, queryType)
                     } else null
 
                     if (resolvedPath == null) return@readAction null
@@ -113,7 +109,7 @@ class JsonEditorTooltipListener(
                     }
 
                     TooltipResult(
-                        text = "<html>$label: <b>$resolvedPath</b></html>",
+                        text = "<html>$label: <b>${StringUtil.escapeXmlEntities(resolvedPath)}</b></html>",
                         isTemplatePlaceholder = templateResult?.isInsidePlaceholder == true
                     )
                 }

@@ -3,9 +3,12 @@ package com.livteam.jsoninja.services.typeConversion
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.livteam.jsoninja.model.typeConversion.TypeDeclaration
 import com.livteam.jsoninja.model.typeConversion.TypeDeclarationKind
 import com.livteam.jsoninja.model.typeConversion.TypeReference
+import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
+import java.util.IdentityHashMap
 
 class TypeToJsonDocumentBuilder(
     private val objectMapper: ObjectMapper,
@@ -15,6 +18,27 @@ class TypeToJsonDocumentBuilder(
         declarations: List<TypeDeclaration>,
         options: TypeToJsonGenerationOptions,
         rootTypeName: String? = null,
+    ): JsonNode = buildDocument(declarations, options, rootTypeName, null)
+
+    fun buildCommentedDocument(
+        declarations: List<TypeDeclaration>,
+        options: TypeToJsonGenerationOptions,
+        rootTypeName: String?,
+    ): String {
+        val optionalFields = IdentityHashMap<ObjectNode, MutableSet<String>>()
+        val document = buildDocument(
+            declarations,
+            options.copy(propertyGenerationMode = SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL),
+            rootTypeName,
+        ) { node, name -> optionalFields.getOrPut(node) { mutableSetOf() }.add(name) }
+        return TypeToJsonCommentRenderer(objectMapper).render(document, optionalFields, options.formatState)
+    }
+
+    private fun buildDocument(
+        declarations: List<TypeDeclaration>,
+        options: TypeToJsonGenerationOptions,
+        rootTypeName: String?,
+        onOptionalField: ((ObjectNode, String) -> Unit)?,
     ): JsonNode {
         val declarationsByName = declarations.associateBy(TypeDeclaration::name)
         val rootDeclaration = selectRootDeclaration(
@@ -23,7 +47,7 @@ class TypeToJsonDocumentBuilder(
             rootTypeName = rootTypeName,
         )
         val outputCount = options.outputCount.coerceIn(1, 100)
-        val rootDocument = buildSingleDocument(rootDeclaration, declarationsByName, options)
+        val rootDocument = buildSingleDocument(rootDeclaration, declarationsByName, options, onOptionalField)
 
         if (outputCount <= 1) {
             return rootDocument
@@ -35,7 +59,7 @@ class TypeToJsonDocumentBuilder(
 
             // Keep array roots flat by appending generated elements into the same array.
             repeat(outputCount - 1) {
-                val generatedDocument = buildSingleDocument(rootDeclaration, declarationsByName, options)
+                val generatedDocument = buildSingleDocument(rootDeclaration, declarationsByName, options, onOptionalField)
                 if (generatedDocument is ArrayNode) {
                     mergedArrayNode.addAll(generatedDocument)
                 } else {
@@ -48,7 +72,7 @@ class TypeToJsonDocumentBuilder(
         val arrayNode = objectMapper.createArrayNode()
         arrayNode.add(rootDocument)
         repeat(outputCount - 1) {
-            arrayNode.add(buildSingleDocument(rootDeclaration, declarationsByName, options))
+            arrayNode.add(buildSingleDocument(rootDeclaration, declarationsByName, options, onOptionalField))
         }
         return arrayNode
     }
@@ -57,9 +81,10 @@ class TypeToJsonDocumentBuilder(
         rootDeclaration: TypeDeclaration,
         declarationsByName: Map<String, TypeDeclaration>,
         options: TypeToJsonGenerationOptions,
+        onOptionalField: ((ObjectNode, String) -> Unit)?,
     ): JsonNode {
         val rootTypeReference = rootDeclaration.aliasedTypeReference ?: TypeReference.Named(rootDeclaration.name)
-        return nodeGenerator.generateNode(rootTypeReference, declarationsByName, options)
+        return nodeGenerator.generateNodeWithOptionalFields(rootTypeReference, declarationsByName, options, onOptionalField = onOptionalField)
     }
 
     private fun selectRootDeclaration(

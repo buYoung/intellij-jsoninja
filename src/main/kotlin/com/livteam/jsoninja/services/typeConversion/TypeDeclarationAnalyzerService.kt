@@ -17,14 +17,28 @@ class TypeDeclarationAnalyzerService(
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
     private val assetRegistryService = service<TreeSitterAssetRegistryService>()
 
+    fun analyzeSource(sourceCode: String, language: SupportedLanguage): TypeAnalysisResult =
+        analyzeSource(sourceCode, language) {}
+
     fun analyzeSource(
         sourceCode: String,
         language: SupportedLanguage,
+        checkCancellation: () -> Unit,
     ): TypeAnalysisResult {
         require(sourceCode.isNotBlank()) { "Type declaration source code must not be blank." }
         assetRegistryService.loadQuery(language)
 
         val runtimeHandle = TreeSitterWasmRuntime.getOrCreate()
+        return runtimeHandle.withTransaction(checkCancellation) {
+            analyzeSource(runtimeHandle, sourceCode, language)
+        }
+    }
+
+    private fun analyzeSource(
+        runtimeHandle: TreeSitterWasmRuntime.RuntimeHandle,
+        sourceCode: String,
+        language: SupportedLanguage,
+    ): TypeAnalysisResult {
         val memoryBridge = WasmMemoryBridge(runtimeHandle)
         val sourceBuffer = memoryBridge.writeUtf8String(sourceCode)
 

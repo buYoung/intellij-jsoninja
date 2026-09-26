@@ -10,6 +10,8 @@ import com.livteam.jsoninja.model.typeConversion.TypeDeclarationKind
 import com.livteam.jsoninja.model.typeConversion.TypeField
 import com.livteam.jsoninja.model.typeConversion.TypePrimitiveKind
 import com.livteam.jsoninja.model.typeConversion.TypeReference
+import com.livteam.jsoninja.model.typeConversion.TypeEnumValue
+import com.livteam.jsoninja.LocalizationBundle
 
 data class AnalysisOutput(
     val language: String,
@@ -31,6 +33,7 @@ data class WasmDeclaration(
     val fields: List<WasmField>,
     val enumValues: List<WasmEnumValue>,
     val aliasedType: WasmTypeReference?,
+    val enumLiteralValues: List<TypeEnumValue> = emptyList(),
 ) {
     fun toDomainModel(): TypeDeclaration {
         return TypeDeclaration(
@@ -40,6 +43,7 @@ data class WasmDeclaration(
             superTypeNames = superTypes.mapNotNull(WasmTypeReference::toSuperTypeName),
             enumValues = enumValues.map(WasmEnumValue::name),
             aliasedTypeReference = aliasedType?.toDomainModel(),
+            enumLiteralValues = enumLiteralValues,
         )
     }
 }
@@ -62,6 +66,7 @@ data class WasmField(
 
 data class WasmEnumValue(
     val name: String,
+    val valueText: String? = null,
 )
 
 data class WasmDiagnostic(
@@ -162,10 +167,26 @@ object TreeSitterQueryResult {
         objectMapper: ObjectMapper,
     ): AnalysisOutput {
         val rootNode = objectMapper.readTree(jsonText)
+        val language = rootNode.path("language").asText("")
+        val diagnostics = rootNode.path("diagnostics").map(::parseDiagnostic).toMutableList()
+        val declarations = rootNode.path("declarations").map(::parseDeclaration).map { declaration ->
+            if (language != "typescript" || declaration.kind != "enum") return@map declaration
+            val literalValues = TypeScriptEnumValueResolver.resolve(declaration.enumValues, objectMapper) { member ->
+                diagnostics.add(WasmDiagnostic(
+                    code = "unsupported_enum_value",
+                    severity = "error",
+                    message = LocalizationBundle.message(
+                        "validation.type.to.json.enum.value.unsupported", "${declaration.name}.${member.name}"
+                    ),
+                    declarationName = declaration.name,
+                ))
+            }
+            declaration.copy(enumLiteralValues = literalValues)
+        }
         return AnalysisOutput(
-            language = rootNode.path("language").asText(""),
-            declarations = rootNode.path("declarations").map(::parseDeclaration),
-            diagnostics = rootNode.path("diagnostics").map(::parseDiagnostic),
+            language = language,
+            declarations = declarations,
+            diagnostics = diagnostics,
         )
     }
 
@@ -175,7 +196,12 @@ object TreeSitterQueryResult {
             kind = node.path("kind").asText("class"),
             superTypes = node.path("super_types").map(::parseTypeReference),
             fields = node.path("fields").map(::parseField),
-            enumValues = node.path("enum_values").map { WasmEnumValue(name = it.path("name").asText("")) },
+            enumValues = node.path("enum_values").map {
+                WasmEnumValue(
+                    name = it.path("name").asText(""),
+                    valueText = it.path("value_text").takeIf(JsonNode::isTextual)?.asText(),
+                )
+            },
             aliasedType = node.path("aliased_type").takeUnless(JsonNode::isNull)?.let(::parseTypeReference),
         )
     }
