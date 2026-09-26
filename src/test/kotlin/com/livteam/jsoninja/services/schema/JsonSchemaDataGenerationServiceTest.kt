@@ -7,6 +7,8 @@ import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
+import java.net.URI
+import java.util.UUID
 
 class JsonSchemaDataGenerationServiceTest : BasePlatformTestCase() {
     private lateinit var jsonSchemaDataGenerationService: JsonSchemaDataGenerationService
@@ -58,6 +60,38 @@ class JsonSchemaDataGenerationServiceTest : BasePlatformTestCase() {
         assertTrue(generatedJson.contains("// \"extends\":"))
         assertTrue(generatedJson.contains("// \"files\":"))
         assertFalse(generatedJson.trim() == "{}")
+    }
+
+    fun testGeneratedFormatsAndPatternsReachFinalJson() {
+        val config = JsonGenerationConfig(
+            generationMode = JsonGenerationMode.SCHEMA,
+            schemaPropertyGenerationMode = SchemaPropertyGenerationMode.REQUIRED_ONLY,
+            schemaText = """
+                {
+                  "type": "object",
+                  "required": ["email", "uuid", "url", "letters", "digits"],
+                  "properties": {
+                    "email": {"type": "string", "format": "email"},
+                    "uuid": {"type": "string", "format": "uuid"},
+                    "url": {"type": "string", "format": "uri"},
+                    "letters": {"type": "string", "pattern": "^[A-Za-z]+$"},
+                    "digits": {"type": "string", "pattern": "^[0-9]+$"}
+                  },
+                  "additionalProperties": false
+                }
+            """.trimIndent(),
+        )
+
+        val result = objectMapper.readTree(jsonSchemaDataGenerationService.generateFromSchema(config))
+
+        assertEquals(5, result.size())
+        assertTrue(result.path("email").asText().contains('@'))
+        assertEquals(result.path("uuid").asText(), UUID.fromString(result.path("uuid").asText()).toString())
+        val url = URI(result.path("url").asText())
+        assertTrue(url.scheme in setOf("http", "https"))
+        assertFalse(url.host.isNullOrBlank())
+        assertTrue(Regex("^[A-Za-z]+$").matches(result.path("letters").asText()))
+        assertTrue(Regex("^[0-9]+$").matches(result.path("digits").asText()))
     }
 
     private fun createSchemaGenerationConfig(
