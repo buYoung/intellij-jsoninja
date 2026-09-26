@@ -9,4 +9,5 @@ object JsonDiffKeys {
     val JSON_DIFF_REQUEST_MARKER: Key<Boolean> = Key.create("JSONINJA_DIFF_REQUEST_MARKER")
     val JSON_DIFF_SORT_KEYS: Key<Boolean> = Key.create("JSONINJA_DIFF_SORT_KEYS")
     val JSON_DIFF_CHANGE_GUARD: Key<Boolean> = Key.create("JSONINJA_DIFF_CHANGE_GUARD")
+    val JSON_DIFF_SESSION: Key<JsonDiffSession> = Key.create("JSONINJA_DIFF_SESSION")
 }

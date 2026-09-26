@@ -308,8 +308,24 @@ tasks {
         gradleVersion = providers.gradleProperty("gradleVersion").get()
     }
 
-    publishPlugin {
-        dependsOn(patchChangelog)
+    val verifiedPluginArchive = providers.gradleProperty("verifiedPluginArchive").orNull
+    if (verifiedPluginArchive != null) {
+        val suppliedArchive = layout.projectDirectory.file(verifiedPluginArchive)
+        signPlugin {
+            archiveFile.set(suppliedArchive)
+        }
+        verifyPlugin {
+            archiveFile.set(suppliedArchive)
+        }
+        publishPlugin {
+            archiveFile.set(suppliedArchive)
+            // Publish the previously verified bytes without building or signing a replacement.
+            setDependsOn(emptyList<Any>())
+        }
+    } else {
+        publishPlugin {
+            dependsOn(patchChangelog)
+        }
     }
 
     // -----------------------------------------------------------
