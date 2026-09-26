@@ -16,8 +16,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  buildWasm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Sources
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup WASM Toolchain
+        run: bash .github/scripts/setup-wasi.sh
+
+      - name: Build shared WASM test resource
+        working-directory: tree-sitter-wasm
+        run: |
+          cargo build --target wasm32-wasip1 --release --locked
+          mkdir -p "$RUNNER_TEMP/wasm"
+          cp target/wasm32-wasip1/release/tree_sitter_wasm.wasm "$RUNNER_TEMP/wasm/tree-sitter.wasm"
+
+      - name: Upload WASM test resource
+        uses: actions/upload-artifact@v7
+        with:
+          name: tree-sitter-wasm-${{ github.sha }}
+          path: ${{ runner.temp }}/wasm/tree-sitter.wasm
+          if-no-files-found: error
 
   testUI:
+    needs: buildWasm
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -29,6 +54,12 @@ jobs:
       # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
+
+      - name: Download WASM test resource
+        uses: actions/download-artifact@v8
+        with:
+          name: tree-sitter-wasm-${{ github.sha }}
+          path: src/main/resources/wasm/tree-sitter
 
       # Set up Java environment for the next steps
       - name: Setup Java
