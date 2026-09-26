@@ -11,7 +11,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.progress.ProcessCanceledException
 import kotlinx.coroutines.CancellationException
-import com.networknt.schema.SpecVersion.VersionFlag
+import com.networknt.schema.SpecificationVersion
 import com.livteam.jsoninja.LocalizationBundle
 import java.io.IOException
 import java.math.BigDecimal
@@ -39,7 +39,7 @@ class JsonSchemaNormalizer(private val project: Project) {
         val baseDirectory: Path?,
         val baseUri: String?,
         val contextsByNode: MutableMap<JsonNode, SchemaDocumentContext>,
-        val dialect: VersionFlag
+        val dialect: SpecificationVersion
     )
 
     fun normalize(schemaNode: JsonNode): NormalizedJsonSchema = normalize(schemaNode, null)
@@ -72,7 +72,7 @@ class JsonSchemaNormalizer(private val project: Project) {
     ): SchemaDocumentContext {
         val contextsByNode = IdentityHashMap<JsonNode, SchemaDocumentContext>()
         fun register(node: JsonNode, parentContext: SchemaDocumentContext?): SchemaDocumentContext {
-            val dialect = JsonSchemaTraversal.dialect(node, parentContext?.dialect ?: VersionFlag.V202012)
+            val dialect = JsonSchemaTraversal.dialect(node, parentContext?.dialect ?: SpecificationVersion.DRAFT_2020_12)
             val declaredId = node.path("\$id").takeIf { it.isTextual }?.asText()
             val parentBaseUri = parentContext?.baseUri ?: retrievalUri
             val effectiveUri = if (declaredId != null) {
@@ -472,7 +472,7 @@ class JsonSchemaNormalizer(private val project: Project) {
     private fun collectAnchorNodes(schemaNode: JsonNode): Map<String, JsonNode> =
         collectAnchorNodes(schemaNode, JsonSchemaTraversal.dialect(schemaNode))
 
-    private fun collectAnchorNodes(schemaNode: JsonNode, dialect: VersionFlag): Map<String, JsonNode> {
+    private fun collectAnchorNodes(schemaNode: JsonNode, dialect: SpecificationVersion): Map<String, JsonNode> {
         val anchorNodesByName = mutableMapOf<String, JsonNode>()
         collectAnchorNodesRecursive(schemaNode, anchorNodesByName, dialect)
         return anchorNodesByName
@@ -481,7 +481,7 @@ class JsonSchemaNormalizer(private val project: Project) {
     private fun collectAnchorNodesRecursive(
         schemaNode: JsonNode,
         anchorNodesByName: MutableMap<String, JsonNode>,
-        dialect: VersionFlag
+        dialect: SpecificationVersion
     ) {
         for (keyword in listOf("\$anchor", "\$dynamicAnchor")) {
             val anchorName = schemaNode.path(keyword).takeIf { it.isTextual }?.asText()
@@ -495,7 +495,7 @@ class JsonSchemaNormalizer(private val project: Project) {
     private fun validateSchemaContradictions(
         schemaNode: JsonNode,
         jsonPointer: String,
-        inheritedDialect: VersionFlag = VersionFlag.V202012
+        inheritedDialect: SpecificationVersion = SpecificationVersion.DRAFT_2020_12
     ) {
         if (!schemaNode.isObject) {
             return

@@ -8,11 +8,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
-import com.networknt.schema.JsonSchema
-import com.networknt.schema.JsonSchemaFactory
-import com.networknt.schema.SpecVersion
-import com.networknt.schema.SpecVersionDetector
-import com.networknt.schema.ValidationMessage
+import com.intellij.openapi.progress.ProcessCanceledException
+import kotlinx.coroutines.CancellationException
+import com.networknt.schema.Schema
+import com.networknt.schema.SchemaRegistry
+import com.networknt.schema.SchemaRegistryConfig
+import com.networknt.schema.SpecificationVersion
+import com.networknt.schema.path.PathType
+import com.networknt.schema.Error as SchemaError
 
 @Service(Service.Level.PROJECT)
 class JsonSchemaValidationService(private val project: Project) {
@@ -26,14 +29,20 @@ class JsonSchemaValidationService(private val project: Project) {
             configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, false)
         }
 
-    private val schemaFactoryByVersion: Map<SpecVersion.VersionFlag, JsonSchemaFactory> =
-        SpecVersion.VersionFlag.values().associateWith { versionFlag ->
-            JsonSchemaFactory.getInstance(versionFlag)
+    private val schemaRegistryByVersion: Map<SpecificationVersion, SchemaRegistry> =
+        SpecificationVersion.entries.associateWith { version ->
+            SchemaRegistry.withDefaultDialect(version) { builder ->
+                builder.schemaRegistryConfig(
+                    SchemaRegistryConfig.builder().pathType(PathType.JSON_POINTER).build()
+                )
+                // JsonSchemaNormalizer resolves external references using our cache/timeouts.
+                // Keep the validator's remote fetching disabled to avoid a second I/O path.
+            }
         }
 
     data class SchemaValidationResult(
         val isValid: Boolean,
-        val compiledSchema: JsonSchema? = null,
+        val compiledSchema: Schema? = null,
         val errorMessage: String? = null,
         val jsonPointer: String? = null,
         val schemaNode: JsonNode? = null
@@ -65,12 +74,16 @@ class JsonSchemaValidationService(private val project: Project) {
         }
     }
 
-    fun compileSchema(schemaNode: JsonNode): JsonSchema {
+    fun compileSchema(schemaNode: JsonNode): Schema {
         try {
-            val versionFlag = detectVersionFlag(schemaNode)
-            val schemaFactory = schemaFactoryByVersion[versionFlag]
-                ?: JsonSchemaFactory.getInstance(versionFlag)
-            return schemaFactory.getSchema(schemaNode)
+            val version = JsonSchemaTraversal.dialect(schemaNode)
+            return schemaRegistryByVersion.getValue(version).getSchema(JsonSchemaNodeAdapter.convert(schemaNode))
+        } catch (exception: ProcessCanceledException) {
+            throw exception
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: JsonSchemaGenerationException) {
+            throw exception
         } catch (exception: Exception) {
             throw JsonSchemaGenerationException(
                 message = "Failed to compile JSON Schema: ${exception.message}",
@@ -98,16 +111,16 @@ class JsonSchemaValidationService(private val project: Project) {
         }
     }
 
-    fun validateInstance(compiledSchema: JsonSchema, instanceNode: JsonNode): InstanceValidationResult {
+    fun validateInstance(compiledSchema: Schema, instanceNode: JsonNode): InstanceValidationResult {
         return try {
-            val validationMessageSet = compiledSchema.validate(instanceNode)
-            if (validationMessageSet.isEmpty()) {
+            val validationErrors = compiledSchema.validate(JsonSchemaNodeAdapter.convert(instanceNode))
+            if (validationErrors.isEmpty()) {
                 InstanceValidationResult(isValid = true)
             } else {
-                val validationMessageList = validationMessageSet.map { validationMessage ->
+                val validationMessageList = validationErrors.map { validationMessage ->
                     resolveValidationMessage(validationMessage)
                 }
-                val firstValidationMessage = validationMessageSet.first()
+                val firstValidationMessage = validationErrors.first()
                 InstanceValidationResult(
                     isValid = false,
                     errorMessage = validationMessageList.firstOrNull(),
@@ -115,6 +128,10 @@ class JsonSchemaValidationService(private val project: Project) {
                     validationMessages = validationMessageList
                 )
             }
+        } catch (exception: ProcessCanceledException) {
+            throw exception
+        } catch (exception: CancellationException) {
+            throw exception
         } catch (exception: Exception) {
             InstanceValidationResult(
                 isValid = false,
@@ -131,7 +148,7 @@ class JsonSchemaValidationService(private val project: Project) {
 
     fun getStrictObjectMapper(): ObjectMapper = strictObjectMapper
 
-    private fun resolveValidationMessage(validationMessage: ValidationMessage): String {
+    private fun resolveValidationMessage(validationMessage: SchemaError): String {
         val messageText = runCatching { validationMessage.message }.getOrNull()
         if (!messageText.isNullOrBlank()) {
             return messageText
@@ -140,17 +157,6 @@ class JsonSchemaValidationService(private val project: Project) {
         return validationMessage.toString()
     }
 
-    private fun resolveValidationPointer(validationMessage: ValidationMessage): String? {
-        val messageText = validationMessage.toString()
-        val atIndex = messageText.indexOf(" at ")
-        if (atIndex >= 0 && atIndex + 4 < messageText.length) {
-            return messageText.substring(atIndex + 4).trim()
-        }
-        return "#"
-    }
-
-    private fun detectVersionFlag(schemaNode: JsonNode): SpecVersion.VersionFlag {
-        return SpecVersionDetector.detectOptionalVersion(schemaNode, true)
-            .orElse(SpecVersion.VersionFlag.V202012)
-    }
+    private fun resolveValidationPointer(validationMessage: SchemaError): String =
+        "#${validationMessage.instanceLocation ?: ""}"
 }

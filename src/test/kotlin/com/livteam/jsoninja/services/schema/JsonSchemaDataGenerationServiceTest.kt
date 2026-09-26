@@ -9,10 +9,17 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import java.net.URI
 import java.util.UUID
+import java.net.InetSocketAddress
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
+import com.sun.net.httpserver.HttpServer
 
 class JsonSchemaDataGenerationServiceTest : BasePlatformTestCase() {
     private lateinit var jsonSchemaDataGenerationService: JsonSchemaDataGenerationService
     private lateinit var objectMapper: ObjectMapper
+
+    override fun runInDispatchThread(): Boolean = false
 
     override fun setUp() {
         super.setUp()
@@ -92,6 +99,71 @@ class JsonSchemaDataGenerationServiceTest : BasePlatformTestCase() {
         assertFalse(url.host.isNullOrBlank())
         assertTrue(Regex("^[A-Za-z]+$").matches(result.path("letters").asText()))
         assertTrue(Regex("^[0-9]+$").matches(result.path("digits").asText()))
+    }
+
+    fun testGeneratedOutputMatchesPrecisionAndLocalReferenceGolden() {
+        val fixtureDirectory = Path.of("src/test/testData/jsonSchema/generation")
+        val config = JsonGenerationConfig(
+            generationMode = JsonGenerationMode.SCHEMA,
+            schemaText = Files.readString(fixtureDirectory.resolve("schema.json")),
+            schemaPropertyGenerationMode = SchemaPropertyGenerationMode.REQUIRED_ONLY,
+        )
+        val generatedJson = jsonSchemaDataGenerationService.generateFromSchema(config)
+        val strictMapper = project.service<JsonSchemaValidationService>().getStrictObjectMapper()
+        assertEquals(strictMapper.readTree(Files.readString(fixtureDirectory.resolve("expected.json"))),
+            strictMapper.readTree(generatedJson))
+        val prepared = jsonSchemaDataGenerationService.prepareSchema(config.schemaText)
+        assertTrue(project.service<JsonSchemaValidationService>()
+            .validateInstance(prepared.compiledSchema, strictMapper.readTree(generatedJson)).isValid)
+    }
+
+    fun testExternalRelativeReferencesUseOneCachedFetch() {
+        val requests = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/schemas/child.json") { exchange ->
+            try {
+                requests.incrementAndGet()
+                val bytes = """{"type":"integer","const":7}""".toByteArray(Charsets.UTF_8)
+                exchange.sendResponseHeaders(200, bytes.size.toLong())
+                exchange.responseBody.use { it.write(bytes) }
+            } finally {
+                exchange.close()
+            }
+        }
+        server.start()
+        try {
+            val config = JsonGenerationConfig(
+                generationMode = JsonGenerationMode.SCHEMA,
+                schemaRetrievalUri = "http://127.0.0.1:${server.address.port}/schemas/root.json",
+                schemaPropertyGenerationMode = SchemaPropertyGenerationMode.REQUIRED_ONLY,
+                schemaText = """{
+                    "type":"object","required":["left","right"],
+                    "properties":{"left":{"${'$'}ref":"child.json"},"right":{"${'$'}ref":"child.json"}}
+                }""",
+            )
+            assertEquals(objectMapper.readTree("""{"left":7,"right":7}"""),
+                objectMapper.readTree(jsonSchemaDataGenerationService.generateFromSchema(config)))
+            assertEquals("Repeated references must share the normalizer's document cache", 1, requests.get())
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    fun testExternalFileReferenceReachesFinalJson() {
+        val directory = Files.createTempDirectory("jsoninja-schema-reference")
+        val child = directory.resolve("child.json")
+        try {
+            Files.writeString(child, """{"type":"string","const":"local-file"}""")
+            val config = JsonGenerationConfig(
+                generationMode = JsonGenerationMode.SCHEMA,
+                schemaText = """{"${'$'}ref":"child.json"}""",
+                schemaRetrievalUri = directory.resolve("root.json").toUri().toString(),
+            )
+            assertEquals("local-file", objectMapper.readTree(jsonSchemaDataGenerationService.generateFromSchema(config)).asText())
+        } finally {
+            Files.deleteIfExists(child)
+            Files.deleteIfExists(directory)
+        }
     }
 
     private fun createSchemaGenerationConfig(

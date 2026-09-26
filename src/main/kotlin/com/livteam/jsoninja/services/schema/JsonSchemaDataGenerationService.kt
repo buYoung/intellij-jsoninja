@@ -18,7 +18,7 @@ import com.livteam.jsoninja.services.RandomJsonDataCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
-import com.networknt.schema.JsonSchema
+import com.networknt.schema.Schema
 
 @Service(Service.Level.PROJECT)
 class JsonSchemaDataGenerationService(private val project: Project) {
@@ -31,7 +31,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
 
     data class PreparedSchema(
         val resolvedSchemaNode: JsonNode,
-        val compiledSchema: JsonSchema,
+        val compiledSchema: Schema,
         val rootConstraint: JsonSchemaConstraint
     )
 

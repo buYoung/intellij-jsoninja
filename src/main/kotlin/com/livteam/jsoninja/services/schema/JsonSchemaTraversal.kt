@@ -3,8 +3,8 @@ package com.livteam.jsoninja.services.schema
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.networknt.schema.SpecVersion.VersionFlag
-import com.networknt.schema.SpecVersionDetector
+import com.networknt.schema.SpecificationVersion
+import com.livteam.jsoninja.LocalizationBundle
 
 /** Schema positions shared by reference, anchor and constraint traversal. Instance payloads stay opaque. */
 internal object JsonSchemaTraversal {
@@ -17,12 +17,26 @@ internal object JsonSchemaTraversal {
     )
     private val schemaArrayKeywords = setOf("allOf", "anyOf", "oneOf", "prefixItems")
 
-    fun dialect(schemaNode: JsonNode, inherited: VersionFlag = VersionFlag.V202012): VersionFlag =
-        SpecVersionDetector.detectOptionalVersion(schemaNode, true).orElse(inherited)
+    fun dialect(
+        schemaNode: JsonNode,
+        inherited: SpecificationVersion = SpecificationVersion.DRAFT_2020_12
+    ): SpecificationVersion {
+        val schemaId = schemaNode.get("\$schema") ?: return inherited
+        // Standard dialects accept both HTTP/HTTPS and an optional empty fragment.
+        // Inspect only the identifier: converting the subtree here would make traversal quadratic.
+        val normalizedId = schemaId.asText().removeSuffix("#")
+        return SpecificationVersion.entries.firstOrNull {
+            val standardPath = it.dialectId.removeSuffix("#").substringAfter("://")
+            schemaId.isTextual && (normalizedId == "http://$standardPath" || normalizedId == "https://$standardPath")
+        } ?: throw JsonSchemaGenerationException(
+            LocalizationBundle.message("validation.error.schema.dialect.unsupported", schemaId.asText()),
+            "#/\$schema"
+        )
+    }
 
     fun mapChildren(
         schemaNode: JsonNode,
-        dialect: VersionFlag,
+        dialect: SpecificationVersion,
         transform: (JsonNode, List<String>) -> JsonNode
     ): JsonNode {
         if (schemaNode !is ObjectNode) return schemaNode.deepCopy()
@@ -39,7 +53,7 @@ internal object JsonSchemaTraversal {
         return result
     }
 
-    fun forEachChild(schemaNode: JsonNode, dialect: VersionFlag, action: (JsonNode, List<String>) -> Unit) {
+    fun forEachChild(schemaNode: JsonNode, dialect: SpecificationVersion, action: (JsonNode, List<String>) -> Unit) {
         if (!schemaNode.isObject) return
         for ((keyword, value) in schemaNode.properties()) {
             if (!supports(keyword, dialect)) continue
@@ -52,7 +66,7 @@ internal object JsonSchemaTraversal {
                         if (isSchema(child)) action(child, listOf(keyword, name))
                     }
                 }
-                (keyword in schemaArrayKeywords || keyword == "items" && dialect != VersionFlag.V202012) && value is ArrayNode -> {
+                (keyword in schemaArrayKeywords || keyword == "items" && dialect != SpecificationVersion.DRAFT_2020_12) && value is ArrayNode -> {
                     value.forEachIndexed { index, child ->
                         if (isSchema(child)) action(child, listOf(keyword, index.toString()))
                     }
@@ -61,13 +75,13 @@ internal object JsonSchemaTraversal {
         }
     }
 
-    private fun supports(keyword: String, dialect: VersionFlag): Boolean = when (keyword) {
-        "prefixItems" -> dialect == VersionFlag.V202012
-        "additionalItems" -> dialect != VersionFlag.V202012
+    private fun supports(keyword: String, dialect: SpecificationVersion): Boolean = when (keyword) {
+        "prefixItems" -> dialect == SpecificationVersion.DRAFT_2020_12
+        "additionalItems" -> dialect != SpecificationVersion.DRAFT_2020_12
         "\$defs", "dependentSchemas", "unevaluatedItems", "unevaluatedProperties", "contentSchema" ->
-            dialect == VersionFlag.V201909 || dialect == VersionFlag.V202012
-        "contains", "propertyNames" -> dialect != VersionFlag.V4
-        "if", "then", "else" -> dialect != VersionFlag.V4 && dialect != VersionFlag.V6
+            dialect == SpecificationVersion.DRAFT_2019_09 || dialect == SpecificationVersion.DRAFT_2020_12
+        "contains", "propertyNames" -> dialect != SpecificationVersion.DRAFT_4
+        "if", "then", "else" -> dialect != SpecificationVersion.DRAFT_4 && dialect != SpecificationVersion.DRAFT_6
         else -> true
     }
 
