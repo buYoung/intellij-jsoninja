@@ -1,8 +1,9 @@
 package com.livteam.jsoninja.ui.component.convertType
 
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.components.JBPanel
+import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.model.SupportedLanguage
 import java.awt.BorderLayout
 import java.awt.Component
@@ -10,7 +11,7 @@ import javax.swing.DefaultListCellRenderer
 import javax.swing.Icon
 import javax.swing.JList
 
-class LanguageSelectorComponent : JBPanel<LanguageSelectorComponent>(BorderLayout()) {
+class LanguageSelectorComponent(private val project: Project? = null) : JBPanel<LanguageSelectorComponent>(BorderLayout()) {
     private val languageComboBox = ComboBox(SupportedLanguage.entries.toTypedArray())
     private var onLanguageChanged: ((SupportedLanguage) -> Unit)? = null
 
@@ -51,6 +52,6 @@ class LanguageSelectorComponent : JBPanel<LanguageSelectorComponent>(BorderLayou
     }
 
     private fun loadLanguageIcon(language: SupportedLanguage): Icon {
-        return IconLoader.getIcon("/icons/languages/${language.name.lowercase()}.svg", javaClass)
+        return JsoninjaIcons.getLanguageIcon(project, language)
     }
 }

@@ -1,0 +1,12 @@
+{
+  "user": {
+    "id": 1,
+    "name": "B",
+    "email": "e"
+  },
+  "meta": {
+    "v": 2,
+    "extra": true
+  },
+  "extraTop": 0
+}
