@@ -8,6 +8,7 @@ import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.TemplatePlaceholderSupport
+import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 import kotlinx.coroutines.CancellationException
@@ -30,8 +31,16 @@ class JsonEditorTreePresenter(
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
     private val coroutineScope: CoroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
     private var refreshTreeJob: Job? = null
+    private val refreshSequence = AtomicInteger()
+    private var isDisposed = false
 
     fun refreshTreeFromJson(jsonText: String) {
+        refreshTreeFromJson(jsonText) { true }
+    }
+
+    fun refreshTreeFromJson(jsonText: String, isCurrentDocument: () -> Boolean) {
+        if (isDisposed) return
+        val sequence = refreshSequence.incrementAndGet()
         refreshTreeJob?.cancel()
         refreshTreeJob = coroutineScope.launch {
             try {
@@ -40,7 +49,9 @@ class JsonEditorTreePresenter(
                 }
 
                 withContext(Dispatchers.EDT) {
-                    if (project.isDisposed) return@withContext
+                    if (project.isDisposed || isDisposed || sequence != refreshSequence.get() || !isCurrentDocument()) {
+                        return@withContext
+                    }
                     view.setTreeModel(treeModel)
                 }
             } catch (cancellationException: CancellationException) {
@@ -50,11 +61,13 @@ class JsonEditorTreePresenter(
     }
 
     fun cancelRefresh() {
+        refreshSequence.incrementAndGet()
         refreshTreeJob?.cancel()
         refreshTreeJob = null
     }
 
     fun dispose() {
+        isDisposed = true
         cancelRefresh()
         coroutineScope.cancel()
     }
@@ -78,6 +91,8 @@ class JsonEditorTreePresenter(
                 jsonNode = jsonNode,
                 placeholderLookup = placeholderLookup
             )
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
         } catch (_: Exception) {
             treeRootNode.add(
                 DefaultMutableTreeNode(LocalizationBundle.message("dialog.json.diff.invalid.json.format"))
@@ -131,6 +146,10 @@ class JsonEditorTreePresenter(
         arrayNode: JsonNode,
         placeholderLookup: Map<String, String>
     ) {
+        if (arrayNode.isEmpty) {
+            parentNode.add(DefaultMutableTreeNode("${label ?: TREE_VALUE_PREFIX} : []"))
+            return
+        }
         for (index in 0 until arrayNode.size()) {
             val arrayItemNode = arrayNode.get(index)
             val arrayItemLabel = if (label.isNullOrEmpty()) {

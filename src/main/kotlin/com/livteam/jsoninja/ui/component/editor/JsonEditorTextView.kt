@@ -3,9 +3,13 @@ package com.livteam.jsoninja.ui.component.editor
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.openapi.actionSystem.PlatformCoreDataKeys
+import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.fileEditor.impl.text.TextEditorProvider
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
@@ -20,7 +24,7 @@ class JsonEditorTextView(
     private val project: Project,
     private val fileExtension: String? = null,
     private val documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
-) : JPanel(), Disposable {
+) : JPanel(), Disposable, UiDataProvider {
 
     companion object {
         private const val EMPTY_TEXT = ""
@@ -99,6 +103,13 @@ class JsonEditorTextView(
     }
 
     fun getText(): String = editor.text
+
+    override fun uiDataSnapshot(sink: DataSink) {
+        val currentEditor = editor.editor ?: return
+        if (!currentEditor.isDisposed) {
+            sink[PlatformCoreDataKeys.FILE_EDITOR] = TextEditorProvider.getInstance().getTextEditor(currentEditor)
+        }
+    }
 
     fun setText(text: String) {
         setEditorTextAndRefreshCodeFolding(project, editor, text)

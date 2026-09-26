@@ -66,6 +66,7 @@ class GenerateSchemaJsonTabView(
 
     private var onSchemaUrlInputChangedCallback: (() -> Unit)? = null
     private var onLoadSchemaFromUrlRequestedCallback: (() -> Unit)? = null
+    private var onSchemaSourceReplacedCallback: (() -> Unit)? = null
 
     val component: JComponent = createComponent()
 
@@ -75,6 +76,10 @@ class GenerateSchemaJsonTabView(
 
     fun setOnLoadSchemaFromUrlRequested(callback: () -> Unit) {
         onLoadSchemaFromUrlRequestedCallback = callback
+    }
+
+    fun setOnSchemaSourceReplaced(callback: () -> Unit) {
+        onSchemaSourceReplacedCallback = callback
     }
 
     fun getSchemaText(): String = schemaEditor.text
@@ -254,6 +259,22 @@ class GenerateSchemaJsonTabView(
         }
 
         schemaEditor = createSchemaEditor()
+        schemaEditor.addDocumentListener(object : com.intellij.openapi.editor.event.DocumentListener {
+            override fun beforeDocumentChange(event: com.intellij.openapi.editor.event.DocumentEvent) {
+                val selection = schemaEditor.editor?.selectionModel
+                val isEntireDocumentSelected = selection?.hasSelection() == true &&
+                    selection.selectionStart == 0 && selection.selectionEnd == event.document.textLength
+                if (event.isWholeTextReplaced || isEntireDocumentSelected) {
+                    onSchemaSourceReplacedCallback?.invoke()
+                }
+            }
+
+            override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
+                if (event.document.textLength == 0) {
+                    onSchemaSourceReplacedCallback?.invoke()
+                }
+            }
+        })
         val groupSeparatorColor = resolveGroupSeparatorColor(optionsPanel)
         val schemaEditorContainer = JPanel(BorderLayout()).apply {
             val dividerPanel = JPanel(BorderLayout()).apply {

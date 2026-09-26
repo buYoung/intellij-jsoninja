@@ -1,9 +1,9 @@
 package com.livteam.jsoninja.ui.diff
 
 import com.intellij.diff.editor.ChainDiffVirtualFile
-import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.diff.JsonDiffSession
 import com.livteam.jsoninja.services.JsonDiffService
 
 /**
@@ -12,12 +12,10 @@ import com.livteam.jsoninja.services.JsonDiffService
 class JsonDiffVirtualFile(
     project: Project,
     diffService: JsonDiffService,
-    leftDocument: Document,
-    rightDocument: Document,
-    sortKeys: Boolean = false,
+    session: JsonDiffSession,
     name: String = LocalizationBundle.message("dialog.json.diff.title")
 ) : ChainDiffVirtualFile(
-    JsonDiffRequestChain(diffService, leftDocument, rightDocument, sortKeys),
+    JsonDiffRequestChain(diffService, session),
     name
 ) {
     // Store the chain for potential updates

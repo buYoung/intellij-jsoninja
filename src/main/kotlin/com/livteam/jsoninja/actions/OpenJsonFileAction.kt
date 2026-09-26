@@ -1,6 +1,5 @@
 package com.livteam.jsoninja.actions
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.EDT
@@ -8,6 +7,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,7 +18,7 @@ import kotlinx.coroutines.withContext
 class OpenJsonFileAction : AnAction(
     LocalizationBundle.messagePointer("openJsonFile"),
     LocalizationBundle.messagePointer("openJsonFileDescription"),
-    AllIcons.Actions.MenuOpen as javax.swing.Icon?
+    JsoninjaIcons.OpenJsonFileIconV3
 ) {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -58,5 +58,6 @@ class OpenJsonFileAction : AnAction(
 
     override fun update(e: AnActionEvent) {
         e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
+        e.presentation.icon = JsoninjaIcons.getOpenJsonFileIcon(e.project)
     }
 }
