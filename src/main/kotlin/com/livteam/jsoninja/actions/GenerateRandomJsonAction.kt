@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.ui.Messages
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
@@ -19,6 +20,8 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 class GenerateRandomJsonAction : AnAction(
@@ -36,6 +39,7 @@ class GenerateRandomJsonAction : AnAction(
         if (dialog.showAndGet()) {
             val config = dialog.getConfig()
             val jsonFormatState = panel.presenter.getJsonFormatState()
+            val target = panel.presenter.captureGenerationTarget() ?: return
 
             project.service<JsoninjaCoroutineScopeService>().launch {
                 try {
@@ -50,7 +54,8 @@ class GenerateRandomJsonAction : AnAction(
                             JsonGenerationMode.SCHEMA -> {
                                 val schemaDataGenerationService =
                                     project.getService(JsonSchemaDataGenerationService::class.java)
-                                schemaDataGenerationService.generateFromSchema(config)
+                                val generationContext = currentCoroutineContext()
+                                schemaDataGenerationService.generateFromSchema(config) { generationContext.ensureActive() }
                             }
                         }
 
@@ -65,13 +70,16 @@ class GenerateRandomJsonAction : AnAction(
                     }
 
                     withContext(Dispatchers.EDT) {
-                        if (project.isDisposed) return@withContext
+                        if (project.isDisposed || !panel.presenter.isGenerationTargetCurrent(target)) return@withContext
                         panel.presenter.setRandomJsonData(
                             generatedJson,
+                            target,
                             skipFormatting = true
                         )
                     }
                 } catch (cancellationException: CancellationException) {
+                    throw cancellationException
+                } catch (cancellationException: ProcessCanceledException) {
                     throw cancellationException
                 } catch (generationException: JsonSchemaGenerationException) {
                     LOG.error(
@@ -85,7 +93,7 @@ class GenerateRandomJsonAction : AnAction(
                         ?: LocalizationBundle.message("dialog.generate.json.error.generic")) + pointerSuffix
 
                     withContext(Dispatchers.EDT) {
-                        if (project.isDisposed) return@withContext
+                        if (project.isDisposed || !panel.presenter.isGenerationTargetCurrent(target)) return@withContext
                         Messages.showErrorDialog(
                             project,
                             errorMessage,
@@ -95,7 +103,7 @@ class GenerateRandomJsonAction : AnAction(
                 } catch (exception: Exception) {
                     LOG.error("Unexpected error while generating JSON.", exception)
                     withContext(Dispatchers.EDT) {
-                        if (project.isDisposed) return@withContext
+                        if (project.isDisposed || !panel.presenter.isGenerationTargetCurrent(target)) return@withContext
                         Messages.showErrorDialog(
                             project,
                             exception.message ?: LocalizationBundle.message("dialog.generate.json.error.generic"),
@@ -105,7 +113,7 @@ class GenerateRandomJsonAction : AnAction(
                 } catch (error: Throwable) {
                     LOG.error("Fatal error while generating JSON.", error)
                     withContext(Dispatchers.EDT) {
-                        if (project.isDisposed) return@withContext
+                        if (project.isDisposed || !panel.presenter.isGenerationTargetCurrent(target)) return@withContext
                         Messages.showErrorDialog(
                             project,
                             error.message ?: LocalizationBundle.message("dialog.generate.json.error.generic"),

@@ -20,14 +20,18 @@ class JsonToTypeInferenceContext(
     private val warnings = mutableListOf<TypeConversionWarning>()
     private val declarationsByName = LinkedHashMap<String, TypeDeclaration>()
     private val signatureToDeclarationName = mutableMapOf<String, String>()
+    private val declarationNamesByPath = mutableMapOf<List<String>, String>()
+    private val usedDeclarationNames = mutableSetOf<String>()
 
     fun infer(jsonNode: JsonNode): JsonToTypeConversionResult {
         val rootTypeName = JsonToTypeNamingSupport.toTypeName(options.rootTypeName)
+        usedDeclarationNames += rootTypeName
         val rootTypeReference = inferType(
             jsonNode = jsonNode,
             suggestedTypeName = rootTypeName,
             depth = 0,
             forceDeclarationName = true,
+            sourcePath = emptyList(),
         )
         if (!jsonNode.isObject) {
             declarationsByName[rootTypeName] = TypeDeclaration(
@@ -49,6 +53,7 @@ class JsonToTypeInferenceContext(
         suggestedTypeName: String,
         depth: Int,
         forceDeclarationName: Boolean = false,
+        sourcePath: List<String>,
     ): TypeReference {
         if (depth >= options.maximumDepth) {
             warnings += TypeConversionWarning(
@@ -71,6 +76,7 @@ class JsonToTypeInferenceContext(
                 arrayNode = jsonNode as ArrayNode,
                 suggestedTypeName = suggestedTypeName,
                 depth = depth,
+                sourcePath = sourcePath,
             )
 
             jsonNode.isObject -> inferObjectType(
@@ -78,6 +84,7 @@ class JsonToTypeInferenceContext(
                 suggestedTypeName = suggestedTypeName,
                 depth = depth,
                 forceDeclarationName = forceDeclarationName,
+                sourcePath = sourcePath,
             )
 
             else -> TypeReference.AnyValue
@@ -88,6 +95,7 @@ class JsonToTypeInferenceContext(
         arrayNode: ArrayNode,
         suggestedTypeName: String,
         depth: Int,
+        sourcePath: List<String>,
     ): TypeReference {
         if (arrayNode.isEmpty) {
             return TypeReference.ListReference(TypeReference.AnyValue)
@@ -108,6 +116,7 @@ class JsonToTypeInferenceContext(
                 objectNodes = nonNullElements.map { it as ObjectNode },
                 suggestedTypeName = elementTypeName,
                 depth = depth + 1,
+                sourcePath = sourcePath + "array",
             )
         } else {
             var mergedTypeReference: TypeReference? = null
@@ -116,6 +125,7 @@ class JsonToTypeInferenceContext(
                     jsonNode = elementNode,
                     suggestedTypeName = elementTypeName,
                     depth = depth + 1,
+                    sourcePath = sourcePath + "array",
                 )
                 mergedTypeReference = if (mergedTypeReference == null) {
                     inferredElementType
@@ -150,6 +160,7 @@ class JsonToTypeInferenceContext(
         suggestedTypeName: String,
         depth: Int,
         forceDeclarationName: Boolean = false,
+        sourcePath: List<String>,
     ): TypeReference {
         val usedFieldNames = mutableSetOf<String>()
         val fieldSourceNames = linkedMapOf<String, MutableList<JsonNode>>()
@@ -169,6 +180,7 @@ class JsonToTypeInferenceContext(
                     jsonNode = fieldValue,
                     suggestedTypeName = fieldTypeName,
                     depth = depth + 1,
+                    sourcePath = sourcePath + "field:$fieldSourceName",
                 )
                 mergedTypeReference = if (mergedTypeReference == null) {
                     inferredFieldType
@@ -209,17 +221,29 @@ class JsonToTypeInferenceContext(
         }.sortedBy(TypeField::name)
 
         val signature = inferredFields.joinToString(prefix = "{", postfix = "}") {
-            "${it.name}:${JsonToTypeSupport.buildTypeSignature(it.typeReference)}:${it.isOptional}"
+            "${it.sourceName.length}:${it.sourceName}:${it.name}:${JsonToTypeSupport.buildTypeSignature(it.typeReference)}:${it.isOptional}"
         }
-        if (!forceDeclarationName) {
-            signatureToDeclarationName[signature]?.let { return TypeReference.Named(it) }
+        val previousName = declarationNamesByPath[sourcePath]
+        if (!forceDeclarationName && previousName == null) {
+            signatureToDeclarationName[signature]?.let {
+                declarationNamesByPath[sourcePath] = it
+                return TypeReference.Named(it)
+            }
         }
 
-        val declarationName = if (forceDeclarationName) {
+        val declarationName = if (previousName != null) {
+            previousName
+        } else if (forceDeclarationName) {
             JsonToTypeNamingSupport.toTypeName(suggestedTypeName)
         } else {
-            signatureToDeclarationName[signature] ?: JsonToTypeNamingSupport.toTypeName(suggestedTypeName)
+            val baseName = JsonToTypeNamingSupport.toTypeName(suggestedTypeName)
+            var candidate = baseName
+            var suffixIndex = 2
+            while (candidate in usedDeclarationNames) candidate = "$baseName${suffixIndex++}"
+            candidate
         }
+        declarationNamesByPath[sourcePath] = declarationName
+        usedDeclarationNames += declarationName
         signatureToDeclarationName.putIfAbsent(signature, declarationName)
         val inferredDeclaration = TypeDeclaration(
             name = declarationName,
@@ -250,6 +274,7 @@ class JsonToTypeInferenceContext(
         val fieldSourceNames = existingFields.map(TypeField::sourceName) +
             incomingFields.map(TypeField::sourceName).filterNot(existingFieldsBySourceName::containsKey)
 
+        val usedFieldNames = mutableSetOf<String>()
         return fieldSourceNames.map { fieldSourceName ->
             val existingField = existingFieldsBySourceName[fieldSourceName]
             val incomingField = incomingFieldsBySourceName[fieldSourceName]
@@ -284,6 +309,10 @@ class JsonToTypeInferenceContext(
                 )
                 else -> error("Cannot merge missing field `$fieldSourceName`.")
             }
+        }.map { field ->
+            val name = JsonToTypeNamingSupport.toFieldName(field.sourceName, options.namingConvention, language, usedFieldNames)
+            usedFieldNames += name
+            field.copy(name = name)
         }.sortedBy(TypeField::name)
     }
 }

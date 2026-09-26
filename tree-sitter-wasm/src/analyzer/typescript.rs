@@ -155,17 +155,23 @@ fn parse_enum_declaration(
         .unwrap_or_default();
     let enum_values = node.child_by_field_name("body")
         .map(|body_node| {
-            named_children_of_kind(body_node, "enum_assignment")
+            named_children(body_node)
                 .into_iter()
-                .map(|enum_assignment_node| EnumValue {
-                    name: enum_assignment_node
-                        .child_by_field_name("name")
-                        .map(|child_node| clean_member_name(text(child_node, source_bytes)))
-                        .unwrap_or_default(),
-                    value_text: enum_assignment_node
-                        .child_by_field_name("value")
-                        .map(|child_node| text_owned(child_node, source_bytes)),
-                    span: span(enum_assignment_node),
+                .filter_map(|member_node| {
+                    let name_node = if member_node.kind() == "enum_assignment" {
+                        member_node.child_by_field_name("name")?
+                    } else if matches!(member_node.kind(), "property_identifier" | "private_property_identifier" | "string" | "number" | "computed_property_name") {
+                        member_node
+                    } else {
+                        return None;
+                    };
+                    Some(EnumValue {
+                        name: clean_member_name(text(name_node, source_bytes)),
+                        value_text: member_node
+                            .child_by_field_name("value")
+                            .map(|child_node| text_owned(child_node, source_bytes)),
+                        span: span(member_node),
+                    })
                 })
                 .collect::<Vec<_>>()
         })
