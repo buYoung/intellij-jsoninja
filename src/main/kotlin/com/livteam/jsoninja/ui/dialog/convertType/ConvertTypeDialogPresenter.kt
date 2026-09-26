@@ -24,6 +24,7 @@ class ConvertTypeDialogPresenter(
     private val view = ConvertTypeDialogView(
         jsonToTypeComponent = jsonToTypePresenter.component,
         typeToJsonComponent = typeToJsonPresenter.component,
+        project = project,
     )
 
     init {

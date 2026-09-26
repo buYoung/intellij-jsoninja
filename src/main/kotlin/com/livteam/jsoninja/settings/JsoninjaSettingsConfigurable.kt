@@ -98,6 +98,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
             return when (pack) {
                 JsonIconPack.VERSION_1 -> LocalizationBundle.message("settings.icon.pack.v1")
                 JsonIconPack.VERSION_2 -> LocalizationBundle.message("settings.icon.pack.v2")
+                JsonIconPack.VERSION_3 -> LocalizationBundle.message("settings.icon.pack.v3")
             }
         }
 
@@ -146,11 +147,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 .map { JsonIconPackWrapper(it) }
                 .toTypedArray()
             iconPackComboBox = ComboBox(iconPacks)
-            val currentIconPack = try {
-                JsonIconPack.valueOf(settings.iconPack)
-            } catch (e: IllegalArgumentException) {
-                JsonIconPack.VERSION_2
-            }
+            val currentIconPack = JsonIconPack.fromPersistedValue(settings.iconPack)
             val selectedIconPackWrapper = iconPacks.find { it.pack == currentIconPack }
             iconPackComboBox?.selectedItem = selectedIconPackWrapper
 
@@ -242,11 +239,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
 
     override fun isModified(): Boolean {
         val currentFormatState = JsonFormatState.fromString(settings.jsonFormatState)
-        val currentIconPack = try {
-            JsonIconPack.valueOf(settings.iconPack)
-        } catch (e: IllegalArgumentException) {
-            JsonIconPack.VERSION_2
-        }
+        val currentIconPack = JsonIconPack.fromPersistedValue(settings.iconPack)
         val currentPasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
         val currentDiffDisplayMode = try {
             JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
@@ -311,11 +304,7 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
         jsonFormatStateComboBox?.selectedItem = selectedWrapper
 
         // Find the matching wrapper for the current icon pack
-        val currentIconPack = try {
-            JsonIconPack.valueOf(settings.iconPack)
-        } catch (e: IllegalArgumentException) {
-            JsonIconPack.VERSION_2
-        }
+        val currentIconPack = JsonIconPack.fromPersistedValue(settings.iconPack)
         val iconPacks = JsonIconPack.entries
             .map { JsonIconPackWrapper(it) }
             .toTypedArray()

@@ -18,7 +18,11 @@ open class TypeConversionAction(
 ) : AnAction(
     LocalizationBundle.messagePointer(actionTextKey),
     LocalizationBundle.messagePointer(actionDescriptionKey),
-    null as javax.swing.Icon?,
+    when (forcedTabIndex) {
+        0 -> JsoninjaIcons.JsonToTypeIconV3
+        1 -> JsoninjaIcons.TypeToJsonIconV3
+        else -> JsoninjaIcons.ConvertTypeIconV3
+    },
 ) {
     private data class ConvertActionContext(
         val project: Project,
@@ -50,7 +54,11 @@ open class TypeConversionAction(
 
     override fun update(event: AnActionEvent) {
         event.presentation.isEnabledAndVisible = resolveActionContext(event) != null
-        event.presentation.icon = JsoninjaIcons.getGenerateIcon(event.project)
+        event.presentation.icon = when (forcedTabIndex) {
+            0 -> JsoninjaIcons.getJsonToTypeIcon(event.project)
+            1 -> JsoninjaIcons.getTypeToJsonIcon(event.project)
+            else -> JsoninjaIcons.getConvertTypeIcon(event.project)
+        }
     }
 
     private fun resolveActionContext(event: AnActionEvent): ConvertActionContext? {

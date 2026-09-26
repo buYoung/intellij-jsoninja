@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#CED0D6" stroke-width="0.833333333333" stroke-linecap="round" stroke-linejoin="round">
+  <title>Kotlin</title>
+  <rect x="1.5" y="1.5" width="13" height="13" rx="2" />
+  <line x1="4.12979" x2="4.12979" y1="4.68771" y2="11.24187" />
+  <path d="M7.65063 4.68771 l-2.89792 3.32583 l2.93583 3.36917" />
+  <path d="M10.68396 6.04187 v3.90542 c0 0.8125 0.46583 1.29458 1.46792 1.2025" />
+  <path d="M9.54646 7.07104 h2.36167" />
+</svg>

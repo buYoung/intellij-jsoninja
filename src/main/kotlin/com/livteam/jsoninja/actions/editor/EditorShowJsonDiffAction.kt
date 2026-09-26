@@ -10,6 +10,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.actions.ShowJsonDiffAction
+import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
@@ -81,6 +82,7 @@ class EditorShowJsonDiffAction : AnAction() {
     override fun update(e: AnActionEvent) {
         val editor = e.getData(CommonDataKeys.EDITOR)
         e.presentation.isEnabledAndVisible = e.project != null && editor != null
+        e.presentation.icon = JsoninjaIcons.getDiffIcon(e.project)
         if (editor == null) return
 
         val textKey = if (editor.selectionModel.hasSelection()) {
