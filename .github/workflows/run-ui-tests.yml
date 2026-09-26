@@ -30,7 +30,7 @@ jobs:
       - name: Build shared WASM test resource
         working-directory: tree-sitter-wasm
         run: |
-          cargo build --target wasm32-wasip1 --release --locked
+          cargo build --target wasm32-wasip1 --release
           mkdir -p "$RUNNER_TEMP/wasm"
           cp target/wasm32-wasip1/release/tree_sitter_wasm.wasm "$RUNNER_TEMP/wasm/tree-sitter.wasm"
 
