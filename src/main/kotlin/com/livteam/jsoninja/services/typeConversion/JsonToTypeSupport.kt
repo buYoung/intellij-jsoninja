@@ -63,7 +63,7 @@ object JsonToTypeSupport {
         }
 
         if (left is TypeReference.Primitive && right is TypeReference.Primitive) {
-            return TypeReference.Primitive(mergePrimitiveKinds(left.primitiveKind, right.primitiveKind))
+            mergePrimitiveKinds(left.primitiveKind, right.primitiveKind)?.let { return TypeReference.Primitive(it) }
         }
         if (left is TypeReference.ListReference && right is TypeReference.ListReference) {
             return TypeReference.ListReference(
@@ -105,9 +105,6 @@ object JsonToTypeSupport {
         if (unionMembers.size == 1) {
             return unionMembers.values.first()
         }
-        if (!usesExperimentalGoUnionTypes && unionMembers.values.all { it is TypeReference.Primitive }) {
-            return TypeReference.AnyValue
-        }
         return TypeReference.Union(unionMembers.values.toList())
     }
 
@@ -147,7 +144,7 @@ object JsonToTypeSupport {
     private fun mergePrimitiveKinds(
         left: TypePrimitiveKind,
         right: TypePrimitiveKind,
-    ): TypePrimitiveKind {
+    ): TypePrimitiveKind? {
         if (left == right) {
             return left
         }
@@ -155,7 +152,7 @@ object JsonToTypeSupport {
             setOf(left, right) == setOf(TypePrimitiveKind.INTEGER, TypePrimitiveKind.DECIMAL) -> TypePrimitiveKind.NUMBER
             setOf(left, right) == setOf(TypePrimitiveKind.INTEGER, TypePrimitiveKind.NUMBER) -> TypePrimitiveKind.NUMBER
             setOf(left, right) == setOf(TypePrimitiveKind.DECIMAL, TypePrimitiveKind.NUMBER) -> TypePrimitiveKind.NUMBER
-            else -> TypePrimitiveKind.STRING
+            else -> null
         }
     }
 

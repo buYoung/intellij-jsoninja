@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.livteam.jsoninja</id>
     <name>JSONinja</name>
-    <version>1.13.0</version>
+    <version>1.15.0</version>
     <vendor email="leebu18@gmail.com">BuYoung</vendor>
 
     <depends>com.intellij.modules.lang</depends>
@@ -43,11 +43,11 @@
     <actions>
         <!-- JSON Diff Actions Group -->
         <group id="com.livteam.jsoninja.action.group.DiffActions"
-               icon="/icons/diff.svg"
+               icon="com.livteam.jsoninja.icons.JsoninjaIcons.DiffIconV3"
                popup="true">
             <action id="com.livteam.jsoninja.action.ShowJsonDiffAction"
                     class="com.livteam.jsoninja.actions.ShowJsonDiffAction"
-                    icon="/icons/diff.svg"/>
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.DiffIconV3"/>
             <separator/>
             <action id="com.livteam.jsoninja.action.ShowJsonDiffInEditorTabAction"
                     class="com.livteam.jsoninja.actions.ShowJsonDiffInEditorTabAction"
@@ -65,29 +65,29 @@
                     icon="AllIcons.General.Add"/>
             <action id="com.livteam.jsoninja.action.OpenJsonFileAction"
                     class="com.livteam.jsoninja.actions.OpenJsonFileAction"
-                    icon="AllIcons.Actions.MenuOpen"/>
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.OpenJsonFileIconV3"/>
             <separator/>
             <action id="com.livteam.jsoninja.action.PrettifyJsonAction"
                     class="com.livteam.jsoninja.actions.PrettifyJsonAction"
-                    icon="/icons/prettify.svg"/>
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.PrettyIconV3"/>
             <action id="com.livteam.jsoninja.action.UglifyJsonAction"
                     class="com.livteam.jsoninja.actions.UglifyJsonAction"
-                    icon="/icons/uglify.svg"/>
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.UglyIconV3"/>
             <action id="com.livteam.jsoninja.action.EscapeJsonAction"
                     class="com.livteam.jsoninja.actions.EscapeJsonAction"
-                    icon="/icons/escape.svg"/>
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.EscapeIconV3"/>
             <action id="com.livteam.jsoninja.action.UnescapeJsonAction"
                     class="com.livteam.jsoninja.actions.UnescapeJsonAction"
-                    icon="/icons/unescape.svg"/>
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.UnescapeIconV3"/>
             <separator/>
             <action id="com.livteam.jsoninja.action.GenerateRandomJsonAction"
                     class="com.livteam.jsoninja.actions.GenerateRandomJsonAction"
-                    icon="/icons/random_json.svg"/>
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.GenerateIconV3"/>
             <action id="com.livteam.jsoninja.action.TypeConversionAction"
                     class="com.livteam.jsoninja.actions.TypeConversionAction"/>
             <action id="com.livteam.jsoninja.action.LoadJsonFromApiAction"
                     class="com.livteam.jsoninja.actions.LoadJsonFromApiAction"
-                    icon="AllIcons.Actions.Download"/>
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.LoadJsonFromApiIconV3"/>
             <separator/>
             <action id="com.livteam.jsoninja.action.CloseTabAction"
                     class="com.livteam.jsoninja.actions.CloseTabAction">
@@ -126,6 +126,10 @@
                     class="com.livteam.jsoninja.actions.editor.EditorEscapeJsonAction"/>
             <action id="com.livteam.jsoninja.action.editor.EditorUnescapeJsonAction"
                     class="com.livteam.jsoninja.actions.editor.EditorUnescapeJsonAction"/>
+            <separator/>
+            <action id="com.livteam.jsoninja.action.editor.EditorShowJsonDiffAction"
+                    class="com.livteam.jsoninja.actions.editor.EditorShowJsonDiffAction"
+                    icon="com.livteam.jsoninja.icons.JsoninjaIcons.DiffIconV3"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
 

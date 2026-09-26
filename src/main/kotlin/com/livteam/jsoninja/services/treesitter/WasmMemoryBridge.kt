@@ -18,8 +18,18 @@ class WasmMemoryBridge(
 
         val pointer = runtimeHandle.alloc.apply(bytes.size.toLong()).firstOrNull()?.toInt() ?: 0
         check(pointer > 0) { "Failed to allocate WASM memory for input text." }
-        runtimeHandle.memory.write(pointer, bytes)
-        return BufferSlice(pointer = pointer, length = bytes.size)
+        val buffer = BufferSlice(pointer = pointer, length = bytes.size)
+        try {
+            runtimeHandle.memory.write(pointer, bytes)
+            return buffer
+        } catch (failure: Throwable) {
+            try {
+                releaseBuffer(buffer)
+            } catch (cleanupFailure: Throwable) {
+                failure.addSuppressed(cleanupFailure)
+            }
+            throw failure
+        }
     }
 
     fun readUtf8String(bufferSlice: BufferSlice): String {
