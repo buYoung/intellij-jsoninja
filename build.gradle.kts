@@ -295,6 +295,16 @@ changelog {
 
 // Configure Gradle Kover Plugin - read more: https://github.com/Kotlin/kotlinx-kover#configuration
 kover {
+    currentProject {
+        // Remote Robot measures a separately launched IDE, not this Gradle JVM.
+        // Keep it explicitly runnable without starting it from check/coverage reports.
+        instrumentation {
+            disabledForTestTasks.add("uiTest")
+        }
+        sources {
+            excludedSourceSets.add("uiTest")
+        }
+    }
     reports {
         total {
             xml {

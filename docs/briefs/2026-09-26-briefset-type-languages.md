@@ -16,6 +16,8 @@ The user requested execution of this whole briefset and explicitly required gold
 
 실제 UI 후속 검증: 등록·렉서 검사와 구분하여 별도 IDE의 모달 변환 창에서 11개 언어를 검사한다. 언어 전환 시 네이티브 미리보기 강조가 누락되는 생성 순서, C/C++ typedef 별칭, C# 특성을 보완한다. 최신 실행 범위와 결과는 [실제 UI 강조 검증](type-languages/12-visible-ui-highlighting.md)을 따른다.
 
+CI 후속 검증: PR에서 확인된 `check`의 수동 UI 테스트 자동 호출과 Windows 골든 파일 줄바꿈 실패는 [CI 테스트 실행 경계와 줄바꿈 수정](type-languages/13-ci-test-boundaries.md)에 기록한다. 이후 전체 빌드 검증은 `test`뿐 아니라 `check` 경로도 포함한다.
+
 후속 화면 보고로 확인된 기존 Kotlin 읽기 전용 미리보기의 구문 분석 기반 강조 누락을 수정했다. 네이티브 언어 색상을 유지하며 미리보기의 검사 비용과 불필요한 오류 표시를 제한한다. 이 변경의 최신 결과는 [미리보기 강조 복구 기록](type-languages/10-preview-highlighting-fix.md)에 별도로 기록한다.
 
 공통 구조와 일곱 언어의 구현을 마쳤고, 메인 에이전트에서 전체 상세 검토를 수행했다. 전체 Kotlin 테스트 178개와 Rust 호스트 테스트 37개가 통과했다. 마지막 C# 선언명 충돌 보완 후 정책 테스트 5개·컴파일·ZIP 재빌드도 통과했다. 배포 ZIP 내부 WASM, 11개 쿼리, 7개 라이선스 고지를 확인했다. Plugin Verifier도 7개 IDE 빌드 모두 호환으로 완료했으며, 263 대상의 기존 현지화 생성자 경고 1건을 기록했다.
