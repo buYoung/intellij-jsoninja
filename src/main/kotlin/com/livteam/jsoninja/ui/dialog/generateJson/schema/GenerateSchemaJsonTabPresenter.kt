@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.ui.dialog.generateJson.schema
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.asContextElement
@@ -60,11 +61,32 @@ class GenerateSchemaJsonTabPresenter(
         return view.component
     }
 
+    fun setOnOptionsChanged(callback: () -> Unit) = view.setOnOptionsChanged(callback)
+
+    fun setActive(isActive: Boolean) = view.setActive(isActive)
+
+    fun registerValidators(parentDisposable: Disposable) = view.registerValidators(parentDisposable)
+
+    fun getPreferredFocusedComponent(): JComponent = view.getSchemaInputComponent()
+
+    fun getSummary(): String {
+        val outputCount = view.getSchemaOutputCountText().toIntOrNull()
+        if (outputCount == null || outputCount !in 1..100) {
+            return LocalizationBundle.message("dialog.generate.json.summary.invalid")
+        }
+        val outputFormat = if (view.isJson5Selected()) "JSON5" else "JSON"
+        return if (outputCount == 1) {
+            LocalizationBundle.message("dialog.generate.json.summary.schema.single", outputFormat)
+        } else {
+            LocalizationBundle.message("dialog.generate.json.summary.schema.multiple", outputCount, outputFormat)
+        }
+    }
+
     fun validate(): ValidationInfo? {
         val schemaOutputCount = view.getSchemaOutputCountText().toIntOrNull()
-        if (schemaOutputCount == null || schemaOutputCount <= 0) {
+        if (schemaOutputCount == null || schemaOutputCount !in 1..100) {
             return ValidationInfo(
-                LocalizationBundle.message("validation.error.positive.integer.required.ge1"),
+                LocalizationBundle.message("dialog.generate.json.validation.integer.range", 1, 100),
                 view.getSchemaOutputCountField()
             )
         }
@@ -112,7 +134,7 @@ class GenerateSchemaJsonTabPresenter(
             generationMode = JsonGenerationMode.SCHEMA,
             isJson5 = view.isJson5Selected() || isCommentedMode,
             schemaText = view.getSchemaText(),
-            schemaOutputCount = view.getSchemaOutputCountText().toIntOrNull() ?: initialConfig.schemaOutputCount,
+            schemaOutputCount = view.getSchemaOutputCountText().toInt(),
             schemaPropertyGenerationMode = schemaPropertyGenerationMode,
             schemaRetrievalUri = schemaRetrievalUri
         )
