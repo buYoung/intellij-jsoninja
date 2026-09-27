@@ -101,3 +101,8 @@ data class JsonToTypeConversionResult(
     val warnings: List<TypeConversionWarning> = emptyList(),
     val declarations: List<TypeDeclaration> = emptyList(),
 )
+
+data class TypeToJsonGenerationResult(
+    val jsonText: String,
+    val diagnostics: List<TypeAnalysisDiagnostic> = emptyList(),
+)

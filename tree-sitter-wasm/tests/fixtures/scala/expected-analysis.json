@@ -1,0 +1,123 @@
+{
+  "language": "scala",
+  "declarations": [
+    {
+      "name": "Base",
+      "kind": "interface",
+      "fields": [
+        {
+          "name": "id",
+          "source_name": "id",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "integer"
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Root",
+      "kind": "class",
+      "fields": [
+        {
+          "name": "name",
+          "source_name": "name",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        },
+        {
+          "name": "items",
+          "source_name": "items",
+          "optional": false,
+          "type": {
+            "kind": "list",
+            "element_type": {
+              "kind": "named",
+              "name": "Item",
+              "type_arguments": [],
+              "is_type_parameter": false
+            }
+          }
+        },
+        {
+          "name": "maybe",
+          "source_name": "maybe",
+          "optional": false,
+          "type": {
+            "kind": "nullable",
+            "wrapped_type": {
+              "kind": "primitive",
+              "primitive": "string"
+            }
+          }
+        },
+        {
+          "name": "id",
+          "source_name": "id",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "integer"
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Item",
+      "kind": "class",
+      "fields": [
+        {
+          "name": "type",
+          "source_name": "type",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Types.Users",
+      "kind": "type_alias",
+      "fields": [],
+      "alias": {
+        "kind": "list",
+        "element_type": {
+          "kind": "named",
+          "name": "Root",
+          "type_arguments": [],
+          "is_type_parameter": false
+        }
+      },
+      "enum_values": []
+    },
+    {
+      "name": "Status",
+      "kind": "enum",
+      "fields": [],
+      "alias": null,
+      "enum_values": [
+        {
+          "name": "Ready",
+          "value_text": null
+        },
+        {
+          "name": "Done",
+          "value_text": null
+        }
+      ]
+    }
+  ],
+  "diagnostics": []
+}

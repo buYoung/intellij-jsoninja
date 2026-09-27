@@ -1,0 +1,88 @@
+{
+  "language": "cpp",
+  "declarations": [
+    {
+      "name": "api::Child",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "name",
+          "source_name": "name",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "api::Root",
+      "kind": "class",
+      "fields": [
+        {
+          "name": "active",
+          "source_name": "active",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "boolean"
+          }
+        },
+        {
+          "name": "items",
+          "source_name": "items",
+          "optional": false,
+          "type": {
+            "kind": "list",
+            "element_type": {
+              "kind": "nullable",
+              "wrapped_type": {
+                "kind": "primitive",
+                "primitive": "integer"
+              }
+            }
+          }
+        },
+        {
+          "name": "children",
+          "source_name": "children",
+          "optional": false,
+          "type": {
+            "kind": "map",
+            "key_type": {
+              "kind": "primitive",
+              "primitive": "string"
+            },
+            "value_type": {
+              "kind": "named",
+              "name": "api::Child",
+              "type_arguments": [],
+              "is_type_parameter": false
+            }
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "api::Roots",
+      "kind": "type_alias",
+      "fields": [],
+      "alias": {
+        "kind": "list",
+        "element_type": {
+          "kind": "named",
+          "name": "api::Root",
+          "type_arguments": [],
+          "is_type_parameter": false
+        }
+      },
+      "enum_values": []
+    }
+  ],
+  "diagnostics": []
+}

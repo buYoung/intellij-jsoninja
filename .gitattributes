@@ -1,2 +1,5 @@
 # IntelliJ documents and byte-preserving diff goldens use LF on every host.
 src/test/testData/jsonDiff/** text eol=lf
+
+# Conversion source and highlighting goldens must match IntelliJ's LF documents.
+src/test/resources/typeConversion/** text eol=lf

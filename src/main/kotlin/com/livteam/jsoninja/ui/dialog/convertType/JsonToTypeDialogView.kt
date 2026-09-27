@@ -26,6 +26,7 @@ class JsonToTypeDialogView(
     private val rootTypeNameTextField = JBTextField(12)
     private val nullableCheckBox = JBCheckBox(LocalizationBundle.message("dialog.json.to.type.nullable"))
     private val namingConventionComboBox = ComboBox(NamingConvention.entries.toTypedArray())
+    private val originalKeysLabel = com.intellij.ui.components.JBLabel(LocalizationBundle.message("dialog.json.to.type.original.keys")).apply { isVisible = false }
     private val annotationStyleComboBox = ComboBox(JsonToTypeAnnotationStyle.entries.toTypedArray())
     private val inputEditorView = JsonEditorView(project, "json5")
     private val previewPanel = CodePreviewPanel(project)
@@ -48,6 +49,7 @@ class JsonToTypeDialogView(
             row {
                 label(LocalizationBundle.message("dialog.json.to.type.naming"))
                 cell(namingConventionComboBox)
+                cell(originalKeysLabel)
                 label(LocalizationBundle.message("dialog.json.to.type.annotation")).gap(com.intellij.ui.dsl.builder.RightGap.SMALL)
                 cell(annotationStyleComboBox)
             }
@@ -153,6 +155,8 @@ class JsonToTypeDialogView(
             language.availableNamingConventions.forEach(namingConventionComboBox::addItem)
             namingConventionComboBox.selectedItem = language.getSupportedNamingConvention(selectedNamingConvention)
             namingConventionComboBox.isEnabled = language.availableNamingConventions.size > 1
+            namingConventionComboBox.isVisible = !language.usesOriginalJsonFieldNames
+            originalKeysLabel.isVisible = language.usesOriginalJsonFieldNames
 
             annotationStyleComboBox.removeAllItems()
             language.availableAnnotationStyles.forEach(annotationStyleComboBox::addItem)

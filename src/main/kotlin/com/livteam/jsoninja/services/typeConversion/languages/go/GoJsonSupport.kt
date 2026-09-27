@@ -1,4 +1,6 @@
-package com.livteam.jsoninja.services.typeConversion
+package com.livteam.jsoninja.services.typeConversion.languages.go
+
+import com.livteam.jsoninja.services.typeConversion.*
 
 import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.model.typeConversion.TypeDeclaration
@@ -7,7 +9,7 @@ import com.livteam.jsoninja.model.typeConversion.TypeField
 import com.livteam.jsoninja.model.typeConversion.TypePrimitiveKind
 import com.livteam.jsoninja.model.typeConversion.TypeReference
 
-internal object JsonToTypeGoJsonSupport {
+internal object GoJsonSupport {
     fun exportedName(field: TypeField): String = JsonToTypeNamingSupport.toFieldName(
         field.name, NamingConvention.PASCAL_CASE, SupportedLanguage.GO,
     )
@@ -73,5 +75,10 @@ internal object JsonToTypeGoJsonSupport {
             else -> "$access != 0"
         }
         else -> "$access != nil"
+    }
+    fun jsonTag(sourceName: String, isOptional: Boolean): String {
+        val value = sourceName + if (isOptional) ",omitempty" else ""
+        val tag = "json:" + JsonToTypeLiteralSupport.quote(value, SupportedLanguage.GO)
+        return if ('`' in tag) JsonToTypeLiteralSupport.quote(tag, SupportedLanguage.GO) else "`$tag`"
     }
 }

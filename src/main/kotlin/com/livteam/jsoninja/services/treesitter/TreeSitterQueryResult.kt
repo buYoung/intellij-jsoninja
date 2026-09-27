@@ -12,6 +12,8 @@ import com.livteam.jsoninja.model.typeConversion.TypePrimitiveKind
 import com.livteam.jsoninja.model.typeConversion.TypeReference
 import com.livteam.jsoninja.model.typeConversion.TypeEnumValue
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.model.SupportedLanguage
+import com.livteam.jsoninja.services.typeConversion.languages.TypeLanguageRegistry
 
 data class AnalysisOutput(
     val language: String,
@@ -170,7 +172,22 @@ object TreeSitterQueryResult {
         val language = rootNode.path("language").asText("")
         val diagnostics = rootNode.path("diagnostics").map(::parseDiagnostic).toMutableList()
         val declarations = rootNode.path("declarations").map(::parseDeclaration).map { declaration ->
-            if (language != "typescript" || declaration.kind != "enum") return@map declaration
+            if (declaration.kind != "enum") return@map declaration
+            if (language != "typescript") {
+                val selectedLanguage = SupportedLanguage.entries.firstOrNull { it.resourceKey == language }
+                    ?: return@map declaration
+                val values = TypeLanguageRegistry.forLanguage(selectedLanguage).policy.resolveEnumValues(
+                    declaration.enumValues.map { it.name to it.valueText },
+                ) ?: return@map declaration
+                values.forEachIndexed { index, value ->
+                    if (value is TypeEnumValue.Unresolved) diagnostics += WasmDiagnostic(
+                        "unsupported_enum_value", "error", LocalizationBundle.message(
+                            "validation.type.to.json.enum.value.unsupported", "${declaration.name}.${declaration.enumValues[index].name}",
+                        ), declaration.name,
+                    )
+                }
+                return@map declaration.copy(enumLiteralValues = values)
+            }
             val literalValues = TypeScriptEnumValueResolver.resolve(declaration.enumValues, objectMapper) { member ->
                 diagnostics.add(WasmDiagnostic(
                     code = "unsupported_enum_value",

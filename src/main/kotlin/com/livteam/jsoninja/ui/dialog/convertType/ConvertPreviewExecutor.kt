@@ -26,6 +26,14 @@ class ConvertPreviewExecutor(
         computePreview: (() -> Unit) -> String,
         onSuccess: (String) -> Unit,
         onError: (Throwable) -> Unit,
+    ) = submitDetailed(delayMs, onLoading, computePreview, onSuccess, onError)
+
+    fun <T> submitDetailed(
+        delayMs: Int,
+        onLoading: () -> Unit,
+        computePreview: (() -> Unit) -> T,
+        onSuccess: (T) -> Unit,
+        onError: (Throwable) -> Unit,
     ) {
         val requestId = requestSequence.incrementAndGet()
         previewJob?.cancel()
@@ -47,6 +55,8 @@ class ConvertPreviewExecutor(
                     }
                 )
             } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            } catch (cancellationException: com.intellij.openapi.progress.ProcessCanceledException) {
                 throw cancellationException
             } catch (throwable: Throwable) {
                 Result.failure(throwable)

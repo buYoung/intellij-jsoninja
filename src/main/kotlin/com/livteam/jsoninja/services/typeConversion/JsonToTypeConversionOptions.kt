@@ -19,7 +19,11 @@ enum class JsonToTypeAnnotationStyle {
     JACKSON_JSON_PROPERTY,
     KOTLIN_SERIAL_NAME,
     GO_JSON_TAG,
+    CSHARP_JSON_PROPERTY_NAME,
     ;
+
+    override fun toString(): String = if (this == CSHARP_JSON_PROPERTY_NAME)
+        com.livteam.jsoninja.LocalizationBundle.message("dialog.json.to.type.annotation.csharp") else name
 
     companion object {
         fun fromPersistedValue(value: String?): JsonToTypeAnnotationStyle? {

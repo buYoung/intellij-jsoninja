@@ -1,0 +1,4 @@
+public class <TYPE_NAME>Root</TYPE_NAME> { public <TYPE_PREDEFINED>List</TYPE_PREDEFINED><string> <TYPE_FIELD>Names</TYPE_FIELD> { get; set; } }
+[<TYPE_METADATA>System</TYPE_METADATA>.<TYPE_METADATA>Text</TYPE_METADATA>.<TYPE_METADATA>Json</TYPE_METADATA>.<TYPE_METADATA>Serialization</TYPE_METADATA>.<TYPE_METADATA>JsonPropertyName</TYPE_METADATA>("names"), <TYPE_METADATA>Obsolete</TYPE_METADATA>]
+public <TYPE_PREDEFINED>List</TYPE_PREDEFINED><string> <TYPE_FIELD>Names</TYPE_FIELD> { get; set; }
+public int[] <TYPE_FIELD>Numbers</TYPE_FIELD> { get; set; }

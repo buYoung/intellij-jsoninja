@@ -122,11 +122,11 @@ class TypeToJsonDialogPresenter(
         }
         val previewConfig = currentConfig
         view.showLoadingPreview()
-        previewExecutor.submit(
+        previewExecutor.submitDetailed(
             delayMs = 500,
             onLoading = { view.showLoadingPreview() },
             computePreview = { checkCancellation ->
-                generationService.generate(
+                generationService.generateDetailed(
                     sourceCode = inputText,
                     language = previewConfig.language,
                     options = TypeToJsonGenerationOptions(
@@ -139,10 +139,14 @@ class TypeToJsonDialogPresenter(
                     checkCancellation = checkCancellation,
                 )
             },
-            onSuccess = { previewText ->
+            onSuccess = { result ->
                 if (inputText == view.getInputText() && previewConfig == view.collectConfig()) {
+                    val previewText = result.jsonText
                     updatePreviewState(ConvertPreviewState.Ready(inputText, previewConfig, previewText))
-                    view.showSuccessPreview(previewText, getOutputFileExtension())
+                    val warnings = if (previewConfig.language.showsAnalysisWarnings) result.diagnostics
+                        .filter { it.severity == com.livteam.jsoninja.model.typeConversion.TypeAnalysisSeverity.WARNING }
+                        .map { it.message }.distinct() else emptyList()
+                    view.showSuccessPreview(previewText, getOutputFileExtension(), warnings)
                 }
             },
             onError = { error ->
@@ -157,6 +161,7 @@ class TypeToJsonDialogPresenter(
 
     private fun invalidatePreview() {
         previewExecutor.cancel()
+        view.clearPreviewWarnings()
         updatePreviewState(ConvertPreviewState.Pending)
     }
 

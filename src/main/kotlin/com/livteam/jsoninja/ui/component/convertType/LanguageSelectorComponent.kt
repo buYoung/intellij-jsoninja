@@ -12,7 +12,22 @@ import javax.swing.Icon
 import javax.swing.JList
 
 class LanguageSelectorComponent(private val project: Project? = null) : JBPanel<LanguageSelectorComponent>(BorderLayout()) {
-    private val languageComboBox = ComboBox(SupportedLanguage.entries.toTypedArray())
+    // TIOBE September 2026 (https://www.tiobe.com/tiobe-index/); JSDoc follows JavaScript.
+    private val languageComboBox = ComboBox(arrayOf(
+        SupportedLanguage.PYTHON,
+        SupportedLanguage.C,
+        SupportedLanguage.CPP,
+        SupportedLanguage.JAVA,
+        SupportedLanguage.CSHARP,
+        SupportedLanguage.JSDOC,
+        SupportedLanguage.RUST,
+        SupportedLanguage.GO,
+        SupportedLanguage.KOTLIN,
+        SupportedLanguage.TYPESCRIPT,
+        SupportedLanguage.SCALA,
+    )).apply {
+        selectedItem = SupportedLanguage.KOTLIN
+    }
     private var onLanguageChanged: ((SupportedLanguage) -> Unit)? = null
 
     init {

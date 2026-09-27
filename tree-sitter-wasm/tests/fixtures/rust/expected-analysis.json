@@ -1,0 +1,132 @@
+{
+  "language": "rust",
+  "declarations": [
+    {
+      "name": "Root",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "user_id",
+          "source_name": "userId",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "integer"
+          }
+        },
+        {
+          "name": "display_name",
+          "source_name": "display-name",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        },
+        {
+          "name": "nickname",
+          "source_name": "nickname",
+          "optional": true,
+          "type": {
+            "kind": "nullable",
+            "wrapped_type": {
+              "kind": "primitive",
+              "primitive": "string"
+            }
+          }
+        },
+        {
+          "name": "items",
+          "source_name": "items",
+          "optional": false,
+          "type": {
+            "kind": "list",
+            "element_type": {
+              "kind": "named",
+              "name": "Item",
+              "type_arguments": [],
+              "is_type_parameter": false
+            }
+          }
+        },
+        {
+          "name": "flags",
+          "source_name": "flags",
+          "optional": false,
+          "type": {
+            "kind": "map",
+            "key_type": {
+              "kind": "primitive",
+              "primitive": "string"
+            },
+            "value_type": {
+              "kind": "primitive",
+              "primitive": "boolean"
+            }
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Item",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "type",
+          "source_name": "type",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Count",
+      "kind": "type_alias",
+      "fields": [],
+      "alias": {
+        "kind": "primitive",
+        "primitive": "integer"
+      },
+      "enum_values": []
+    },
+    {
+      "name": "Users",
+      "kind": "type_alias",
+      "fields": [],
+      "alias": {
+        "kind": "list",
+        "element_type": {
+          "kind": "named",
+          "name": "Root",
+          "type_arguments": [],
+          "is_type_parameter": false
+        }
+      },
+      "enum_values": []
+    },
+    {
+      "name": "Status",
+      "kind": "enum",
+      "fields": [],
+      "alias": null,
+      "enum_values": [
+        {
+          "name": "ready_now",
+          "value_text": null
+        },
+        {
+          "name": "done",
+          "value_text": null
+        }
+      ]
+    }
+  ],
+  "diagnostics": []
+}

@@ -1,0 +1,12 @@
+declaration.name: Address
+alias.name: Address
+field.declarator: zip
+declaration.name: Root
+alias.name: Root
+field.declarator: a
+field.declarator: b
+field.declarator: enabled
+field.declarator: *label
+field.declarator: address
+field.declarator: values[3]
+field.declarator: *maybe

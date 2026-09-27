@@ -131,6 +131,7 @@ dependencies {
         pluginVerifier()
         zipSigner()
         testFramework(TestFrameworkType.Platform)
+        testBundledPlugins("com.intellij.java", "org.jetbrains.kotlin")
     }
 }
 
@@ -300,6 +301,16 @@ changelog {
 
 // Configure Gradle Kover Plugin - read more: https://github.com/Kotlin/kotlinx-kover#configuration
 kover {
+    currentProject {
+        // Remote Robot measures a separately launched IDE, not this Gradle JVM.
+        // Keep it explicitly runnable without starting it from check/coverage reports.
+        instrumentation {
+            disabledForTestTasks.add("uiTest")
+        }
+        sources {
+            excludedSourceSets.add("uiTest")
+        }
+    }
     reports {
         total {
             xml {
@@ -389,13 +400,47 @@ intellijPlatformTesting {
                         "-Dide.mac.message.dialogs.as.sheets=false",
                         "-Djb.privacy.policy.text=<!--999.999-->",
                         "-Djb.consents.confirmation.enabled=false",
+                        "-Dide.show.tips.on.startup.default.value=false",
+                        "-Didea.trust.all.projects=true",
                     )
                 }
+                args(layout.buildDirectory.dir("ui-test-project").get().asFile.absolutePath)
             }
 
             plugins {
-                robotServerPlugin()
+                robotServerPlugin("0.11.23")
             }
         }
     }
 }
+
+// Remote Robot exercises the installed plugin in the separate runIdeForUiTests sandbox.
+val uiTestSourceSet = sourceSets.create("uiTest")
+dependencies {
+    add(uiTestSourceSet.implementationConfigurationName, libs.junit)
+    add(uiTestSourceSet.implementationConfigurationName, kotlin("stdlib"))
+    add(uiTestSourceSet.implementationConfigurationName, "com.intellij.remoterobot:remote-robot:0.11.23")
+}
+tasks.register<Test>("uiTest") {
+    group = "verification"
+    description = "Test the conversion dialog in an IDE started by runIdeForUiTests"
+    testClassesDirs = uiTestSourceSet.output.classesDirs
+    classpath = uiTestSourceSet.runtimeClasspath
+    // Remote Robot's response DTO includes Throwable, which Gson reads on JDK 17+.
+    jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED")
+    systemProperty("robot.url", providers.gradleProperty("robotUrl").getOrElse("http://127.0.0.1:8082"))
+    outputs.upToDateWhen { false }
+}
+
+val uiTestProjectDirectory = layout.buildDirectory.dir("ui-test-project")
+tasks.register("prepareUiTestProject") {
+    val directory = uiTestProjectDirectory
+    outputs.dir(directory)
+    doLast {
+        val root = directory.get().asFile
+        root.resolve(".idea").mkdirs()
+        root.resolve(".idea/misc.xml").writeText("<project version=\"4\"/>")
+        root.resolve("sample.json").writeText("""{"id":1,"name":"Ada","items":[{"enabled":true}],"createdAt":null}""")
+    }
+}
+tasks.named("runIdeForUiTests") { dependsOn("prepareUiTestProject") }

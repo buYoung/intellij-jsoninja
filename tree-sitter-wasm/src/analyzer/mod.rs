@@ -1,3 +1,12 @@
+mod c;
+mod cpp;
+mod csharp;
+mod python;
+mod rust;
+mod scala;
+mod jsdoc;
+mod jsdoc_tags;
+mod rust_attributes;
 mod go;
 mod java;
 mod kotlin;
@@ -29,6 +38,13 @@ pub(crate) fn analyze_source(
             typescript::analyze(root_node, source_bytes, &mut diagnostics)
         }
         SupportedLanguage::Go => go::analyze(root_node, source_bytes, &mut diagnostics),
+        SupportedLanguage::C => c::analyze(root_node, source_bytes, &mut diagnostics),
+        SupportedLanguage::Cpp => cpp::analyze(root_node, source_bytes, &mut diagnostics),
+        SupportedLanguage::CSharp => csharp::analyze(root_node, source_bytes, &mut diagnostics),
+        SupportedLanguage::Python => python::analyze(root_node, source_bytes, &mut diagnostics),
+        SupportedLanguage::Rust => rust::analyze(root_node, source_bytes, &mut diagnostics),
+        SupportedLanguage::Scala => scala::analyze(root_node, source_bytes, &mut diagnostics),
+        SupportedLanguage::JsDoc => jsdoc::analyze(root_node, source_bytes, &mut diagnostics),
     };
 
     Ok(AnalysisOutput {

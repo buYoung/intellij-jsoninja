@@ -1,0 +1,1 @@
+export interface <TYPE_NAME>Root</TYPE_NAME> { <TYPE_FIELD>id</TYPE_FIELD>: number; <TYPE_FIELD>items</TYPE_FIELD>?: <TYPE_PREDEFINED>Array</TYPE_PREDEFINED><<TYPE_NAME>Child</TYPE_NAME>>; }
