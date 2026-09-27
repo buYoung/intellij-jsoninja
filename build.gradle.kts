@@ -2,6 +2,7 @@ import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.PrintProductsReleasesTask
 
 fun properties(key: String): String = providers.gradleProperty(key).get()
 
@@ -281,7 +282,12 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            recommended()
+            val recommendedIdes = ProductReleasesValueSource()
+            tasks.named<PrintProductsReleasesTask>("printProductsReleases") {
+                productsReleases.set(recommendedIdes)
+            }
+            // CI splits this same recommended list across jobs; local verification keeps the full list.
+            create(providers.gradleProperty("pluginVerificationIde").map { listOf(it) }.orElse(recommendedIdes))
         }
     }
 }
