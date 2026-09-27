@@ -25,7 +25,7 @@ JVM 도구 체인과 실제 IDE의 부트 런타임은 다르다. 선언한 지�
 | 공통 판단 | 현재 연결 | 적용 경계 |
 | --- | --- | --- |
 | 라벨과 입력의 관계 | UI DSL `row`, `buttonsGroup` | 폼의 관련 행 안에서 정렬 |
-| 상세 설정의 선택적 공개 | `collapsibleGroup` | 펼침과 기능 활성은 별도 상태 |
+| 고급 기능의 선택적 공개 | `collapsibleGroup` | [적용 조건](../patterns.md#기본-노출과-고급-설정의-적용-조건)을 만족할 때만 사용하며 펼침과 기능 활성은 별도 상태 |
 | 종속 컨트롤 | `enabledIf`, 조건부 `visible` | 숨김/비활성의 선택은 [패턴](../patterns.md)에 따름 |
 | 입력 오류 연결 | `ValidationInfo`, 다이얼로그 검증 | 오류를 필드와 연결하고 필요한 영역 표시 |
 | 배율 대응 | `JBUI.Borders`, `JBUI.scale` | 실제 수치의 정본은 [토큰](../tokens.md) |

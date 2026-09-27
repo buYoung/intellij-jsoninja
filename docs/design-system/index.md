@@ -1,6 +1,6 @@
 # JSONinja 디자인 시스템
 
-JSONinja의 입력 중심 화면은 **현재 저장소의 랜덤 JSON 생성 다이얼로그**를 기준으로 만든다. 기본 설정을 먼저 읽고, 필요한 경우 고급 설정을 펼친 뒤, 결과 요약과 적용 대상을 확인하고 실행하는 흐름을 유지한다.
+JSONinja의 입력 중심 화면은 **현재 저장소의 랜덤 JSON 생성 다이얼로그**를 기준으로 정보 위계와 상태 표현을 맞춘다. 기본 설정을 읽고 결과 요약과 적용 대상을 확인한 뒤 실행하는 흐름을 유지하며, 접이식 고급 설정의 적용 여부는 [정보량과 작업 필요성](patterns.md#기본-노출과-고급-설정의-적용-조건)에 따라 결정한다.
 
 이 문서는 화면을 설계하거나 구현하는 기여자와 코드 에이전트가 함께 사용하는 제품 UI 기준이다. 기존 화면의 공통 판단을 정리한 문서이며, 코드에 공통 컴포넌트나 토큰 모듈을 새로 추가한 것은 아니다.
 
@@ -8,8 +8,8 @@ JSONinja의 입력 중심 화면은 **현재 저장소의 랜덤 JSON 생성 다
 
 | 항목 | 기준 |
 | --- | --- |
-| 방향의 승인 근거 | 사용자가 랜덤 JSON 생성 다이얼로그를 기준으로 지정하고, 후속 확인에서 **현재 저장소의 하단 요약 + 접이식 고급 옵션**을 선택함 |
-| 구현 기준 | `main`의 `148ccfd`, 2026-09-27에 확인한 작업 트리 |
+| 방향의 승인 근거 | 사용자가 랜덤 JSON 생성 화면의 하단 요약과 고급 옵션을 기준으로 선택함. 이후 **내용이 적으면 숨기지 않고, 많을 때 일반 사용자에게 불필요한 고급 기능만 접는다**고 적용 조건을 명시함 |
+| 구현 기준 | 생성 화면은 `main`의 `148ccfd`, 2026-09-27에 확인한 작업 트리. API 불러오기 화면의 후속 수정과 검증 범위는 [변경 기록](governance.md#기본-노출-기준과-api-다이얼로그-수정)에 구분 |
 | 성숙도 | 디자인 시스템 문서화. 현행 코드와 대표 컴포넌트 상태를 검증한 기준이며, 전체 제품의 시각·접근성 적합성 인증은 아님 |
 | 주 적용 대상 | 설정을 입력한 뒤 실행하는 다이얼로그, 그 안의 폼·선택·보조 설명·요약·오류 표현 |
 | 구체적 플랫폼 | IntelliJ Platform 기반 JetBrains IDE 플러그인. [플랫폼 적용 기준](platforms/intellij-platform.md) 참조 |
@@ -23,7 +23,7 @@ JSONinja의 입력 중심 화면은 **현재 저장소의 랜덤 JSON 생성 다
 | --- | --- |
 | 정보 위계, 색상·글꼴·여백·형태·움직임의 원칙 | [기초 원칙](foundations.md) |
 | 코드에서 확인한 치수와 플랫폼 값의 연결 | [토큰과 구현 값](tokens.md) |
-| 입력부터 실행까지의 구성과 상태 전환 | [상호작용 패턴](patterns.md) |
+| 기본 노출과 고급 설정의 적용 조건, 입력부터 실행까지의 상태 전환 | [상호작용 패턴](patterns.md) |
 | 화면 문구와 번역 기준 | [문구와 용어](content.md) |
 | 키보드, 초점, 보조 기술, 테마·확대 검증 | [접근성](accessibility.md) |
 | 구성 요소와 구현 위치 찾기 | [구성 요소 목록](components/index.md) |
@@ -59,4 +59,4 @@ JSONinja의 입력 중심 화면은 **현재 저장소의 랜덤 JSON 생성 다
 
 플랫폼 공개 API와 접근성 제약은 외형을 맞추기 위해 우회하지 않는다. 구현과 문서가 다르면 우선 원인과 적용 버전을 확인한다. 문서에 없는 색상·치수·저장 정책을 관례만으로 확정하지 않는다.
 
-주요 구현 근거: [다이얼로그](../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/GenerateJsonDialog.kt), [전체 뷰](../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/GenerateJsonDialogView.kt), [무작위 탭 뷰](../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/random/GenerateRandomJsonTabView.kt), [무작위 탭 프레젠터](../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/random/GenerateRandomJsonTabPresenter.kt).
+주요 구현 근거: [다이얼로그](../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/GenerateJsonDialog.kt), [전체 뷰](../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/GenerateJsonDialogView.kt), [무작위 탭 뷰](../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/random/GenerateRandomJsonTabView.kt), [무작위 탭 프레젠터](../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/random/GenerateRandomJsonTabPresenter.kt), [API 불러오기 뷰](../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/loadJson/LoadJsonFromApiDialogView.kt).

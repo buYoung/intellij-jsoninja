@@ -1,6 +1,6 @@
 # 고급 설정
 
-기본 생성에 필요하지 않은 상세 제어를 접어 두면서, 필요한 사용자는 같은 화면에서 접근하게 한다. 기준은 [무작위 뷰의 `collapsibleGroup`](../../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/random/GenerateRandomJsonTabView.kt#L158)다.
+내용이 많은 화면에서 일반 사용자의 기본 작업에 필요하지 않은 고급 기능을 접어 두는 구성이다. 도입 여부는 [기본 노출과 고급 설정의 적용 조건](../patterns.md#기본-노출과-고급-설정의-적용-조건)을 먼저 따른다. 아래 상태 계약의 기준은 [무작위 뷰의 `collapsibleGroup`](../../../src/main/kotlin/com/livteam/jsoninja/ui/dialog/generateJson/random/GenerateRandomJsonTabView.kt#L158)다.
 
 ## 구성
 
@@ -35,7 +35,7 @@
 
 시드 유지의 목적과 재현 조건은 [문구 기준](../content.md)을 따른다. 하단 요약에는 기능 활성 여부를 표시하되 긴 시드 숫자 두 개를 다시 늘어놓지 않는다. 정확한 숫자는 원래 입력에서 확인한다.
 
-이 패턴을 다른 작업에 적용할 때도 “더 자세히 보기”와 “기능 사용”을 분리한다. 펼침 제목에 체크박스의 의미를 함께 실어 사용자가 두 상태를 혼동하게 만들지 않는다.
+적용 조건을 만족하는 다른 작업에서도 “더 자세히 보기”와 “기능 사용”을 분리한다. 펼침 제목에 체크박스의 의미를 함께 실어 사용자가 두 상태를 혼동하게 만들지 않는다. 내용이 적은 API 불러오기 화면에는 이 구성 요소를 두지 않으며, 인증과 Content-Type은 [기본 폼](task-dialog.md#변형과-크기)에 남긴다.
 
 ## 접근성과 사용 제한
 

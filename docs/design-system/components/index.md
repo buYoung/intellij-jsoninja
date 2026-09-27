@@ -4,9 +4,9 @@
 
 | 구성 요소 | 정본 | 구현 연결 | 상태 |
 | --- | --- | --- | --- |
-| 작업 다이얼로그 | [task-dialog.md](task-dialog.md) | `GenerateJsonDialog`, `GenerateJsonDialogView` | 현재 랜덤 생성 화면을 기준으로 문서화 |
+| 작업 다이얼로그 | [task-dialog.md](task-dialog.md) | `GenerateJsonDialog`, `GenerateJsonDialogView`, `LoadJsonFromApiDialogView` | 생성 화면 기준과 접이식 영역이 없는 API 폼 변형을 문서화 |
 | 폼 컨트롤 | [form-controls.md](form-controls.md) | UI DSL 행, 라디오 버튼, `intTextField`, `ComboBox`, `ValidationInfo` | 현행 사용과 조건 확인 |
-| 고급 설정 | [advanced-options.md](advanced-options.md) | `GenerateRandomJsonTabView`의 `collapsibleGroup`과 시드 제어 | 접힘·펼침·활성 상태를 기존 테스트로 확인 |
+| 고급 설정 | [advanced-options.md](advanced-options.md) | `GenerateRandomJsonTabView`의 `collapsibleGroup`과 시드 제어 | 내용이 많고 일반 작업에 불필요한 고급 기능에만 적용. 시드 상태의 기존 테스트 기록은 유지 |
 | 결과 요약 | [result-summary.md](result-summary.md) | `GenerateRandomJsonTabPresenter.getSummary()`, `GenerateJsonDialogView.setSummary()` | 설정·검증 상태와의 연결 확인 |
 
 새로운 화면에서는 목적이 같은 요소를 먼저 찾고, 기존 구현이 고정하는 배치와 지원하는 변형을 확인한다. 공통 클래스가 없는 곳에 문서상의 이름을 코드 API처럼 호출하지 않는다.

@@ -17,6 +17,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.util.Disposer
+import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBLabel
@@ -30,12 +31,11 @@ import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiRequestMethod
 import java.awt.BorderLayout
-import javax.swing.JButton
+import java.awt.Dimension
 import javax.swing.JComponent
-import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
-import javax.swing.SwingConstants
+import javax.swing.event.DocumentEvent as SwingDocumentEvent
 
 class LoadJsonFromApiDialogView(
     private val project: Project
@@ -43,26 +43,42 @@ class LoadJsonFromApiDialogView(
     private lateinit var rootPanel: JPanel
     private lateinit var requestMethodComboBox: ComboBox<ApiRequestMethod>
     private lateinit var requestUrlTextField: JBTextField
-    private lateinit var sendButton: JButton
     private lateinit var authorizationTypeComboBox: ComboBox<ApiAuthorizationType>
     private lateinit var basicUsernameTextField: JBTextField
     private lateinit var basicPasswordTextField: JBPasswordField
     private lateinit var bearerTokenTextField: JBTextField
-    private lateinit var contentTypeTextField: JBTextField
     private lateinit var requestBodyEditorTextField: EditorTextField
-    private lateinit var basicAuthPanel: JPanel
-    private lateinit var bearerAuthPanel: JPanel
-    private lateinit var requestBodyPanel: JPanel
-    private lateinit var errorMessageLabel: JBLabel
+    private lateinit var requestRow: Row
+    private lateinit var authorizationRow: Row
+    private lateinit var basicUsernameRow: Row
+    private lateinit var basicPasswordRow: Row
+    private lateinit var bearerTokenRow: Row
+    private lateinit var requestBodyRow: Row
+    private val summaryLabel = JBLabel().apply {
+        foreground = UIUtil.getContextHelpForeground()
+    }
 
     private var currentBodyFileType: FileType? = null
-    private var onSendRequestedCallback: (() -> Unit)? = null
+    private var onInputsChangedCallback: (() -> Unit)? = null
+    private var onLayoutChangedCallback: (() -> Unit)? = null
 
     val component: JComponent by lazy { createComponent() }
 
-    fun setOnSendRequested(callback: () -> Unit) {
-        onSendRequestedCallback = callback
+    fun setOnInputsChanged(callback: () -> Unit) {
+        onInputsChangedCallback = callback
     }
+
+    fun setOnLayoutChanged(callback: () -> Unit) {
+        onLayoutChangedCallback = callback
+    }
+
+    fun getRequestUrlComponent(): JComponent = requestUrlTextField
+
+    fun getBasicUsernameComponent(): JComponent = basicUsernameTextField
+
+    fun getBasicPasswordComponent(): JComponent = basicPasswordTextField
+
+    fun getBearerTokenComponent(): JComponent = bearerTokenTextField
 
     fun getSelectedRequestMethod(): ApiRequestMethod {
         return requestMethodComboBox.selectedItem as? ApiRequestMethod ?: ApiRequestMethod.GET
@@ -93,20 +109,12 @@ class LoadJsonFromApiDialogView(
     }
 
     fun setLoading(isLoading: Boolean) {
-        sendButton.isEnabled = !isLoading
-        sendButton.text = if (isLoading) {
-            LocalizationBundle.message("dialog.load.json.api.loading")
-        } else {
-            LocalizationBundle.message("dialog.load.json.api.send")
-        }
+        listOf(requestRow, authorizationRow, basicUsernameRow, basicPasswordRow, bearerTokenRow, requestBodyRow)
+            .forEach { it.enabled(!isLoading) }
     }
 
-    fun showErrorMessage(errorMessage: String) {
-        errorMessageLabel.text = errorMessage
-    }
-
-    fun clearErrorMessage() {
-        errorMessageLabel.text = " "
+    fun setSummary(summary: String) {
+        summaryLabel.text = summary
     }
 
     fun dispose() {
@@ -123,8 +131,9 @@ class LoadJsonFromApiDialogView(
                 }
             }
         }
-        requestUrlTextField = JBTextField()
-        sendButton = JButton(LocalizationBundle.message("dialog.load.json.api.send"))
+        requestUrlTextField = JBTextField().apply {
+            emptyText.text = LocalizationBundle.message("dialog.load.json.api.url.placeholder")
+        }
         authorizationTypeComboBox = ComboBox(ApiAuthorizationType.entries.toTypedArray()).apply {
             renderer = object : SimpleListCellRenderer<ApiAuthorizationType>() {
                 override fun customize(list: JList<out ApiAuthorizationType>, value: ApiAuthorizationType?, index: Int, selected: Boolean, hasFocus: Boolean) {
@@ -140,117 +149,87 @@ class LoadJsonFromApiDialogView(
         basicUsernameTextField = JBTextField()
         basicPasswordTextField = JBPasswordField()
         bearerTokenTextField = JBTextField()
-        contentTypeTextField = JBTextField("application/json").apply {
-            isEditable = false
-            horizontalAlignment = SwingConstants.LEFT
-        }
         requestBodyEditorTextField = createRequestBodyEditorTextField()
-        errorMessageLabel = JBLabel(" ").apply {
-            foreground = UIUtil.getErrorForeground()
-        }
-
-        basicAuthPanel = createBasicAuthPanel()
-        bearerAuthPanel = createBearerAuthPanel()
 
         val configPanel = panel {
-            row {
+            requestRow = row {
                 cell(requestMethodComboBox)
+                    .label(LocalizationBundle.message("dialog.load.json.api.method"), LabelPosition.TOP)
                     .gap(RightGap.SMALL)
                 cell(requestUrlTextField)
+                    .label(LocalizationBundle.message("dialog.load.json.api.url"), LabelPosition.TOP)
                     .resizableColumn()
                     .align(AlignX.FILL)
-                cell(sendButton)
             }
 
-            separator()
+            separator().topGap(TopGap.SMALL)
 
-            row(LocalizationBundle.message("dialog.load.json.api.auth.type")) {
+            authorizationRow = row(LocalizationBundle.message("dialog.load.json.api.auth.type")) {
                 cell(authorizationTypeComboBox)
-                    .align(AlignX.FILL)
-            }.layout(RowLayout.PARENT_GRID)
-
-            row {
-                cell(basicAuthPanel)
-                    .align(AlignX.FILL)
             }
-            row {
-                cell(bearerAuthPanel)
-                    .align(AlignX.FILL)
-            }
-
-            separator()
-
+            basicUsernameRow = row(LocalizationBundle.message("dialog.load.json.api.auth.username")) {
+                cell(basicUsernameTextField).align(AlignX.FILL).resizableColumn()
+            }.visible(false)
+            basicPasswordRow = row(LocalizationBundle.message("dialog.load.json.api.auth.password")) {
+                cell(basicPasswordTextField).align(AlignX.FILL).resizableColumn()
+            }.visible(false)
+            bearerTokenRow = row(LocalizationBundle.message("dialog.load.json.api.auth.token")) {
+                cell(bearerTokenTextField).align(AlignX.FILL).resizableColumn()
+            }.visible(false)
             row(LocalizationBundle.message("dialog.load.json.api.content.type")) {
-                cell(contentTypeTextField)
-                    .align(AlignX.FILL)
-            }.layout(RowLayout.PARENT_GRID)
-        }
-
-        requestBodyPanel = JPanel(BorderLayout()).apply {
-            val bodyLabel = JLabel(LocalizationBundle.message("dialog.load.json.api.body")).apply {
-                border = JBUI.Borders.empty(8, 2, 4, 0)
+                label("application/json")
             }
-            add(bodyLabel, BorderLayout.NORTH)
-            add(requestBodyEditorTextField, BorderLayout.CENTER)
+
+            requestBodyRow = row {
+                cell(requestBodyEditorTextField)
+                    .label(LocalizationBundle.message("dialog.load.json.api.body"), LabelPosition.TOP)
+                    .align(Align.FILL)
+                    .resizableColumn()
+            }.resizableRow().topGap(TopGap.SMALL).visible(false)
+        }.apply {
+            border = JBUI.Borders.empty(16, 12, 12, 12)
         }
 
-        rootPanel = JPanel(BorderLayout()).apply {
-            border = JBUI.Borders.empty(10)
-            preferredSize = java.awt.Dimension(JBUI.scale(760), preferredSize.height)
-            add(configPanel, BorderLayout.NORTH)
-            add(requestBodyPanel, BorderLayout.CENTER)
-            add(JPanel(BorderLayout()).apply {
-                border = JBUI.Borders.emptyTop(6)
-                add(errorMessageLabel, BorderLayout.CENTER)
-            }, BorderLayout.SOUTH)
+        val footer = panel {
+            separator()
+            row { cell(summaryLabel) }
+            row { comment(LocalizationBundle.message("dialog.load.json.api.output.destination")) }
+        }.apply {
+            border = JBUI.Borders.empty(0, 12, 0, 12)
+        }
+
+        rootPanel = object : JPanel(BorderLayout()) {
+            override fun getPreferredSize(): Dimension {
+                val size = super.getPreferredSize()
+                return Dimension(maxOf(size.width, JBUI.scale(600)), size.height)
+            }
+
+            override fun getMinimumSize(): Dimension {
+                val size = super.getMinimumSize()
+                return Dimension(maxOf(size.width, JBUI.scale(560)), size.height)
+            }
+        }.apply {
+            add(configPanel, BorderLayout.CENTER)
+            add(footer, BorderLayout.SOUTH)
         }
 
         attachInputListeners()
-        updateAuthorizationInputVisibility()
-        updateRequestBodyVisibility()
         updateRequestBodyHighlightByHeuristic()
 
         return rootPanel
     }
 
-    private fun createBasicAuthPanel(): JPanel {
-        return panel {
-            indent {
-                row(LocalizationBundle.message("dialog.load.json.api.auth.username")) {
-                    cell(basicUsernameTextField)
-                        .align(AlignX.FILL)
-                        .resizableColumn()
-                }
-                row(LocalizationBundle.message("dialog.load.json.api.auth.password")) {
-                    cell(basicPasswordTextField)
-                        .align(AlignX.FILL)
-                        .resizableColumn()
-                }
-            }
-        }
-    }
-
-    private fun createBearerAuthPanel(): JPanel {
-        return panel {
-            indent {
-                row(LocalizationBundle.message("dialog.load.json.api.auth.token")) {
-                    cell(bearerTokenTextField)
-                        .align(AlignX.FILL)
-                        .resizableColumn()
-                }
-            }
-        }
-    }
-
     private fun createRequestBodyEditorTextField(): EditorTextField {
         return EditorTextFieldFactory.createPlainTextField(
             project = project,
-            preferredSize = JBUI.size(620, 220),
+            preferredSize = JBUI.size(560, 220),
             placeholderText = LocalizationBundle.message("dialog.load.json.api.body.placeholder"),
             configureEditorSettings = {
                 applyRequestBodyEditorSettings()
             },
-        )
+        ).apply {
+            minimumSize = JBUI.size(0, 160)
+        }
     }
 
     private fun EditorSettings.applyRequestBodyEditorSettings() {
@@ -262,18 +241,22 @@ class LoadJsonFromApiDialogView(
 
     private fun attachInputListeners() {
         requestMethodComboBox.addActionListener {
-            clearErrorMessage()
             updateRequestBodyVisibility()
+            onInputsChangedCallback?.invoke()
         }
 
         authorizationTypeComboBox.addActionListener {
-            clearErrorMessage()
             updateAuthorizationInputVisibility()
+            onInputsChangedCallback?.invoke()
         }
 
-        sendButton.addActionListener {
-            onSendRequestedCallback?.invoke()
+        val inputListener = object : DocumentAdapter() {
+            override fun textChanged(event: SwingDocumentEvent) {
+                onInputsChangedCallback?.invoke()
+            }
         }
+        listOf(requestUrlTextField, basicUsernameTextField, basicPasswordTextField, bearerTokenTextField)
+            .forEach { it.document.addDocumentListener(inputListener) }
 
         requestBodyEditorTextField.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
@@ -284,21 +267,17 @@ class LoadJsonFromApiDialogView(
 
     private fun updateAuthorizationInputVisibility() {
         val selectedAuthorizationType = getSelectedAuthorizationType()
-        basicAuthPanel.isVisible = selectedAuthorizationType == ApiAuthorizationType.BASIC
-        bearerAuthPanel.isVisible = selectedAuthorizationType == ApiAuthorizationType.BEARER
-        if (::rootPanel.isInitialized) {
-            rootPanel.revalidate()
-            rootPanel.repaint()
-        }
+        basicUsernameRow.visible(selectedAuthorizationType == ApiAuthorizationType.BASIC)
+        basicPasswordRow.visible(selectedAuthorizationType == ApiAuthorizationType.BASIC)
+        bearerTokenRow.visible(selectedAuthorizationType == ApiAuthorizationType.BEARER)
+        onLayoutChangedCallback?.invoke()
     }
 
     private fun updateRequestBodyVisibility() {
         val isRequestBodyVisible = getSelectedRequestMethod().supportsRequestBody
-        requestBodyPanel.isVisible = isRequestBodyVisible
-        if (::rootPanel.isInitialized) {
-            rootPanel.revalidate()
-            rootPanel.repaint()
-        }
+        if (requestBodyEditorTextField.isVisible == isRequestBodyVisible) return
+        requestBodyRow.visible(isRequestBodyVisible)
+        onLayoutChangedCallback?.invoke()
     }
 
     private fun updateRequestBodyHighlightByHeuristic() {

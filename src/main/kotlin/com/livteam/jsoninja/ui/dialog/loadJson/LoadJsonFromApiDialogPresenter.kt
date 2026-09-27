@@ -6,6 +6,8 @@ import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.openapi.util.text.HtmlChunk
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonObjectMapperService
@@ -27,7 +29,10 @@ import kotlinx.coroutines.withContext
 class LoadJsonFromApiDialogPresenter(
     private val project: Project,
     private val onJsonLoaded: (String) -> Unit,
-    private val onDialogCloseRequested: () -> Unit
+    private val onDialogCloseRequested: () -> Unit,
+    private val onLoadingChanged: (Boolean) -> Unit,
+    private val onValidationChanged: (ValidationInfo?) -> Unit,
+    onLayoutChanged: () -> Unit
 ) {
     private val view = LoadJsonFromApiDialogView(project)
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
@@ -35,14 +40,23 @@ class LoadJsonFromApiDialogPresenter(
 
     @Volatile
     private var isDisposed = false
+    private var isLoading = false
 
     init {
-        view.setOnSendRequested { handleSendRequested() }
+        view.setOnInputsChanged {
+            if (!isLoading) {
+                onValidationChanged(null)
+                updateSummary()
+            }
+        }
+        view.setOnLayoutChanged(onLayoutChanged)
     }
 
     fun getComponent(): JComponent {
-        return view.component
+        return view.component.also { updateSummary() }
     }
+
+    fun getPreferredFocusedComponent(): JComponent = view.getRequestUrlComponent()
 
     fun dispose() {
         isDisposed = true
@@ -50,18 +64,18 @@ class LoadJsonFromApiDialogPresenter(
         view.dispose()
     }
 
-    private fun handleSendRequested() {
-        if (isDisposed) return
+    fun handleSendRequested() {
+        if (isDisposed || isLoading) return
 
-        view.clearErrorMessage()
+        onValidationChanged(null)
         val apiLoadRequest = buildApiLoadRequest()
-        val validationErrorMessage = validateApiLoadRequest(apiLoadRequest)
-        if (validationErrorMessage != null) {
-            view.showErrorMessage(validationErrorMessage)
+        val validationInfo = validateApiLoadRequest(apiLoadRequest)
+        if (validationInfo != null) {
+            onValidationChanged(validationInfo)
             return
         }
 
-        view.setLoading(true)
+        setLoading(true)
 
         coroutineScope.launch {
             val loadResult = try {
@@ -80,7 +94,7 @@ class LoadJsonFromApiDialogPresenter(
 
             withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
                 if (isDisposed) return@withContext
-                view.setLoading(false)
+                setLoading(false)
 
                 loadResult.fold(
                     onSuccess = { responseJson ->
@@ -88,7 +102,7 @@ class LoadJsonFromApiDialogPresenter(
                             onJsonLoaded(responseJson)
                             onDialogCloseRequested()
                         }.onFailure { callbackException ->
-                            view.showErrorMessage(
+                            showRequestError(
                                 callbackException.message
                                     ?: LocalizationBundle.message(
                                         "dialog.load.json.api.error.request.failed",
@@ -98,7 +112,7 @@ class LoadJsonFromApiDialogPresenter(
                         }
                     },
                     onFailure = { throwable ->
-                        view.showErrorMessage(
+                        showRequestError(
                             throwable.message
                                 ?: LocalizationBundle.message(
                                     "dialog.load.json.api.error.request.failed",
@@ -109,6 +123,35 @@ class LoadJsonFromApiDialogPresenter(
                 )
             }
         }
+    }
+
+    private fun setLoading(isLoading: Boolean) {
+        this.isLoading = isLoading
+        view.setLoading(isLoading)
+        onLoadingChanged(isLoading)
+        updateSummary()
+    }
+
+    private fun showRequestError(message: String) {
+        onValidationChanged(ValidationInfo(HtmlChunk.text(message), null))
+    }
+
+    private fun updateSummary() {
+        val request = buildApiLoadRequest()
+        val summary = when {
+            isLoading -> LocalizationBundle.message("dialog.load.json.api.loading")
+            request.requestUrl.isBlank() -> LocalizationBundle.message("dialog.load.json.api.error.url.empty")
+            validateApiLoadRequest(request) != null -> LocalizationBundle.message("dialog.load.json.api.summary.invalid")
+            else -> {
+                val authorization = when (request.authorizationType) {
+                    ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
+                    ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
+                    ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
+                }
+                LocalizationBundle.message("dialog.load.json.api.summary", request.requestMethod.name, authorization)
+            }
+        }
+        view.setSummary(summary)
     }
 
     private fun buildApiLoadRequest(): ApiLoadRequest {
@@ -123,28 +166,43 @@ class LoadJsonFromApiDialogPresenter(
         )
     }
 
-    private fun validateApiLoadRequest(apiLoadRequest: ApiLoadRequest): String? {
+    private fun validateApiLoadRequest(apiLoadRequest: ApiLoadRequest): ValidationInfo? {
         if (apiLoadRequest.requestUrl.isBlank()) {
-            return LocalizationBundle.message("dialog.load.json.api.error.url.empty")
+            return ValidationInfo(
+                LocalizationBundle.message("dialog.load.json.api.error.url.empty"),
+                view.getRequestUrlComponent()
+            )
         }
 
         if (!isValidHttpUrl(apiLoadRequest.requestUrl)) {
-            return LocalizationBundle.message("dialog.load.json.api.error.url.invalid")
+            return ValidationInfo(
+                LocalizationBundle.message("dialog.load.json.api.error.url.invalid"),
+                view.getRequestUrlComponent()
+            )
         }
 
         when (apiLoadRequest.authorizationType) {
             ApiAuthorizationType.BASIC -> {
                 if (apiLoadRequest.basicUsername.isBlank()) {
-                    return LocalizationBundle.message("dialog.load.json.api.error.auth.basic.username.empty")
+                    return ValidationInfo(
+                        LocalizationBundle.message("dialog.load.json.api.error.auth.basic.username.empty"),
+                        view.getBasicUsernameComponent()
+                    )
                 }
                 if (apiLoadRequest.basicPassword.isBlank()) {
-                    return LocalizationBundle.message("dialog.load.json.api.error.auth.basic.password.empty")
+                    return ValidationInfo(
+                        LocalizationBundle.message("dialog.load.json.api.error.auth.basic.password.empty"),
+                        view.getBasicPasswordComponent()
+                    )
                 }
             }
 
             ApiAuthorizationType.BEARER -> {
                 if (apiLoadRequest.bearerToken.isBlank()) {
-                    return LocalizationBundle.message("dialog.load.json.api.error.auth.bearer.token.empty")
+                    return ValidationInfo(
+                        LocalizationBundle.message("dialog.load.json.api.error.auth.bearer.token.empty"),
+                        view.getBearerTokenComponent()
+                    )
                 }
             }
 
