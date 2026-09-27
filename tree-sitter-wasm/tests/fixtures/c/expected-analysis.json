@@ -1,0 +1,106 @@
+{
+  "language": "c",
+  "declarations": [
+    {
+      "name": "Address",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "zip",
+          "source_name": "zip",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "integer"
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Root",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "a",
+          "source_name": "a",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "integer"
+          }
+        },
+        {
+          "name": "b",
+          "source_name": "b",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "integer"
+          }
+        },
+        {
+          "name": "enabled",
+          "source_name": "enabled",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "boolean"
+          }
+        },
+        {
+          "name": "label",
+          "source_name": "label",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        },
+        {
+          "name": "address",
+          "source_name": "address",
+          "optional": false,
+          "type": {
+            "kind": "named",
+            "name": "Address",
+            "type_arguments": [],
+            "is_type_parameter": false
+          }
+        },
+        {
+          "name": "values",
+          "source_name": "values",
+          "optional": false,
+          "type": {
+            "kind": "list",
+            "element_type": {
+              "kind": "primitive",
+              "primitive": "integer"
+            }
+          }
+        },
+        {
+          "name": "maybe",
+          "source_name": "maybe",
+          "optional": false,
+          "type": {
+            "kind": "nullable",
+            "wrapped_type": {
+              "kind": "primitive",
+              "primitive": "integer"
+            }
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    }
+  ],
+  "diagnostics": [
+    "c.pointer.assumption",
+    "c.array.length_ignored",
+    "c.pointer.assumption"
+  ]
+}

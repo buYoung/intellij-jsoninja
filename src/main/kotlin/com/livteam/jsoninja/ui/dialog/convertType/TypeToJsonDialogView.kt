@@ -135,6 +135,12 @@ class TypeToJsonDialogView(
         previewPanel.setSuccess(text, fileExtension)
     }
 
+    fun showSuccessPreview(text: String, fileExtension: String, warnings: List<String>) {
+        previewPanel.setSuccess(text, fileExtension, warnings)
+    }
+
+    fun clearPreviewWarnings() = previewPanel.clearWarnings()
+
     fun getValidationComponent(): JComponent = outputCountSpinner
 
     fun dispose() {
@@ -143,12 +149,7 @@ class TypeToJsonDialogView(
     }
 
     private fun updateInputLanguage(language: SupportedLanguage) {
-        val placeholderText = when (language) {
-            SupportedLanguage.JAVA -> LocalizationBundle.message("dialog.type.to.json.input.placeholder.java")
-            SupportedLanguage.KOTLIN -> LocalizationBundle.message("dialog.type.to.json.input.placeholder.kotlin")
-            SupportedLanguage.TYPESCRIPT -> LocalizationBundle.message("dialog.type.to.json.input.placeholder.typescript")
-            SupportedLanguage.GO -> LocalizationBundle.message("dialog.type.to.json.input.placeholder.go")
-        }
+        val placeholderText = LocalizationBundle.message(language.inputPlaceholderKey)
         inputPanel.updateLanguage(language.fileExtension, placeholderText)
     }
 }

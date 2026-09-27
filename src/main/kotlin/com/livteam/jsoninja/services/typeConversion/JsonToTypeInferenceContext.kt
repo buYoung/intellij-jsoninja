@@ -12,6 +12,7 @@ import com.livteam.jsoninja.model.typeConversion.TypeField
 import com.livteam.jsoninja.model.typeConversion.TypePrimitiveKind
 import com.livteam.jsoninja.model.typeConversion.TypeReference
 import java.util.LinkedHashMap
+import com.livteam.jsoninja.services.typeConversion.languages.TypeLanguageRegistry
 
 class JsonToTypeInferenceContext(
     private val language: SupportedLanguage,
@@ -24,7 +25,7 @@ class JsonToTypeInferenceContext(
     private val usedDeclarationNames = mutableSetOf<String>()
 
     fun infer(jsonNode: JsonNode): JsonToTypeConversionResult {
-        val rootTypeName = JsonToTypeNamingSupport.toTypeName(options.rootTypeName)
+        val rootTypeName = declarationName(options.rootTypeName)
         usedDeclarationNames += rootTypeName
         val rootTypeReference = inferType(
             jsonNode = jsonNode,
@@ -234,9 +235,9 @@ class JsonToTypeInferenceContext(
         val declarationName = if (previousName != null) {
             previousName
         } else if (forceDeclarationName) {
-            JsonToTypeNamingSupport.toTypeName(suggestedTypeName)
+            declarationName(suggestedTypeName)
         } else {
-            val baseName = JsonToTypeNamingSupport.toTypeName(suggestedTypeName)
+            val baseName = declarationName(suggestedTypeName)
             var candidate = baseName
             var suffixIndex = 2
             while (candidate in usedDeclarationNames) candidate = "$baseName${suffixIndex++}"
@@ -247,14 +248,10 @@ class JsonToTypeInferenceContext(
         signatureToDeclarationName.putIfAbsent(signature, declarationName)
         val inferredDeclaration = TypeDeclaration(
             name = declarationName,
-            declarationKind = when (language) {
-                SupportedLanguage.TYPESCRIPT -> TypeDeclarationKind.INTERFACE
-                SupportedLanguage.GO -> TypeDeclarationKind.STRUCT
-                else -> TypeDeclarationKind.CLASS
-            },
+            declarationKind = TypeLanguageRegistry.forLanguage(language).policy.objectDeclarationKind,
             fields = inferredFields,
         )
-        declarationsByName[declarationName] = declarationsByName[declarationName]?.let { existingDeclaration ->
+        val mergedDeclaration = declarationsByName[declarationName]?.let { existingDeclaration ->
             existingDeclaration.copy(
                 fields = mergeDeclarationFields(
                     existingFields = existingDeclaration.fields,
@@ -262,8 +259,12 @@ class JsonToTypeInferenceContext(
                 ),
             )
         } ?: inferredDeclaration
+        declarationsByName[declarationName] = TypeLanguageRegistry.forLanguage(language).policy.normalizeDeclaration(mergedDeclaration)
         return TypeReference.Named(declarationName)
     }
+
+    private fun declarationName(candidate: String): String =
+        TypeLanguageRegistry.forLanguage(language).policy.escapeDeclarationName(JsonToTypeNamingSupport.toTypeName(candidate))
 
     private fun mergeDeclarationFields(
         existingFields: List<TypeField>,

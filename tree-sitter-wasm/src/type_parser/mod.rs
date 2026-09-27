@@ -1,3 +1,11 @@
+pub(crate) mod c;
+pub(crate) mod cpp;
+pub(crate) mod csharp;
+pub(crate) mod python;
+pub(crate) mod rust;
+pub(crate) mod scala;
+pub(crate) mod jsdoc;
+pub(crate) mod jsdoc_expression;
 mod go;
 mod java;
 mod kotlin;
@@ -21,6 +29,13 @@ pub(crate) fn parse_type_reference(
     declaration_name: Option<&str>,
 ) -> TypeReference {
     match language {
+        SupportedLanguage::JsDoc => jsdoc::parse(node, source_bytes, type_parameter_names, diagnostics, declaration_name),
+        SupportedLanguage::Scala => scala::parse(node, source_bytes, type_parameter_names, diagnostics, declaration_name),
+        SupportedLanguage::Rust => rust::parse(node, source_bytes, type_parameter_names, diagnostics, declaration_name),
+        SupportedLanguage::Python => python::parse(node, source_bytes, type_parameter_names, diagnostics, declaration_name),
+        SupportedLanguage::CSharp => csharp::parse(node, source_bytes, type_parameter_names, diagnostics, declaration_name),
+        SupportedLanguage::Cpp => cpp::parse(node, source_bytes, type_parameter_names, diagnostics, declaration_name),
+        SupportedLanguage::C => c::parse(node, source_bytes, type_parameter_names, diagnostics, declaration_name),
         SupportedLanguage::Java => java::parse(
             node,
             source_bytes,

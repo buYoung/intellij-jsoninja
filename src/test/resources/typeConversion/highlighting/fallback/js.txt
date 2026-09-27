@@ -1,0 +1,5 @@
+/**
+ * @typedef {<TYPE_PREDEFINED>Object</TYPE_PREDEFINED>} <TYPE_NAME>Root</TYPE_NAME>
+ * @property {?<TYPE_PREDEFINED>number</TYPE_PREDEFINED>} [<TYPE_FIELD>count</TYPE_FIELD>=1]
+ * @property {<TYPE_PREDEFINED>Array</TYPE_PREDEFINED><<TYPE_NAME>Child</TYPE_NAME>>} <TYPE_FIELD>items</TYPE_FIELD>
+ */

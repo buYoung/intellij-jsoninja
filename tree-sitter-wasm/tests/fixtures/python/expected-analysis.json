@@ -1,0 +1,118 @@
+{
+  "language": "python",
+  "declarations": [
+    {
+      "name": "Base",
+      "kind": "class",
+      "fields": [
+        {
+          "name": "keep",
+          "source_name": "keep",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "integer"
+          }
+        },
+        {
+          "name": "maybe",
+          "source_name": "maybe",
+          "optional": true,
+          "type": {
+            "kind": "nullable",
+            "wrapped_type": {
+              "kind": "primitive",
+              "primitive": "string"
+            }
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Child",
+      "kind": "class",
+      "fields": [
+        {
+          "name": "extra",
+          "source_name": "extra",
+          "optional": true,
+          "type": {
+            "kind": "list",
+            "element_type": {
+              "kind": "named",
+              "name": "Node",
+              "type_arguments": [],
+              "is_type_parameter": false
+            }
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Node",
+      "kind": "class",
+      "fields": [
+        {
+          "name": "name",
+          "source_name": "name",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Loose",
+      "kind": "class",
+      "fields": [
+        {
+          "name": "a-b",
+          "source_name": "a-b",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        },
+        {
+          "name": "x",
+          "source_name": "x",
+          "optional": true,
+          "type": {
+            "kind": "nullable",
+            "wrapped_type": {
+              "kind": "primitive",
+              "primitive": "integer"
+            }
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Alias",
+      "kind": "type_alias",
+      "fields": [],
+      "alias": {
+        "kind": "list",
+        "element_type": {
+          "kind": "named",
+          "name": "Child",
+          "type_arguments": [],
+          "is_type_parameter": false
+        }
+      },
+      "enum_values": []
+    }
+  ],
+  "diagnostics": []
+}

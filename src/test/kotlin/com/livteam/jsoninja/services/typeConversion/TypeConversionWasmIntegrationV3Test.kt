@@ -185,6 +185,13 @@ class TypeConversionWasmIntegrationV3Test : BasePlatformTestCase() {
         language: SupportedLanguage,
     ) {
         val expectedFragments = when (language) {
+            SupportedLanguage.CSHARP -> listOf("public class WorkspaceReport", "public List<WorkspaceReportWorkspaceOwnerItem> Owners")
+            SupportedLanguage.PYTHON -> listOf("class WorkspaceReport(TypedDict):", "owners: list[WorkspaceReportWorkspaceOwnerItem]")
+            SupportedLanguage.RUST -> listOf("pub struct WorkspaceReport", "pub owners: Vec<WorkspaceReportWorkspaceOwnerItem>")
+            SupportedLanguage.SCALA -> listOf("case class WorkspaceReport(", "owners: List[WorkspaceReportWorkspaceOwnerItem]")
+            SupportedLanguage.JSDOC -> listOf("@typedef {Object} WorkspaceReport", "@property {Array<WorkspaceReportWorkspaceOwnerItem>} owners")
+            SupportedLanguage.CPP -> listOf("struct WorkspaceReport", "std::vector<WorkspaceReportWorkspaceOwnerItem> owners;")
+            SupportedLanguage.C -> listOf("typedef struct WorkspaceReport", "#include <stdint.h>")
             SupportedLanguage.KOTLIN -> listOf(
                 "data class WorkspaceReport(",
                 "val owners: List<WorkspaceReportWorkspaceOwnerItem>",
@@ -303,7 +310,7 @@ class TypeConversionWasmIntegrationV3Test : BasePlatformTestCase() {
                 assertPrimitiveType(compactField.typeReference, TypePrimitiveKind.BOOLEAN)
                 assertListOfPrimitiveType(labelsField.typeReference, TypePrimitiveKind.STRING)
             }
-            SupportedLanguage.KOTLIN, SupportedLanguage.JAVA -> {
+            SupportedLanguage.KOTLIN, SupportedLanguage.JAVA, SupportedLanguage.C, SupportedLanguage.CPP, SupportedLanguage.CSHARP, SupportedLanguage.PYTHON, SupportedLanguage.RUST, SupportedLanguage.SCALA, SupportedLanguage.JSDOC -> {
                 assertNamedType(typeReference, "InlineSettings")
             }
         }
@@ -364,8 +371,8 @@ class TypeConversionWasmIntegrationV3Test : BasePlatformTestCase() {
 
     private fun expectedJsonToTypeDeclarationKind(language: SupportedLanguage): TypeDeclarationKind {
         return when (language) {
-            SupportedLanguage.KOTLIN, SupportedLanguage.JAVA -> TypeDeclarationKind.CLASS
-            SupportedLanguage.GO -> TypeDeclarationKind.STRUCT
+            SupportedLanguage.KOTLIN, SupportedLanguage.JAVA, SupportedLanguage.CSHARP, SupportedLanguage.PYTHON, SupportedLanguage.SCALA, SupportedLanguage.JSDOC -> TypeDeclarationKind.CLASS
+            SupportedLanguage.GO, SupportedLanguage.C, SupportedLanguage.CPP, SupportedLanguage.RUST -> TypeDeclarationKind.STRUCT
             SupportedLanguage.TYPESCRIPT -> TypeDeclarationKind.INTERFACE
         }
     }

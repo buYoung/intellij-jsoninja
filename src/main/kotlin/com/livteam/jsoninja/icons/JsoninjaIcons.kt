@@ -109,7 +109,9 @@ object JsoninjaIcons {
 
     fun getLanguageIcon(project: Project?, language: SupportedLanguage): Icon {
         val directory = if (getIconPack(project) == JsonIconPack.VERSION_3) "v3/" else ""
-        return load("/icons/languages/$directory${language.name.lowercase()}.svg")
+        val path = "/icons/languages/$directory${language.resourceKey}.svg"
+        return load(if (JsoninjaIcons::class.java.getResource(path) != null) path
+            else "/icons/languages/v3/${language.resourceKey}.svg")
     }
 
     private fun getIcon(project: Project?, v1Icon: Icon, v2Icon: Icon, v3Icon: Icon): Icon {

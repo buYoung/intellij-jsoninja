@@ -6,6 +6,7 @@ import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.model.typeConversion.JsonToTypeConversionResult
 import com.livteam.jsoninja.services.JsonObjectMapperService
+import com.livteam.jsoninja.services.typeConversion.languages.TypeLanguageRegistry
 
 @Service(Service.Level.PROJECT)
 class JsonToTypeConversionService(
@@ -35,12 +36,14 @@ class JsonToTypeConversionService(
         val jsonNode = objectMapper.readTree(jsonText)
         val inferenceContext = JsonToTypeInferenceContext(language, options)
         val inferenceResult = inferenceContext.infer(jsonNode)
+        val warnings = inferenceResult.warnings +
+            TypeLanguageRegistry.forLanguage(language).renderer.collectWarnings(inferenceResult.declarations, options)
         val renderedSourceCode = renderer.render(
             declarations = inferenceResult.declarations,
             language = language,
             options = options,
-            warningMessages = inferenceResult.warnings.map { it.message },
+            warningMessages = warnings.map { it.message },
         )
-        return inferenceResult.copy(sourceCode = renderedSourceCode)
+        return inferenceResult.copy(sourceCode = renderedSourceCode, warnings = warnings)
     }
 }

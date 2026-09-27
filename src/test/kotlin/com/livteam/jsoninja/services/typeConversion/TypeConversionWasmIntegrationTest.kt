@@ -198,8 +198,8 @@ class TypeConversionWasmIntegrationTest : BasePlatformTestCase() {
 
         when (language) {
             SupportedLanguage.TYPESCRIPT -> assertEquals(TypeDeclarationKind.INTERFACE, rootDeclaration.declarationKind)
-            SupportedLanguage.GO -> assertEquals(TypeDeclarationKind.STRUCT, rootDeclaration.declarationKind)
-            SupportedLanguage.JAVA, SupportedLanguage.KOTLIN -> {
+            SupportedLanguage.GO, SupportedLanguage.C, SupportedLanguage.CPP, SupportedLanguage.RUST -> assertEquals(TypeDeclarationKind.STRUCT, rootDeclaration.declarationKind)
+            SupportedLanguage.JAVA, SupportedLanguage.KOTLIN, SupportedLanguage.CSHARP, SupportedLanguage.PYTHON, SupportedLanguage.SCALA, SupportedLanguage.JSDOC -> {
                 assertEquals(TypeDeclarationKind.CLASS, rootDeclaration.declarationKind)
             }
         }
@@ -213,6 +213,13 @@ class TypeConversionWasmIntegrationTest : BasePlatformTestCase() {
             SupportedLanguage.KOTLIN -> "data class TsConfig("
             SupportedLanguage.JAVA -> "public class TsConfig"
             SupportedLanguage.GO -> "type TsConfig struct"
+            SupportedLanguage.C -> "typedef struct TsConfig"
+            SupportedLanguage.CPP -> "struct TsConfig"
+            SupportedLanguage.CSHARP -> "public class TsConfig"
+            SupportedLanguage.PYTHON -> "class TsConfig(TypedDict):"
+            SupportedLanguage.RUST -> "pub struct TsConfig"
+            SupportedLanguage.SCALA -> "case class TsConfig("
+            SupportedLanguage.JSDOC -> "@typedef {Object} TsConfig"
             SupportedLanguage.TYPESCRIPT -> "export interface TsConfig"
         }
         assertTrue(
@@ -275,9 +282,9 @@ class TypeConversionWasmIntegrationTest : BasePlatformTestCase() {
 
     private fun expectedUserResponseDeclarationKind(language: SupportedLanguage): TypeDeclarationKind {
         return when (language) {
-            SupportedLanguage.GO -> TypeDeclarationKind.STRUCT
+            SupportedLanguage.GO, SupportedLanguage.C, SupportedLanguage.CPP, SupportedLanguage.RUST -> TypeDeclarationKind.STRUCT
             SupportedLanguage.TYPESCRIPT -> TypeDeclarationKind.INTERFACE
-            SupportedLanguage.JAVA, SupportedLanguage.KOTLIN -> TypeDeclarationKind.CLASS
+            SupportedLanguage.JAVA, SupportedLanguage.KOTLIN, SupportedLanguage.CSHARP, SupportedLanguage.PYTHON, SupportedLanguage.SCALA, SupportedLanguage.JSDOC -> TypeDeclarationKind.CLASS
         }
     }
 
@@ -312,7 +319,7 @@ class TypeConversionWasmIntegrationTest : BasePlatformTestCase() {
                     ?: throw AssertionError("Expected nullable string type, but was $typeReference")
                 assertPrimitiveType(nullableTypeReference.wrappedType, TypePrimitiveKind.STRING)
             }
-            SupportedLanguage.JAVA -> assertPrimitiveType(typeReference, TypePrimitiveKind.STRING)
+            SupportedLanguage.JAVA, SupportedLanguage.C, SupportedLanguage.CPP, SupportedLanguage.CSHARP, SupportedLanguage.PYTHON, SupportedLanguage.RUST, SupportedLanguage.SCALA, SupportedLanguage.JSDOC -> assertPrimitiveType(typeReference, TypePrimitiveKind.STRING)
         }
     }
 

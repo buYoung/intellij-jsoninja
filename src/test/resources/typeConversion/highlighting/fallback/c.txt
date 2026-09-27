@@ -1,0 +1,7 @@
+typedef struct <TYPE_NAME>Root</TYPE_NAME> { <TYPE_PREDEFINED>int64_t</TYPE_PREDEFINED> <TYPE_FIELD>id</TYPE_FIELD>; char *<TYPE_FIELD>name</TYPE_FIELD>; } <TYPE_NAME>Root</TYPE_NAME>;
+typedef <TYPE_NAME>Root</TYPE_NAME> <TYPE_NAME>root_alias</TYPE_NAME>;
+typedef struct {
+    <TYPE_PREDEFINED>size_t</TYPE_PREDEFINED> <TYPE_FIELD>length</TYPE_FIELD>;
+    <TYPE_NAME>Root</TYPE_NAME> *<TYPE_FIELD>data</TYPE_FIELD>;
+} <TYPE_NAME>root_array</TYPE_NAME>;
+typedef <TYPE_NAME>root_array</TYPE_NAME> <TYPE_NAME>array_alias</TYPE_NAME>, *<TYPE_NAME>array_pointer</TYPE_NAME>;

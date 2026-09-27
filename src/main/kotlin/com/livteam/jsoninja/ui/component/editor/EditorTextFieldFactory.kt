@@ -7,6 +7,8 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.colors.EditorColorsScheme
+import com.intellij.openapi.editor.highlighter.EditorHighlighter
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.FileTypeManager
@@ -72,6 +74,7 @@ internal object EditorTextFieldFactory {
         shouldShowHorizontalScrollbar: Boolean = false,
         shouldShowVerticalScrollbar: Boolean = false,
         shouldEmbedIntoDialogWrapper: Boolean = true,
+        highlighterProvider: ((Project, FileType, EditorColorsScheme) -> EditorHighlighter)? = null,
         configureEditorSettings: EditorSettings.() -> Unit = {},
         customizeEditor: EditorEx.(FileType) -> Unit = {},
     ): EditorTextField {
@@ -93,6 +96,7 @@ internal object EditorTextFieldFactory {
             isViewer = isViewer,
             oneLineMode = oneLineMode,
             shouldEnableCodeFolding = shouldEnableCodeFolding ?: shouldUsePsiDocument,
+            highlighterProvider = highlighterProvider,
             shouldApplyEditorColors = shouldApplyEditorColors,
             shouldApplyHighlighter = shouldApplyHighlighter,
             shouldShowHorizontalScrollbar = shouldShowHorizontalScrollbar,
@@ -151,12 +155,14 @@ internal object EditorTextFieldFactory {
         shouldEmbedIntoDialogWrapper: Boolean,
         configureEditorSettings: EditorSettings.() -> Unit,
         customizeEditor: EditorEx.(FileType) -> Unit,
+        highlighterProvider: ((Project, FileType, EditorColorsScheme) -> EditorHighlighter)? = null,
     ): EditorTextField {
         val editorTextField = if (shouldEnableCodeFolding) {
             FoldingAwareEditorTextField(document, project, fileType, isViewer, oneLineMode)
         } else {
             EditorTextField(document, project, fileType, isViewer, oneLineMode)
         }
+        if (shouldApplyEditorColors) editorTextField.setFontInheritedFromLAF(false)
 
         placeholderText?.let(editorTextField::setPlaceholder)
         preferredSize?.let { editorTextField.preferredSize = it }
@@ -178,6 +184,7 @@ internal object EditorTextFieldFactory {
                     fileType = fileType,
                     shouldApplyEditorColors = shouldApplyEditorColors,
                     shouldApplyHighlighter = shouldApplyHighlighter,
+                    highlighterProvider = highlighterProvider,
                 )
             }
 
@@ -219,15 +226,17 @@ internal object EditorTextFieldFactory {
         fileType: FileType,
         shouldApplyEditorColors: Boolean,
         shouldApplyHighlighter: Boolean,
+        highlighterProvider: ((Project, FileType, EditorColorsScheme) -> EditorHighlighter)?,
     ) {
         val globalScheme = EditorColorsManager.getInstance().globalScheme
         if (shouldApplyEditorColors) {
-            editor.colorsScheme = globalScheme
+            editor.colorsScheme = editor.createBoundColorSchemeDelegate(globalScheme)
             editor.backgroundColor = globalScheme.defaultBackground
         }
 
         if (shouldApplyHighlighter) {
-            editor.highlighter = HighlighterFactory.createHighlighter(
+            editor.highlighter = highlighterProvider?.invoke(resolveHighlighterProject(project), fileType, editor.colorsScheme)
+                ?: HighlighterFactory.createHighlighter(
                 resolveHighlighterProject(project),
                 fileType,
             )

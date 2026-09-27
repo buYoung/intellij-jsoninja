@@ -1,0 +1,136 @@
+{
+  "language": "jsdoc",
+  "declarations": [
+    {
+      "name": "Root",
+      "kind": "class",
+      "fields": [
+        {
+          "name": "display-name",
+          "source_name": "display-name",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        },
+        {
+          "name": "nickname",
+          "source_name": "nickname",
+          "optional": true,
+          "type": {
+            "kind": "nullable",
+            "wrapped_type": {
+              "kind": "primitive",
+              "primitive": "string"
+            }
+          }
+        },
+        {
+          "name": "items",
+          "source_name": "items",
+          "optional": false,
+          "type": {
+            "kind": "list",
+            "element_type": {
+              "kind": "named",
+              "name": "Item",
+              "type_arguments": [],
+              "is_type_parameter": false
+            }
+          }
+        },
+        {
+          "name": "flags",
+          "source_name": "flags",
+          "optional": false,
+          "type": {
+            "kind": "map",
+            "key_type": {
+              "kind": "primitive",
+              "primitive": "string"
+            },
+            "value_type": {
+              "kind": "primitive",
+              "primitive": "boolean"
+            }
+          }
+        },
+        {
+          "name": "settings",
+          "source_name": "settings",
+          "optional": false,
+          "type": {
+            "kind": "inline_object",
+            "fields": [
+              {
+                "name": "retries",
+                "source_name": "retries",
+                "optional": false,
+                "type": {
+                  "kind": "primitive",
+                  "primitive": "number"
+                },
+                "annotations": []
+              },
+              {
+                "name": "label",
+                "source_name": "label",
+                "optional": true,
+                "type": {
+                  "kind": "primitive",
+                  "primitive": "string"
+                },
+                "annotations": []
+              }
+            ]
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Item",
+      "kind": "class",
+      "fields": [
+        {
+          "name": "id",
+          "source_name": "id",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "number"
+          }
+        },
+        {
+          "name": "name",
+          "source_name": "name",
+          "optional": false,
+          "type": {
+            "kind": "primitive",
+            "primitive": "string"
+          }
+        }
+      ],
+      "alias": null,
+      "enum_values": []
+    },
+    {
+      "name": "Users",
+      "kind": "type_alias",
+      "fields": [],
+      "alias": {
+        "kind": "list",
+        "element_type": {
+          "kind": "named",
+          "name": "Root",
+          "type_arguments": [],
+          "is_type_parameter": false
+        }
+      },
+      "enum_values": []
+    }
+  ],
+  "diagnostics": []
+}

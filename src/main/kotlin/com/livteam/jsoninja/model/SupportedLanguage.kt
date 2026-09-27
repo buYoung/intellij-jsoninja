@@ -12,6 +12,8 @@ enum class SupportedLanguage(
     val defaultAnnotationStyle: JsonToTypeAnnotationStyle,
     val availableNamingConventions: List<NamingConvention>,
     val availableAnnotationStyles: List<JsonToTypeAnnotationStyle>,
+    val showsAnalysisWarnings: Boolean = false,
+    val usesOriginalJsonFieldNames: Boolean = false,
 ) {
     KOTLIN(
         displayNameKey = "language.kotlin",
@@ -60,7 +62,82 @@ enum class SupportedLanguage(
             JsonToTypeAnnotationStyle.GO_JSON_TAG,
         ),
     ),
+    C(
+        displayNameKey = "language.c",
+        fileExtension = "c",
+        wasmLanguageId = 4,
+        defaultNamingConvention = NamingConvention.SNAKE_CASE,
+        defaultAnnotationStyle = JsonToTypeAnnotationStyle.NONE,
+        availableNamingConventions = NamingConvention.entries,
+        availableAnnotationStyles = listOf(JsonToTypeAnnotationStyle.NONE),
+        showsAnalysisWarnings = true,
+    ),
+    CPP(
+        displayNameKey = "language.cpp",
+        fileExtension = "cpp",
+        wasmLanguageId = 5,
+        defaultNamingConvention = NamingConvention.CAMEL_CASE,
+        defaultAnnotationStyle = JsonToTypeAnnotationStyle.NONE,
+        availableNamingConventions = NamingConvention.entries,
+        availableAnnotationStyles = listOf(JsonToTypeAnnotationStyle.NONE),
+        showsAnalysisWarnings = true,
+    ),
+    CSHARP(
+        displayNameKey = "language.csharp",
+        fileExtension = "cs",
+        wasmLanguageId = 6,
+        defaultNamingConvention = NamingConvention.PASCAL_CASE,
+        defaultAnnotationStyle = JsonToTypeAnnotationStyle.CSHARP_JSON_PROPERTY_NAME,
+        availableNamingConventions = NamingConvention.entries,
+        availableAnnotationStyles = listOf(JsonToTypeAnnotationStyle.NONE, JsonToTypeAnnotationStyle.CSHARP_JSON_PROPERTY_NAME),
+        showsAnalysisWarnings = true,
+    ),
+    PYTHON(
+        displayNameKey = "language.python",
+        fileExtension = "py",
+        wasmLanguageId = 7,
+        defaultNamingConvention = NamingConvention.SNAKE_CASE,
+        defaultAnnotationStyle = JsonToTypeAnnotationStyle.NONE,
+        availableNamingConventions = listOf(NamingConvention.SNAKE_CASE),
+        availableAnnotationStyles = listOf(JsonToTypeAnnotationStyle.NONE),
+        showsAnalysisWarnings = true,
+        usesOriginalJsonFieldNames = true,
+    ),
+    RUST(
+        displayNameKey = "language.rust",
+        fileExtension = "rs",
+        wasmLanguageId = 8,
+        defaultNamingConvention = NamingConvention.SNAKE_CASE,
+        defaultAnnotationStyle = JsonToTypeAnnotationStyle.NONE,
+        availableNamingConventions = NamingConvention.entries,
+        availableAnnotationStyles = listOf(JsonToTypeAnnotationStyle.NONE),
+        showsAnalysisWarnings = true,
+    ),
+    SCALA(
+        displayNameKey = "language.scala",
+        fileExtension = "scala",
+        wasmLanguageId = 9,
+        defaultNamingConvention = NamingConvention.CAMEL_CASE,
+        defaultAnnotationStyle = JsonToTypeAnnotationStyle.NONE,
+        availableNamingConventions = NamingConvention.entries,
+        availableAnnotationStyles = listOf(JsonToTypeAnnotationStyle.NONE),
+        showsAnalysisWarnings = true,
+    ),
+    JSDOC(
+        displayNameKey = "language.jsdoc",
+        fileExtension = "js",
+        wasmLanguageId = 10,
+        defaultNamingConvention = NamingConvention.CAMEL_CASE,
+        defaultAnnotationStyle = JsonToTypeAnnotationStyle.NONE,
+        availableNamingConventions = listOf(NamingConvention.CAMEL_CASE),
+        availableAnnotationStyles = listOf(JsonToTypeAnnotationStyle.NONE),
+        showsAnalysisWarnings = true,
+        usesOriginalJsonFieldNames = true,
+    ),
     ;
+
+    val resourceKey: String get() = name.lowercase(java.util.Locale.ROOT)
+    val inputPlaceholderKey: String get() = "dialog.type.to.json.input.placeholder.$resourceKey"
 
     fun getDisplayName(): String = LocalizationBundle.message(displayNameKey)
 

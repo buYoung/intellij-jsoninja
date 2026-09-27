@@ -32,7 +32,14 @@ fn get_supported_languages_returns_language_descriptors() {
             { "id": 0, "name": "java" },
             { "id": 1, "name": "kotlin" },
             { "id": 2, "name": "typescript" },
-            { "id": 3, "name": "go" }
+            { "id": 3, "name": "go" },
+            { "id": 4, "name": "c" },
+            { "id": 5, "name": "cpp" },
+            { "id": 6, "name": "csharp" },
+            { "id": 7, "name": "python" },
+            { "id": 8, "name": "rust" },
+            { "id": 9, "name": "scala" },
+            { "id": 10, "name": "jsdoc" }
         ])
     );
 }
@@ -347,3 +354,6 @@ fn guest_memory_from_bytes(value: &[u8]) -> GuestMemoryBuffer {
         length,
     }
 }
+
+#[path = "language_tests.rs"]
+mod language_tests;
