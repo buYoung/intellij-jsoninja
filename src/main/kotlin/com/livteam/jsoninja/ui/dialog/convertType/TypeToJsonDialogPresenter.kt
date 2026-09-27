@@ -38,6 +38,8 @@ class TypeToJsonDialogPresenter(
     val component
         get() = view.component
 
+    fun getPreferredFocusedComponent() = view.getPreferredFocusedComponent()
+
     fun updateLanguage(language: SupportedLanguage) {
         invalidatePreview()
         currentConfig = currentConfig.copy(language = language)

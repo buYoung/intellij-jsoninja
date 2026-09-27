@@ -23,6 +23,7 @@ import javax.swing.JPanel
 
 class CodePreviewPanel(
     private val project: Project,
+    private val shouldShowCopyButton: Boolean = true,
 ) : JBPanel<CodePreviewPanel>(BorderLayout()), Disposable, EditorColorsListener {
     private companion object {
         private const val EMPTY_CARD = "empty"
@@ -110,7 +111,7 @@ class CodePreviewPanel(
         cardPanel.add(wrapStateLabel(errorLabel), ERROR_CARD)
         cardPanel.add(
             JPanel(BorderLayout()).apply {
-                add(copyButton, BorderLayout.NORTH)
+                if (shouldShowCopyButton) add(copyButton, BorderLayout.NORTH)
                 add(warningsPanel, BorderLayout.SOUTH)
             },
             SUCCESS_CARD,

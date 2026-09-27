@@ -62,6 +62,10 @@ class LanguageSelectorComponent(private val project: Project? = null) : JBPanel<
         return languageComboBox.selectedItem as? SupportedLanguage
     }
 
+    fun setAccessibleName(name: String) {
+        languageComboBox.accessibleContext.accessibleName = name
+    }
+
     fun setOnLanguageChanged(callback: (SupportedLanguage) -> Unit) {
         onLanguageChanged = callback
     }

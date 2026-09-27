@@ -4,11 +4,14 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.ui.components.JBPanel
+import com.intellij.ui.dsl.builder.panel
+import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.component.main.JsoninjaPanelPresenter
 import com.livteam.jsoninja.utils.ConvertResultUtils
 import java.awt.Dimension
-import javax.swing.Action
+import java.awt.BorderLayout
 import javax.swing.JComponent
 
 class ConvertTypeDialog(
@@ -23,33 +26,48 @@ class ConvertTypeDialog(
         seedText = seedText,
         forcedTabIndex = forcedTabIndex,
     )
-    private val copyAction = object : DialogWrapperAction(LocalizationBundle.message("common.convert.copy")) {
-        override fun doAction(event: java.awt.event.ActionEvent?) {
-            presenter.copyCurrentPreview()
-        }
-    }
-
     init {
         title = LocalizationBundle.message("dialog.type.conversion.title")
-        setOKButtonText(LocalizationBundle.message("common.convert.insert"))
+        setOKButtonText(LocalizationBundle.message(when {
+            targetEditor != null -> "common.convert.insert"
+            panelPresenter != null -> "common.convert.insert.new.tab"
+            else -> "common.convert.copy.result"
+        }))
         init()
         presenter.setOnPreviewStateChanged {
-            val canConsumePreview = presenter.hasCurrentPreview()
-            isOKActionEnabled = canConsumePreview
-            copyAction.isEnabled = canConsumePreview
+            isOKActionEnabled = presenter.hasCurrentPreview()
         }
     }
 
     override fun createCenterPanel(): JComponent {
-        return presenter.component.apply {
-            preferredSize = Dimension(980, 700)
-            minimumSize = Dimension(860, 420)
+        val destinationKey = when {
+            targetEditor?.selectionModel?.hasSelection() == true -> "common.convert.destination.selection"
+            targetEditor != null -> "common.convert.destination.document"
+            panelPresenter != null -> "common.convert.destination.new.tab"
+            else -> "common.convert.destination.clipboard"
+        }
+        val footer = panel {
+            separator()
+            row { comment(LocalizationBundle.message(destinationKey)) }
+        }.apply {
+            border = JBUI.Borders.empty(0, 12, 0, 12)
+        }
+        return JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            add(presenter.component, BorderLayout.CENTER)
+            add(footer, BorderLayout.SOUTH)
+            val contentMinimum = minimumSize
+            minimumSize = Dimension(
+                maxOf(JBUI.scale(900), contentMinimum.width),
+                maxOf(JBUI.scale(460), contentMinimum.height),
+            )
+            preferredSize = Dimension(
+                maxOf(JBUI.scale(1120), minimumSize.width),
+                maxOf(JBUI.scale(680), minimumSize.height),
+            )
         }
     }
 
-    override fun createLeftSideActions(): Array<Action> {
-        return arrayOf(copyAction)
-    }
+    override fun getPreferredFocusedComponent(): JComponent = presenter.getPreferredFocusedComponent()
 
     override fun doValidate(): ValidationInfo? {
         return presenter.validateCurrentTab() ?: if (!presenter.hasCurrentPreview()) {

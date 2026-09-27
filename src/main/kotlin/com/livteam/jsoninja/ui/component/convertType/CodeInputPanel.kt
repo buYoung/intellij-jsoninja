@@ -15,6 +15,7 @@ import com.livteam.jsoninja.ui.component.convertType.highlighting.TypeCodeHighli
 import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
 import java.awt.BorderLayout
 import javax.swing.JPanel
+import javax.swing.JComponent
 
 class CodeInputPanel(
     private val project: Project,
@@ -44,6 +45,8 @@ class CodeInputPanel(
     }
 
     fun getText(): String = editorField?.text.orEmpty()
+
+    fun getPreferredFocusedComponent(): JComponent = editorField ?: this
 
     fun setOnTextChanged(callback: (String) -> Unit) {
         onTextChanged = callback

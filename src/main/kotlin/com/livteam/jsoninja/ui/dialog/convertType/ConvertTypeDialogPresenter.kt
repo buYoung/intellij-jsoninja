@@ -37,6 +37,11 @@ class ConvertTypeDialogPresenter(
     val component
         get() = view.component
 
+    fun getPreferredFocusedComponent() = when (view.getSelectedTabIndex()) {
+        0 -> jsonToTypePresenter.getPreferredFocusedComponent()
+        else -> typeToJsonPresenter.getPreferredFocusedComponent()
+    }
+
     fun validateCurrentTab(): ValidationInfo? {
         return when (view.getSelectedTabIndex()) {
             0 -> jsonToTypePresenter.validate()
