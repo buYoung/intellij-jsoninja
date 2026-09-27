@@ -1,38 +1,37 @@
 package com.livteam.jsoninja.ui.dialog.generateJson.schema
 
-import com.intellij.ide.IdeEventQueue
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.JBPopupListener
+import com.intellij.openapi.ui.popup.LightweightWindowEvent
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.SearchTextField
-import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBList
-import com.intellij.ui.components.JBRadioButton
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
+import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationOutputFormat
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import java.awt.BorderLayout
-import java.awt.Color
-import java.awt.Component
-import java.awt.Container
 import java.awt.Point
-import java.awt.event.FocusAdapter
-import java.awt.event.FocusEvent
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
-import javax.swing.JSeparator
 import javax.swing.JButton
 import javax.swing.JComponent
+import javax.swing.JEditorPane
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.ListCellRenderer
@@ -53,22 +52,53 @@ class GenerateSchemaJsonTabView(
     private lateinit var schemaUrlSuggestionList: JBList<SchemaUrlComboBoxItem>
     private lateinit var loadSchemaFromUrlButton: JButton
     private lateinit var schemaOutputCountField: JBTextField
-    private lateinit var schemaRequiredAndOptionalRadioButton: JBRadioButton
-    private lateinit var schemaRequiredOnlyRadioButton: JBRadioButton
-    private lateinit var schemaRequiredAndOptionalCommentedRadioButton: JBRadioButton
-    private lateinit var schemaJson5Checkbox: JBCheckBox
+    private val schemaPropertyModeComboBox = ComboBox(SchemaPropertyGenerationMode.entries.toTypedArray()).apply {
+        selectedItem = initialConfig.schemaPropertyGenerationMode
+        renderer = SimpleListCellRenderer.create("") { mode ->
+            LocalizationBundle.message(
+                when (mode) {
+                    SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL -> "dialog.generate.json.schema.property.mode.required.optional"
+                    SchemaPropertyGenerationMode.REQUIRED_ONLY -> "dialog.generate.json.schema.property.mode.required.only"
+                    SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED -> "dialog.generate.json.schema.property.mode.required.optional.commented"
+                }
+            )
+        }
+    }
+    private var preferredOutputFormat =
+        if (initialConfig.isJson5) JsonGenerationOutputFormat.JSON5 else JsonGenerationOutputFormat.JSON
+    private val schemaOutputFormatComboBox = ComboBox(JsonGenerationOutputFormat.entries.toTypedArray()).apply {
+        selectedItem = preferredOutputFormat
+    }
+    private lateinit var outputFormatComment: JEditorPane
+    private lateinit var outputFormatCommentRow: Row
     private var schemaUrlSuggestionPopup: JBPopup? = null
     private var selectedSchemaStoreCatalogItem: SchemaStoreCatalogItem? = null
     private var hasPendingSchemaStoreSelectionLoad = false
     private var schemaUrlSuggestionItems: List<SchemaUrlComboBoxItem> = emptyList()
     private var isUpdatingSchemaUrlEditorText = false
     private var isDisposed = false
+    private var shouldShowSchemaUrlSuggestions = false
 
     private var onSchemaUrlInputChangedCallback: (() -> Unit)? = null
     private var onLoadSchemaFromUrlRequestedCallback: (() -> Unit)? = null
     private var onSchemaSourceReplacedCallback: (() -> Unit)? = null
+    private var onOptionsChangedCallback: (() -> Unit)? = null
 
-    val component: JComponent = createComponent()
+    val component: DialogPanel = createComponent()
+
+    fun setOnOptionsChanged(callback: () -> Unit) {
+        onOptionsChangedCallback = callback
+    }
+
+    fun setActive(isActive: Boolean) {
+        if (!isActive) {
+            hideSchemaUrlSuggestionPopup()
+        }
+    }
+
+    fun registerValidators(parentDisposable: Disposable) {
+        component.registerValidators(parentDisposable)
+    }
 
     fun setOnSchemaUrlInputChanged(callback: () -> Unit) {
         onSchemaUrlInputChangedCallback = callback
@@ -92,15 +122,10 @@ class GenerateSchemaJsonTabView(
 
     fun getSchemaUrlInputComponent(): JComponent = schemaUrlSearchField
 
-    fun getSchemaPropertyGenerationMode(): SchemaPropertyGenerationMode {
-        return when {
-            schemaRequiredOnlyRadioButton.isSelected -> SchemaPropertyGenerationMode.REQUIRED_ONLY
-            schemaRequiredAndOptionalCommentedRadioButton.isSelected -> SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
-            else -> SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
-        }
-    }
+    fun getSchemaPropertyGenerationMode(): SchemaPropertyGenerationMode =
+        schemaPropertyModeComboBox.selectedItem as SchemaPropertyGenerationMode
 
-    fun isJson5Selected(): Boolean = schemaJson5Checkbox.isSelected
+    fun isJson5Selected(): Boolean = schemaOutputFormatComboBox.selectedItem == JsonGenerationOutputFormat.JSON5
 
     fun getSchemaUrlEditorText(): String {
         return schemaUrlSearchField.textEditor.text
@@ -144,6 +169,9 @@ class GenerateSchemaJsonTabView(
 
     fun setLoadSchemaFromUrlButtonEnabled(isEnabled: Boolean) {
         loadSchemaFromUrlButton.isEnabled = isEnabled
+        loadSchemaFromUrlButton.text = LocalizationBundle.message(
+            if (isEnabled) "dialog.generate.json.schema.url.load.button" else "dialog.generate.json.schema.url.loading"
+        )
     }
 
     fun updateSchemaUrlSuggestions(
@@ -174,7 +202,9 @@ class GenerateSchemaJsonTabView(
             }
         }
 
-        if (showPopupWhenAvailable && schemaUrlSuggestionItems.isNotEmpty()) {
+        if (showPopupWhenAvailable && shouldShowSchemaUrlSuggestions &&
+            schemaUrlSearchField.textEditor.isFocusOwner && schemaUrlSuggestionItems.isNotEmpty()
+        ) {
             showSchemaUrlSuggestionPopup()
             selectFirstSelectableSuggestion()
             return
@@ -191,73 +221,9 @@ class GenerateSchemaJsonTabView(
         }
     }
 
-    private fun createComponent(): JComponent {
-        val schemaPanel = JPanel(BorderLayout())
+    private fun createComponent(): DialogPanel {
         schemaUrlSearchField = createSchemaUrlSearchField()
         schemaUrlSuggestionList = createSchemaUrlSuggestionList()
-
-        val optionsPanel = panel {
-            group(LocalizationBundle.message("dialog.generate.json.schema.group.input")) {
-                row(LocalizationBundle.message("dialog.generate.json.schema.url.label")) {
-                    cell(schemaUrlSearchField)
-                        .align(AlignX.FILL)
-                        .resizableColumn()
-                        .comment(LocalizationBundle.message("dialog.generate.json.schema.url.comment"))
-                    loadSchemaFromUrlButton =
-                        button(LocalizationBundle.message("dialog.generate.json.schema.url.load.button")) {
-                            onLoadSchemaFromUrlRequestedCallback?.invoke()
-                        }.component
-                }.layout(RowLayout.PARENT_GRID)
-
-                row(LocalizationBundle.message("dialog.generate.json.schema.output.count")) {
-                    schemaOutputCountField = intTextField(1..100)
-                        .apply { component.text = initialConfig.schemaOutputCount.toString() }
-                        .gap(RightGap.SMALL)
-                        .comment(LocalizationBundle.message("dialog.generate.json.schema.output.count.comment"))
-                        .component
-                }
-
-                group(LocalizationBundle.message("dialog.generate.json.schema.property.mode.label")) {
-                    buttonsGroup {
-                        row {
-                            schemaRequiredAndOptionalRadioButton = radioButton(
-                                LocalizationBundle.message("dialog.generate.json.schema.property.mode.required.optional"),
-                                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
-                            ).component
-                        }
-                        row {
-                            schemaRequiredOnlyRadioButton = radioButton(
-                                LocalizationBundle.message("dialog.generate.json.schema.property.mode.required.only"),
-                                SchemaPropertyGenerationMode.REQUIRED_ONLY
-                            ).component
-                        }
-                        row {
-                            schemaRequiredAndOptionalCommentedRadioButton = radioButton(
-                                LocalizationBundle.message("dialog.generate.json.schema.property.mode.required.optional.commented"),
-                                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
-                            ).component
-                        }
-                    }.bind(
-                        { getSchemaPropertyGenerationMode() },
-                        { selectedMode ->
-                            setSchemaPropertyGenerationMode(selectedMode)
-                            updateSchemaJson5CheckboxState(selectedMode)
-                        }
-                    )
-                }
-
-                row {
-                    schemaJson5Checkbox = checkBox(LocalizationBundle.message("dialog.generate.json.checkbox.json5"))
-                        .apply {
-                            component.isSelected = initialConfig.isJson5
-                            updateSchemaJson5CheckboxState(getSchemaPropertyGenerationMode())
-                        }
-                        .component
-                }
-
-            }
-        }
-
         schemaEditor = createSchemaEditor()
         schemaEditor.addDocumentListener(object : com.intellij.openapi.editor.event.DocumentListener {
             override fun beforeDocumentChange(event: com.intellij.openapi.editor.event.DocumentEvent) {
@@ -275,54 +241,102 @@ class GenerateSchemaJsonTabView(
                 }
             }
         })
-        val groupSeparatorColor = resolveGroupSeparatorColor(optionsPanel)
-        val schemaEditorContainer = JPanel(BorderLayout()).apply {
-            val dividerPanel = JPanel(BorderLayout()).apply {
-                border = JBUI.Borders.empty(8, 0, 10, 0)
-                add(JSeparator().apply {
-                    foreground = groupSeparatorColor
-                    background = groupSeparatorColor
-                }, BorderLayout.NORTH)
+
+        val result = panel {
+            row {
+                cell(schemaUrlSearchField)
+                    .label(LocalizationBundle.message("dialog.generate.json.schema.url.label"), LabelPosition.TOP)
+                    .align(AlignX.FILL)
+                    .resizableColumn()
+                loadSchemaFromUrlButton = button(LocalizationBundle.message("dialog.generate.json.schema.url.load.button")) {
+                    onLoadSchemaFromUrlRequestedCallback?.invoke()
+                }.component
             }
-            add(dividerPanel, BorderLayout.NORTH)
-            add(schemaEditor, BorderLayout.CENTER)
-        }
-        schemaPanel.add(optionsPanel, BorderLayout.NORTH)
-        schemaPanel.add(schemaEditorContainer, BorderLayout.CENTER)
 
-        return schemaPanel
+            row {
+                label(LocalizationBundle.message("dialog.generate.json.schema.editor.label"))
+                    .applyToComponent { labelFor = schemaEditor }
+                comment(LocalizationBundle.message("dialog.generate.json.schema.editor.comment"))
+                    .align(AlignX.RIGHT)
+            }.topGap(TopGap.SMALL)
+
+            row {
+                cell(schemaEditor).align(Align.FILL).resizableColumn()
+            }.resizableRow()
+
+            separator().topGap(TopGap.SMALL)
+            panel {
+                row(LocalizationBundle.message("dialog.generate.json.schema.output.count")) {
+                    schemaOutputCountField = intTextField(1..100, keyboardStep = 1)
+                        .applyToComponent { text = initialConfig.schemaOutputCount.toString() }
+                        .component
+                    label(LocalizationBundle.message("dialog.generate.json.range", 1, 100))
+                        .applyToComponent { foreground = UIUtil.getContextHelpForeground() }
+                        .gap(RightGap.COLUMNS)
+                    label(LocalizationBundle.message("dialog.generate.json.output.format"))
+                        .applyToComponent { labelFor = schemaOutputFormatComboBox }
+                    cell(schemaOutputFormatComboBox)
+                }
+                row(LocalizationBundle.message("dialog.generate.json.schema.property.mode.label")) {
+                    cell(schemaPropertyModeComboBox)
+                }
+                outputFormatCommentRow = row {
+                    outputFormatComment = comment(LocalizationBundle.message("dialog.generate.json.output.json5.comment"))
+                        .component
+                }
+            }
+        }.apply {
+            border = JBUI.Borders.empty(16, 12, 12, 12)
+        }
+
+        schemaPropertyModeComboBox.addActionListener {
+            updateOutputFormatState()
+            onOptionsChangedCallback?.invoke()
+        }
+        schemaOutputFormatComboBox.addActionListener {
+            if (schemaOutputFormatComboBox.isEnabled) {
+                preferredOutputFormat = schemaOutputFormatComboBox.selectedItem as JsonGenerationOutputFormat
+            }
+            updateOutputFormatComment()
+            onOptionsChangedCallback?.invoke()
+        }
+        schemaOutputCountField.document.addDocumentListener(object : com.intellij.ui.DocumentAdapter() {
+            override fun textChanged(event: DocumentEvent) {
+                onOptionsChangedCallback?.invoke()
+            }
+        })
+        updateOutputFormatState()
+        return result
     }
 
-    private fun setSchemaPropertyGenerationMode(schemaPropertyGenerationMode: SchemaPropertyGenerationMode) {
-        schemaRequiredAndOptionalRadioButton.isSelected =
-            schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
-        schemaRequiredOnlyRadioButton.isSelected =
-            schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_ONLY
-        schemaRequiredAndOptionalCommentedRadioButton.isSelected =
-            schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
+    private fun updateOutputFormatState() {
+        val isCommentedMode = getSchemaPropertyGenerationMode() == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
+        schemaOutputFormatComboBox.isEnabled = !isCommentedMode
+        schemaOutputFormatComboBox.selectedItem = if (isCommentedMode) JsonGenerationOutputFormat.JSON5 else preferredOutputFormat
+        updateOutputFormatComment()
     }
 
-    private fun updateSchemaJson5CheckboxState(schemaPropertyGenerationMode: SchemaPropertyGenerationMode) {
-        if (!::schemaJson5Checkbox.isInitialized) {
-            return
-        }
-
-        val isCommentedMode = schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
-        if (isCommentedMode) {
-            schemaJson5Checkbox.isSelected = true
-            schemaJson5Checkbox.isEnabled = false
+    private fun updateOutputFormatComment() {
+        val commentKey = if (getSchemaPropertyGenerationMode() == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED) {
+            "dialog.generate.json.output.json5.required"
         } else {
-            schemaJson5Checkbox.isEnabled = true
+            "dialog.generate.json.output.json5.comment"
         }
+        outputFormatComment.text = LocalizationBundle.message(commentKey)
+        outputFormatCommentRow.visible(isJson5Selected())
     }
 
     private fun createSchemaUrlSearchField(): SearchTextField {
         val searchTextField = SearchTextField()
+        searchTextField.textEditor.emptyText.text = LocalizationBundle.message("dialog.generate.json.schema.url.placeholder")
+        searchTextField.textEditor.accessibleContext.accessibleName =
+            LocalizationBundle.message("dialog.generate.json.schema.url.label")
         attachSchemaUrlEditorDocumentListener(searchTextField)
         searchTextField.textEditor.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(keyEvent: KeyEvent) {
                 when (keyEvent.keyCode) {
                     KeyEvent.VK_DOWN -> {
+                        shouldShowSchemaUrlSuggestions = true
                         if (schemaUrlSuggestionItems.isNotEmpty()) {
                             showSchemaUrlSuggestionPopup()
                             selectFirstSelectableSuggestion()
@@ -345,8 +359,10 @@ class GenerateSchemaJsonTabView(
                 }
             }
         })
-        searchTextField.textEditor.addFocusListener(object : FocusAdapter() {
-            override fun focusGained(focusEvent: FocusEvent?) {
+        searchTextField.textEditor.addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mousePressed(mouseEvent: MouseEvent) {
+                if (!SwingUtilities.isLeftMouseButton(mouseEvent)) return
+                shouldShowSchemaUrlSuggestions = true
                 if (schemaUrlSuggestionItems.isNotEmpty()) {
                     showSchemaUrlSuggestionPopup()
                     selectFirstSelectableSuggestion()
@@ -379,6 +395,10 @@ class GenerateSchemaJsonTabView(
         }
 
         val editorText = getSchemaUrlEditorText().trim()
+        shouldShowSchemaUrlSuggestions = schemaUrlSearchField.textEditor.isFocusOwner && editorText.isNotBlank()
+        if (!shouldShowSchemaUrlSuggestions) {
+            hideSchemaUrlSuggestionPopup()
+        }
         val selectedCatalogItem = selectedSchemaStoreCatalogItem
         if (selectedCatalogItem != null && editorText.isNotBlank() && editorText != selectedCatalogItem.name) {
             clearSelectedSchemaStoreCatalogItem()
@@ -522,7 +542,7 @@ class GenerateSchemaJsonTabView(
         }
 
         if (schemaUrlSuggestionPopup?.isVisible == true) {
-            hideSchemaUrlSuggestionPopup()
+            return
         }
 
         val popupWidth = popupAnchorComponent.width.takeIf { it > 0 } ?: 420
@@ -536,10 +556,9 @@ class GenerateSchemaJsonTabView(
             )
         }
 
-        schemaUrlSuggestionPopup = JBPopupFactory.getInstance()
+        val popup = JBPopupFactory.getInstance()
             .createComponentPopupBuilder(popupContent, schemaUrlSuggestionList)
             .setCancelOnClickOutside(true)
-            .setCancelCallback { shouldCancelSchemaUrlSuggestionPopup() }
             .setCancelOnOtherWindowOpen(true)
             .setCancelOnWindowDeactivation(true)
             .setCancelKeyEnabled(true)
@@ -547,65 +566,49 @@ class GenerateSchemaJsonTabView(
             .setResizable(false)
             .setRequestFocus(false)
             .createPopup()
-            .also { popup ->
-                val anchorPoint = RelativePoint(popupAnchorComponent, Point(0, popupAnchorComponent.height))
-                popup.show(anchorPoint)
+        schemaUrlSuggestionPopup = popup
+        popup.addListener(object : JBPopupListener {
+            override fun onClosed(event: LightweightWindowEvent) {
+                if (schemaUrlSuggestionPopup === event.asPopup()) {
+                    schemaUrlSuggestionPopup = null
+                    shouldShowSchemaUrlSuggestions = false
+                }
             }
+        })
+        val anchorPoint = RelativePoint(popupAnchorComponent, Point(0, popupAnchorComponent.height))
+        popup.show(anchorPoint)
     }
 
     private fun hideSchemaUrlSuggestionPopup() {
-        schemaUrlSuggestionPopup?.cancel()
+        shouldShowSchemaUrlSuggestions = false
+        val popup = schemaUrlSuggestionPopup
         schemaUrlSuggestionPopup = null
+        popup?.cancel()
     }
 
     private fun isSchemaUrlSuggestionPopupVisible(): Boolean {
         return schemaUrlSuggestionPopup?.isVisible == true
     }
 
-    private fun shouldCancelSchemaUrlSuggestionPopup(): Boolean {
-        val currentEvent = IdeEventQueue.getInstance().trueCurrentEvent as? MouseEvent ?: return true
-        val eventComponent = currentEvent.component ?: return true
-        return !SwingUtilities.isDescendingFrom(eventComponent, schemaUrlSearchField)
-    }
-
-    private fun resolveGroupSeparatorColor(optionsPanel: JComponent): Color {
-        val groupSeparatorColor = findFirstSeparator(optionsPanel)?.foreground
-        return groupSeparatorColor
-            ?: UIManager.getColor("Group.separatorColor")
-            ?: UIManager.getColor("Separator.foreground")
-            ?: UIManager.getColor("Label.foreground")
-    }
-
-    private fun findFirstSeparator(component: Component): JSeparator? {
-        if (component is JSeparator) {
-            return component
-        }
-        if (component !is Container) {
-            return null
-        }
-
-        component.components.forEach { childComponent ->
-            val separator = findFirstSeparator(childComponent)
-            if (separator != null) {
-                return separator
-            }
-        }
-        return null
-    }
-
     private fun createSchemaEditor(): EditorTextField {
-        val initialSchemaText = LocalizationBundle.message("dialog.generate.json.schema.placeholder")
+        val initialSchemaText = initialConfig.schemaText.ifBlank {
+            LocalizationBundle.message("dialog.generate.json.schema.placeholder")
+        }
         return EditorTextFieldFactory.createJsonField(
             project,
             fileExtension = "json",
             initialText = initialSchemaText,
-            preferredSize = JBUI.size(620, 320),
+            placeholderText = LocalizationBundle.message("dialog.generate.json.schema.editor.comment"),
+            preferredSize = JBUI.size(580, 280),
             shouldShowHorizontalScrollbar = true,
             shouldShowVerticalScrollbar = true,
             configureEditorSettings = {
                 applySchemaEditorSettings()
             },
-        )
+        ).apply {
+            minimumSize = JBUI.size(360, 180)
+            accessibleContext.accessibleName = LocalizationBundle.message("dialog.generate.json.schema.editor.label")
+        }
     }
 
     private fun EditorSettings.applySchemaEditorSettings() {
