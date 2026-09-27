@@ -2,6 +2,9 @@ name: Build
 on:
   pull_request:
   push:
+    # Populate a cache that other PRs can restore; full verification stays on PRs and tags.
+    branches:
+      - main
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
@@ -18,24 +21,19 @@ concurrency:
 
 jobs:
   build:
-    name: Build and verify
+    name: Compile, test, and package
     runs-on: ubuntu-latest
     env:
       ORG_GRADLE_PROJECT_skipWasmBuild: 'false'
     outputs:
       version: ${{ steps.properties.outputs.version }}
       changelog: ${{ steps.properties.outputs.changelog }}
+      verifier-ides: ${{ steps.verifier-ides.outputs.ides }}
     steps:
       - name: Fetch Sources
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          large-packages: false
 
       - name: Gradle Wrapper Validation
         uses: gradle/actions/wrapper-validation@v6.3.0
@@ -52,8 +50,11 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          cache-read-only: ${{ github.ref_type == 'tag' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
 
       - name: Export Properties
+        if: github.ref_type == 'tag'
         id: properties
         shell: bash
         run: |
@@ -69,16 +70,35 @@ jobs:
           PY
 
       - name: Compile, test, check, and package
-        run: ./gradlew compileKotlin check buildPlugin --no-build-cache --no-configuration-cache
+        shell: bash
+        run: |
+          CACHE_OPTION=--build-cache
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            CACHE_OPTION=--no-build-cache
+          fi
+          ./gradlew compileKotlin test --rerun check buildPlugin "$CACHE_OPTION" --no-configuration-cache
 
       - name: Rust Tests
         working-directory: tree-sitter-wasm
         run: cargo test
 
-      - name: Verify packaged plugin
-        run: ./gradlew verifyPlugin --no-configuration-cache
+      - name: Select all recommended verification IDEs
+        if: github.ref != 'refs/heads/main'
+        id: verifier-ides
+        shell: bash
+        run: |
+          ./gradlew printProductsReleases --quiet --console=plain --no-configuration-cache > build/verifier-ides.txt
+          python3 - <<'PY'
+          import json, os, pathlib, re
+          ides = pathlib.Path('build/verifier-ides.txt').read_text().splitlines()
+          if not ides or len(ides) != len(set(ides)) or any(not re.fullmatch(r'[A-Z]+-[0-9][0-9A-Za-z.\-]*', ide) for ide in ides):
+              raise ValueError(f'Invalid recommended IDE list: {ides}')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'ides={json.dumps(ides)}\n')
+          PY
 
       - name: Record toolchains
+        if: github.ref != 'refs/heads/main'
         shell: bash
         run: |
           {
@@ -90,6 +110,139 @@ jobs:
             rustup target list --installed
             "$CC_wasm32_wasip1" --version
           } > build/toolchains.txt 2>&1
+
+      - name: Upload plugin archive
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-archive-${{ github.sha }}
+          path: build/distributions/*.zip
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload test evidence
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-test-evidence-${{ github.sha }}
+          path: |
+            build/toolchains.txt
+            build/verifier-ides.txt
+            build/idea-sandbox/*/plugins-test
+            src/main/resources/wasm/tree-sitter/tree-sitter.wasm
+          if-no-files-found: error
+
+      - name: Collect verification results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: verification-results-${{ github.sha }}
+          path: |
+            build/reports/tests
+            build/test-results/test
+
+      - name: Upload Code Coverage Report
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: codecov/codecov-action@v7
+        with:
+          files: ${{ github.workspace }}/build/reports/kover/report.xml
+
+  verify:
+    name: Verify plugin (${{ matrix.ide }})
+    if: github.ref != 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ide: ${{ fromJSON(needs.build.outputs.verifier-ides) }}
+    steps:
+      - name: Fetch Sources
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download plugin archive
+        uses: actions/download-artifact@v8
+        with:
+          name: plugin-archive-${{ github.sha }}
+          path: build/distributions
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          # Reuse build dependencies without filling the shared cache with seven IDE distributions.
+          cache-read-only: true
+
+      - name: Verify packaged plugin
+        shell: bash
+        env:
+          PLUGIN_VERIFICATION_IDE: ${{ matrix.ide }}
+        run: |
+          mapfile -t ARCHIVES < <(find build/distributions -maxdepth 1 -name '*.zip')
+          test "${#ARCHIVES[@]}" -eq 1
+          ./gradlew verifyPlugin "-PverifiedPluginArchive=${ARCHIVES[0]}" \
+            "-PpluginVerificationIde=$PLUGIN_VERIFICATION_IDE" --no-configuration-cache
+
+      - name: Collect verifier results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-verifier-${{ matrix.ide }}-${{ github.sha }}
+          path: build/reports/pluginVerifier
+          if-no-files-found: error
+
+  verified:
+    name: Build and verify
+    if: always() && github.ref != 'refs/heads/main'
+    needs: [build, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every build and verification job
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: test "$BUILD_RESULT" = success && test "$VERIFY_RESULT" = success
+
+      - name: Fetch Sources
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download plugin archive
+        uses: actions/download-artifact@v8
+        with:
+          name: plugin-archive-${{ github.sha }}
+          path: build/distributions
+
+      - name: Download test evidence
+        uses: actions/download-artifact@v8
+        with:
+          name: plugin-test-evidence-${{ github.sha }}
+
+      - name: Download all verifier results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: plugin-verifier-*-${{ github.sha }}
+          path: build/reports/pluginVerifier
+          merge-multiple: true
+
+      - name: Require a verdict for every recommended IDE
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          expected = Path('build/verifier-ides.txt').read_text().splitlines()
+          verdicts = list(Path('build/reports/pluginVerifier').glob('*/plugins/com.livteam.jsoninja/*/verification-verdict.txt'))
+          if not expected or len(verdicts) != len(expected):
+              raise ValueError(f'Expected {len(expected)} IDE verdicts, found {len(verdicts)}')
+          PY
 
       - name: Record verified artifact
         shell: bash
@@ -114,27 +267,11 @@ jobs:
           path: build/verified
           if-no-files-found: error
 
-      - name: Collect verification results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: verification-results-${{ github.sha }}
-          path: |
-            build/reports/tests
-            build/reports/pluginVerifier
-            build/test-results/test
-
-      - name: Upload Code Coverage Report
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        uses: codecov/codecov-action@v7
-        with:
-          files: ${{ github.workspace }}/build/reports/kover/report.xml
-
   # Run Qodana inspections and provide report
   inspectCode:
     name: Inspect code
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [ build ]
+    needs: [ verified ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -173,7 +310,7 @@ jobs:
   releaseDraft:
     name: Sign verified artifact and create draft
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [ build, inspectCode ]
+    needs: [ build, verified, inspectCode ]
     runs-on: ubuntu-latest
     permissions:
       contents: write

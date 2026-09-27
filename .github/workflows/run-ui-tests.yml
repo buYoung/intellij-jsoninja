@@ -1,6 +1,9 @@
 # Platform fixtures and diff e2e tests run inside Gradle's IntelliJ test process.
 name: IDE Integration Tests
 on:
+  push:
+    branches:
+      - main
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
@@ -71,10 +74,12 @@ jobs:
       # Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       # Run tests
       - name: Tests
-        run: ./gradlew test --no-configuration-cache
+        run: ./gradlew test --rerun --no-configuration-cache
 
       - name: Collect test results
         if: always()
