@@ -14,11 +14,12 @@ class GenerateJsonDialog(
     project: Project
 ) : DialogWrapper(project) {
 
-    private val presenter = GenerateJsonDialogPresenter(project, ::scheduleLayoutUpdate)
+    private val presenter = GenerateJsonDialogPresenter(project, ::scheduleLayoutUpdate, ::scheduleAdvancedOptionsLayoutUpdate)
     private val tabSizes = mutableMapOf<JsonGenerationMode, Dimension>()
     private var currentGenerationMode = JsonGenerationMode.RANDOM
     private var isLayoutUpdateScheduled = false
     private var shouldRestoreTabSize = false
+    private var shouldPackHeight = false
 
     init {
         title = LocalizationBundle.message("dialog.generate.json.title")
@@ -47,6 +48,11 @@ class GenerateJsonDialog(
         super.dispose()
     }
 
+    private fun scheduleAdvancedOptionsLayoutUpdate() {
+        shouldPackHeight = true
+        scheduleLayoutUpdate()
+    }
+
     private fun scheduleLayoutUpdate() {
         val generationMode = presenter.getGenerationMode()
         if (generationMode != currentGenerationMode) {
@@ -67,10 +73,13 @@ class GenerateJsonDialog(
             updateMinimumSize()
             val targetSize = if (shouldRestoreTabSize) {
                 tabSizes[currentGenerationMode] ?: dialogWindow.preferredSize
+            } else if (shouldPackHeight) {
+                Dimension(dialogWindow.width, dialogWindow.preferredSize.height)
             } else {
                 dialogWindow.size
             }
             shouldRestoreTabSize = false
+            shouldPackHeight = false
             val requiredSize = dialogWindow.minimumSize
             dialogWindow.size = Dimension(
                 maxOf(targetSize.width, requiredSize.width),

@@ -1,8 +1,10 @@
 package com.livteam.jsoninja.ui.dialog.generateJson
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
+import com.livteam.jsoninja.services.random.RandomJsonGenerationSessionService
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.random.GenerateRandomJsonTabPresenter
@@ -11,9 +13,12 @@ import javax.swing.JComponent
 
 class GenerateJsonDialogPresenter(
     project: Project,
-    private val onLayoutChanged: () -> Unit
+    private val onLayoutChanged: () -> Unit,
+    onAdvancedOptionsChanged: () -> Unit = onLayoutChanged,
 ) {
-    private val randomTabPresenter = GenerateRandomJsonTabPresenter()
+    private val randomTabPresenter = GenerateRandomJsonTabPresenter(
+        project.service<RandomJsonGenerationSessionService>().createInitialConfig()
+    )
     private val schemaTabPresenter = GenerateSchemaJsonTabPresenter(project)
     private val view = GenerateJsonDialogView(
         randomTabComponent = randomTabPresenter.getComponent(),
@@ -23,6 +28,7 @@ class GenerateJsonDialogPresenter(
 
     init {
         randomTabPresenter.setOnOptionsChanged(::onOptionsChanged)
+        randomTabPresenter.setOnAdvancedOptionsChanged(onAdvancedOptionsChanged)
         schemaTabPresenter.setOnOptionsChanged(::onOptionsChanged)
     }
 
@@ -51,7 +57,7 @@ class GenerateJsonDialogPresenter(
 
     fun validate(): ValidationInfo? {
         return when (view.getGenerationMode()) {
-            JsonGenerationMode.RANDOM -> randomTabPresenter.validate()
+            JsonGenerationMode.RANDOM -> randomTabPresenter.validate(shouldRevealSeedErrors = true)
             JsonGenerationMode.SCHEMA -> schemaTabPresenter.validate()
         }
     }

@@ -7,8 +7,9 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import javax.swing.JComponent
 
-class GenerateRandomJsonTabPresenter {
-    private val initialConfig = JsonGenerationConfig()
+class GenerateRandomJsonTabPresenter(
+    private val initialConfig: JsonGenerationConfig = JsonGenerationConfig(),
+) {
     private val view = GenerateRandomJsonTabView(initialConfig)
 
     fun getComponent(): JComponent {
@@ -16,6 +17,8 @@ class GenerateRandomJsonTabPresenter {
     }
 
     fun setOnOptionsChanged(callback: () -> Unit) = view.setOnOptionsChanged(callback)
+
+    fun setOnAdvancedOptionsChanged(callback: () -> Unit) = view.setOnAdvancedOptionsChanged(callback)
 
     fun registerValidators(parentDisposable: Disposable) = view.registerValidators(parentDisposable)
 
@@ -26,7 +29,7 @@ class GenerateRandomJsonTabPresenter {
             return LocalizationBundle.message("dialog.generate.json.summary.invalid")
         }
         val outputFormat = if (view.isJson5Selected()) "JSON5" else "JSON"
-        return if (view.isObjectRootTypeSelected()) {
+        val summary = if (view.isObjectRootTypeSelected()) {
             LocalizationBundle.message(
                 "dialog.generate.json.summary.object", view.getObjectPropertyCountText().toInt(), outputFormat
             )
@@ -38,9 +41,14 @@ class GenerateRandomJsonTabPresenter {
                 outputFormat
             )
         }
+        return if (view.shouldKeepSeeds()) {
+            LocalizationBundle.message("dialog.generate.json.random.summary.kept", summary)
+        } else {
+            summary
+        }
     }
 
-    fun validate(): ValidationInfo? {
+    fun validate(shouldRevealSeedErrors: Boolean = false): ValidationInfo? {
         if (view.isObjectRootTypeSelected()) {
             val objectPropertyCount = view.getObjectPropertyCountText().toIntOrNull()
             if (objectPropertyCount == null || objectPropertyCount !in 1..100) {
@@ -75,6 +83,18 @@ class GenerateRandomJsonTabPresenter {
             )
         }
 
+        if (view.shouldKeepSeeds()) {
+            for ((text, field) in listOf(
+                view.getStructureSeedText() to view.getStructureSeedField(),
+                view.getValueSeedText() to view.getValueSeedField(),
+            )) {
+                if (text.toLongOrNull() == null) {
+                    if (shouldRevealSeedErrors) view.setAdvancedOptionsExpanded(true)
+                    return ValidationInfo(LocalizationBundle.message("dialog.generate.json.random.seed.invalid"), field)
+                }
+            }
+        }
+
         return null
     }
 
@@ -87,7 +107,10 @@ class GenerateRandomJsonTabPresenter {
             propertiesPerObjectInArray = view.getPropertiesPerObjectInArrayText().toIntOrNull()
                 ?: initialConfig.propertiesPerObjectInArray,
             maxDepth = view.getMaxDepthText().toInt(),
-            isJson5 = view.isJson5Selected()
+            isJson5 = view.isJson5Selected(),
+            randomStructureSeed = view.getStructureSeedText().toLongOrNull(),
+            randomValueSeed = view.getValueSeedText().toLongOrNull(),
+            shouldKeepRandomSeeds = view.shouldKeepSeeds(),
         )
     }
 

@@ -12,6 +12,7 @@ import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.RandomJsonDataCreator
+import com.livteam.jsoninja.services.random.RandomJsonGenerationSessionService
 import com.livteam.jsoninja.services.schema.JsonSchemaDataGenerationService
 import com.livteam.jsoninja.services.schema.JsonSchemaGenerationException
 import com.livteam.jsoninja.ui.dialog.generateJson.GenerateJsonDialog
@@ -37,9 +38,14 @@ class GenerateRandomJsonAction : AnAction(
 
         val dialog = GenerateJsonDialog(project)
         if (dialog.showAndGet()) {
-            val config = dialog.getConfig()
+            val selectedConfig = dialog.getConfig()
             val jsonFormatState = panel.presenter.getJsonFormatState()
             val target = panel.presenter.captureGenerationTarget() ?: return
+            val config = if (selectedConfig.generationMode == JsonGenerationMode.RANDOM) {
+                project.service<RandomJsonGenerationSessionService>().prepareGenerationConfig(selectedConfig)
+            } else {
+                selectedConfig
+            }
 
             project.service<JsoninjaCoroutineScopeService>().launch {
                 try {
@@ -48,7 +54,10 @@ class GenerateRandomJsonAction : AnAction(
                             JsonGenerationMode.RANDOM -> {
                                 val creator = RandomJsonDataCreator()
                                 val prettyPrint = config.isJson5
-                                creator.generateConfiguredJsonString(config, prettyPrint = prettyPrint)
+                                val generationContext = currentCoroutineContext()
+                                creator.generateConfiguredJsonString(config, prettyPrint = prettyPrint) {
+                                    generationContext.ensureActive()
+                                }
                             }
 
                             JsonGenerationMode.SCHEMA -> {
@@ -71,11 +80,14 @@ class GenerateRandomJsonAction : AnAction(
 
                     withContext(Dispatchers.EDT) {
                         if (project.isDisposed || !panel.presenter.isGenerationTargetCurrent(target)) return@withContext
-                        panel.presenter.setRandomJsonData(
+                        val isApplied = panel.presenter.setRandomJsonData(
                             generatedJson,
                             target,
                             skipFormatting = true
                         )
+                        if (isApplied && config.generationMode == JsonGenerationMode.RANDOM) {
+                            project.service<RandomJsonGenerationSessionService>().remember(config)
+                        }
                     }
                 } catch (cancellationException: CancellationException) {
                     throw cancellationException

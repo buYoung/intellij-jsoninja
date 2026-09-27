@@ -12,5 +12,8 @@ data class JsonGenerationConfig(
     val schemaText: String = "",
     val schemaOutputCount: Int = 1,
     val schemaPropertyGenerationMode: SchemaPropertyGenerationMode = SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL,
-    val schemaRetrievalUri: String? = null
+    val schemaRetrievalUri: String? = null,
+    val randomStructureSeed: Long? = null,
+    val randomValueSeed: Long? = null,
+    val shouldKeepRandomSeeds: Boolean = false,
 )
