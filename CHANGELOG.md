@@ -10,11 +10,28 @@
   - Compare selected JSON from an editor's context menu, or compare the whole document when nothing is selected. The source opens on the left side of the comparison.
   - Choose alphabetical object-key order or keep the left side's key order and align the right side to it. You can also align matching array elements when their order differs.
   - Turn automatic sorting on or off for each comparison, restore both sides to their text before the last sort if neither side has been edited, and rename the left and right side labels.
+- **Type Conversion**:
+  - Convert JSON to C, C++, C#, Python, Rust, Scala, or JSDoc type declarations, and generate sample JSON from those declarations. Type-to-JSON previews for these languages also show conversion warnings.
+  - Type input and generated code now have syntax highlighting for all supported languages, even without the corresponding IDE language plugins.
+- **Random JSON Generation**:
+  - Keep separate structure and value seeds to reproduce a result with the same settings in the same JSONinja version.
+  - Choose New values to change the data while keeping the same keys and value types, or New structure to generate a different shape. The dialog remembers the last successfully used settings while the project is open.
 
 ### Changed
 
 - **JSON Diff**: Automatic object-key sorting is now enabled by default for new settings.
 - **Icon Pack**: The new Version 3 icons are the default for new settings. Versions 1 and 2 remain available in the Icon Pack setting.
+- **Random JSON Generation**: Generated fields now have meaningful names and matching values, such as email addresses and dates, without randomly inserted nulls. Objects within each array share the same keys and value types.
+- **JSON Generation**:
+  - Review the expected result structure, count, format, and destination before generating. Including optional schema properties as comments selects JSON5 in the output format selector and explains why it is required.
+  - Numeric fields now show range errors and enforce limits of 1–100 for object, property, and schema result counts, and 1–10 for maximum nesting depth.
+- **Type Conversion Dialog**: Settings now appear beside the input and preview. Preview status and destination labels show when the result is ready and whether it will replace editor text, open in a new tab, or be copied.
+- **Load JSON from API**: The dialog now summarizes the request and its destination, highlights and focuses invalid URL or authentication fields, and disables request settings while loading.
+
+### Fixed
+
+- **Random JSON Generation**: Arrays generated with a maximum depth of 1 now contain the requested object fields instead of depth-limit placeholders.
+- **Schema-Based JSON Generation**: Errors for unsupported JSON Schema dialects now use the interface language instead of always appearing in English.
 
 ## [1.14.0] - 2026-09-17
 
