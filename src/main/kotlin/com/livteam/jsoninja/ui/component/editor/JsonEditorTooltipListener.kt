@@ -5,6 +5,8 @@ import com.intellij.codeInsight.hint.HintManagerImpl
 import com.intellij.codeInsight.hint.HintUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.event.EditorMouseEvent
@@ -121,7 +123,7 @@ class JsonEditorTooltipListener(
 
             if (project.isDisposed || editorEx.isDisposed) return@launch
 
-            withContext(Dispatchers.EDT) {
+            withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
                 if (pendingTooltip != pending || project.isDisposed || editorEx.isDisposed) return@withContext
                 if (result != null) {
                     if (result.isTemplatePlaceholder) {
@@ -148,10 +150,10 @@ class JsonEditorTooltipListener(
         val logicalPos = editor.offsetToLogicalPosition(offset)
         val point = HintManagerImpl.getHintPosition(hint, editor, logicalPos, HintManager.UNDER)
 
-        val flags = HintManagerImpl.HIDE_BY_ANY_KEY or
-            HintManagerImpl.HIDE_BY_TEXT_CHANGE or
-            HintManagerImpl.HIDE_BY_SCROLLING or
-            HintManagerImpl.HIDE_BY_OTHER_HINT
+        val flags = HintManager.HIDE_BY_ANY_KEY or
+            HintManager.HIDE_BY_TEXT_CHANGE or
+            HintManager.HIDE_BY_SCROLLING or
+            HintManager.HIDE_BY_OTHER_HINT
         HintManagerImpl.getInstanceImpl().showEditorHint(
             hint, editor, point, flags, 0, false
         )

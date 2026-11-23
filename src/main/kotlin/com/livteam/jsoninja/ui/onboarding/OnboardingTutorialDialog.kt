@@ -2,6 +2,7 @@ package com.livteam.jsoninja.ui.onboarding
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.WindowManager
 import com.livteam.jsoninja.LocalizationBundle
 import java.awt.BorderLayout
@@ -25,14 +26,16 @@ class OnboardingTutorialDialog(
     private val onClosed: () -> Unit
 ) : JDialog(WindowManager.getInstance().getFrame(project) as? Window), Disposable {
     private var closed = false
+    private val dialogDisposable = Disposer.newDisposable("JSONinja OnboardingTutorialDialog")
     private val presenter = OnboardingTutorialDialogPresenter(
         project = project,
         rootComponent = rootComponent,
-        tooltipParent = this,
+        tooltipParent = dialogDisposable,
         onCancelRequested = { dispose() }
     )
 
     init {
+        Disposer.register(dialogDisposable, presenter)
         title = LocalizationBundle.message("onboarding.tutorial.title")
         modalityType = Dialog.ModalityType.MODELESS
         isAlwaysOnTop = true
@@ -73,7 +76,7 @@ class OnboardingTutorialDialog(
             return
         }
         closed = true
-        presenter.dispose()
+        Disposer.dispose(dialogDisposable)
         onClosed()
         super.dispose()
     }

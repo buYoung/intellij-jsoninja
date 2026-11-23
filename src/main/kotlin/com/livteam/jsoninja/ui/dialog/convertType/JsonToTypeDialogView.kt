@@ -1,7 +1,7 @@
 package com.livteam.jsoninja.ui.dialog.convertType
 
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.SimpleListCellRenderer
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
@@ -9,6 +9,7 @@ import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.LabelPosition
 import com.intellij.ui.dsl.builder.Row
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.services.typeConversion.JsonToTypeAnnotationStyle
@@ -42,22 +43,24 @@ class JsonToTypeDialogView(
 
     init {
         languageSelector.setAccessibleName(LocalizationBundle.message("dialog.json.to.type.language"))
-        namingConventionComboBox.renderer = SimpleListCellRenderer.create("") { convention ->
+        namingConventionComboBox.renderer = textListCellRenderer<NamingConvention?> { convention ->
             when (convention) {
                 NamingConvention.CAMEL_CASE -> "camelCase"
                 NamingConvention.PASCAL_CASE -> "PascalCase"
                 NamingConvention.SNAKE_CASE -> "snake_case"
+                null -> ""
             }
         }
-        annotationStyleComboBox.renderer = SimpleListCellRenderer.create("") { style ->
-            LocalizationBundle.message(when (style) {
-                JsonToTypeAnnotationStyle.NONE -> "dialog.json.to.type.annotation.none"
-                JsonToTypeAnnotationStyle.GSON_SERIALIZED_NAME -> "dialog.json.to.type.annotation.gson"
-                JsonToTypeAnnotationStyle.JACKSON_JSON_PROPERTY -> "dialog.json.to.type.annotation.jackson"
-                JsonToTypeAnnotationStyle.KOTLIN_SERIAL_NAME -> "dialog.json.to.type.annotation.kotlinx"
-                JsonToTypeAnnotationStyle.GO_JSON_TAG -> "dialog.json.to.type.annotation.go"
-                JsonToTypeAnnotationStyle.CSHARP_JSON_PROPERTY_NAME -> "dialog.json.to.type.annotation.csharp"
-            })
+        annotationStyleComboBox.renderer = textListCellRenderer<JsonToTypeAnnotationStyle?> { style ->
+            when (style) {
+                JsonToTypeAnnotationStyle.NONE -> LocalizationBundle.message("dialog.json.to.type.annotation.none")
+                JsonToTypeAnnotationStyle.GSON_SERIALIZED_NAME -> LocalizationBundle.message("dialog.json.to.type.annotation.gson")
+                JsonToTypeAnnotationStyle.JACKSON_JSON_PROPERTY -> LocalizationBundle.message("dialog.json.to.type.annotation.jackson")
+                JsonToTypeAnnotationStyle.KOTLIN_SERIAL_NAME -> LocalizationBundle.message("dialog.json.to.type.annotation.kotlinx")
+                JsonToTypeAnnotationStyle.GO_JSON_TAG -> LocalizationBundle.message("dialog.json.to.type.annotation.go")
+                JsonToTypeAnnotationStyle.CSHARP_JSON_PROPERTY_NAME -> LocalizationBundle.message("dialog.json.to.type.annotation.csharp")
+                null -> ""
+            }
         }
         val settingsPanel = panel {
             row {
@@ -177,8 +180,8 @@ class JsonToTypeDialogView(
     fun getPreferredFocusedComponent(): JComponent = inputEditorView.editor
 
     fun dispose() {
-        inputEditorView.dispose()
-        workspace.dispose()
+        Disposer.dispose(inputEditorView)
+        Disposer.dispose(workspace)
     }
 
     private fun updateLanguageOptions(

@@ -42,7 +42,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: zulu
-          java-version: 17
+          java-version: 21
 
       - name: Setup WASM Toolchain
         shell: bash
@@ -76,7 +76,7 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             CACHE_OPTION=--no-build-cache
           fi
-          ./gradlew compileKotlin test --rerun check buildPlugin "$CACHE_OPTION" --no-configuration-cache
+          ./gradlew compileKotlin test --rerun check verifyPluginProjectConfiguration verifyPluginStructure buildPlugin "$CACHE_OPTION" --no-configuration-cache
 
       - name: Rust Tests
         working-directory: tree-sitter-wasm
@@ -172,7 +172,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: zulu
-          java-version: 17
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6.3.0
@@ -290,15 +290,14 @@ jobs:
       - name: Fetch Sources
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
-          fetch-depth: 0  # a full history is required for pull request analysis
+          fetch-depth: 0  # a full history is required for analysis
 
       # Set up Java environment for the next steps
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: zulu
-          java-version: 17
+          java-version: 21
 
       # Run Qodana inspections
       - name: Qodana - Code Inspection
@@ -335,7 +334,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: zulu
-          java-version: 17
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6.3.0

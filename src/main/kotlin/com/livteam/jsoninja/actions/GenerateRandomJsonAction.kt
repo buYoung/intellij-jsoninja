@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.actions
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.EDT
@@ -122,16 +123,6 @@ class GenerateRandomJsonAction : AnAction(
                             LocalizationBundle.message("dialog.generate.json.error.title")
                         )
                     }
-                } catch (error: Throwable) {
-                    LOG.error("Fatal error while generating JSON.", error)
-                    withContext(Dispatchers.EDT) {
-                        if (project.isDisposed || !panel.presenter.isGenerationTargetCurrent(target)) return@withContext
-                        Messages.showErrorDialog(
-                            project,
-                            error.message ?: LocalizationBundle.message("dialog.generate.json.error.generic"),
-                            LocalizationBundle.message("dialog.generate.json.error.title")
-                        )
-                    }
                 }
             }
         }
@@ -142,6 +133,8 @@ class GenerateRandomJsonAction : AnAction(
         e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
         e.presentation.icon = JsoninjaIcons.getGenerateIcon(e.project)
     }
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     private fun shouldSkipFormatting(config: JsonGenerationConfig): Boolean {
         if (config.isJson5) {

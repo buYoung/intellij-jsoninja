@@ -23,11 +23,11 @@ import com.networknt.schema.Schema
 @Service(Service.Level.PROJECT)
 class JsonSchemaDataGenerationService(private val project: Project) {
     private val LOG = logger<JsonSchemaDataGenerationService>()
-    private val validationService = project.service<JsonSchemaValidationService>()
-    private val normalizer = project.service<JsonSchemaNormalizer>()
-    private val valueGenerator = project.service<JsonSchemaValueGenerator>()
-    private val objectMapper = service<JsonObjectMapperService>().objectMapper
-    private val randomJsonDataCreator = RandomJsonDataCreator()
+    private val validationService by lazy { project.service<JsonSchemaValidationService>() }
+    private val normalizer by lazy { project.service<JsonSchemaNormalizer>() }
+    private val valueGenerator by lazy { project.service<JsonSchemaValueGenerator>() }
+    private val objectMapper by lazy { service<JsonObjectMapperService>().objectMapper }
+    private val randomJsonDataCreator by lazy { RandomJsonDataCreator() }
 
     data class PreparedSchema(
         val resolvedSchemaNode: JsonNode,
@@ -186,15 +186,25 @@ class JsonSchemaDataGenerationService(private val project: Project) {
     }
 
     private fun generateCompleteNodeForCommentedMode(preparedSchema: PreparedSchema, activeNode: JsonNode): JsonNode {
-        val generatedCompleteNode = runCatching {
+        val generatedCompleteNode = try {
             generateSingleNode(preparedSchema, SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL)
-        }.recoverCatching {
-            valueGenerator.generateValue(
-                preparedSchema.rootConstraint,
-                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
-            )
-        }.getOrElse {
-            buildMinimalValueCandidate(preparedSchema.resolvedSchemaNode, depth = 0)
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (cancellationException: ProcessCanceledException) {
+            throw cancellationException
+        } catch (_: Exception) {
+            try {
+                valueGenerator.generateValue(
+                    preparedSchema.rootConstraint,
+                    SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
+                )
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            } catch (cancellationException: ProcessCanceledException) {
+                throw cancellationException
+            } catch (_: Exception) {
+                buildMinimalValueCandidate(preparedSchema.resolvedSchemaNode, depth = 0)
+            }
         }
 
         if (!generatedCompleteNode.isObject || !activeNode.isObject) {
@@ -399,12 +409,16 @@ class JsonSchemaDataGenerationService(private val project: Project) {
             return TextNode("value")
         }
 
-        return runCatching {
+        return try {
             valueGenerator.generateValue(
                 optionalPropertyConstraint,
                 SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL
             )
-        }.getOrElse {
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (cancellationException: ProcessCanceledException) {
+            throw cancellationException
+        } catch (_: Exception) {
             buildMinimalValueCandidate(optionalPropertyConstraint.schemaNode, depth = 0)
         }
     }

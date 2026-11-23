@@ -3,9 +3,9 @@ package com.livteam.jsoninja.ui.component.convertType.highlighting
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightingLevelManager
 import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.editor.HighlighterColors
-import com.intellij.openapi.editor.colors.EditorColorsListener
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.EditorColorsScheme
 import com.intellij.openapi.editor.markup.TextAttributes
@@ -13,7 +13,6 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.EditorTextField
 import com.intellij.util.ui.UIUtil
-import com.intellij.util.ComponentTreeEventDispatcher
 import com.livteam.jsoninja.ui.component.convertType.CodePreviewPanel
 import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import java.awt.Color
@@ -67,7 +66,7 @@ class TypeCodePreviewHighlightingTest : BasePlatformTestCase() {
                     markup.map { checkNotNull(it.textAttributesKey) }.distinct().forEach { key ->
                         scheme.setAttributes(key, TextAttributes(custom, null, null, null, 0))
                     }
-                    ComponentTreeEventDispatcher.create(preview, EditorColorsListener::class.java).multicaster.globalSchemeChange(null)
+                    ApplicationManager.getApplication().messageBus.syncPublisher(EditorColorsManager.TOPIC).globalSchemeChange(null)
                     markup.forEach { assertEquals(custom, it.getTextAttributes(editor.colorsScheme)?.foregroundColor) }
                     assertEquals(background, editor.backgroundColor)
                     assertSame(field.document, editor.document)
@@ -86,7 +85,7 @@ class TypeCodePreviewHighlightingTest : BasePlatformTestCase() {
             assertTrue(updatedMarkup.any { it.startOffset == updated.indexOf("name") && it.textAttributesKey?.externalName == "KOTLIN_INSTANCE_PROPERTY" })
             assertTrue(updatedMarkup.all { it.endOffset <= updated.length })
         } finally {
-            preview.dispose()
+            Disposer.dispose(preview)
             Disposer.dispose(lifetime)
             UIUtil.dispatchAllInvocationEvents()
             colors.setGlobalScheme(originalScheme)
@@ -112,7 +111,7 @@ class TypeCodePreviewHighlightingTest : BasePlatformTestCase() {
             myFixture.configureByText("Regular.java", "class Regular { private MissingType value; }")
             assertTrue("Regular project editors must retain diagnostics", myFixture.doHighlighting().any { it.severity == HighlightSeverity.ERROR })
         } finally {
-            preview.dispose()
+            Disposer.dispose(preview)
             Disposer.dispose(lifetime)
             UIUtil.dispatchAllInvocationEvents()
         }
@@ -136,7 +135,7 @@ class TypeCodePreviewHighlightingTest : BasePlatformTestCase() {
             assertNull(TypeCodePreviewHighlightingSettingProvider().getDefaultSetting(project, jsonPsi.virtualFile))
             assertFalse(DaemonCodeAnalyzer.getInstance(project).isHighlightingAvailable(jsonPsi))
         } finally {
-            preview.dispose()
+            Disposer.dispose(preview)
             Disposer.dispose(lifetime)
             UIUtil.dispatchAllInvocationEvents()
         }

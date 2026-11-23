@@ -2,12 +2,13 @@ package com.livteam.jsoninja.ui.component.convertType
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
+import com.intellij.ui.JBColor
 import com.intellij.ui.JBSplitter
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import com.livteam.jsoninja.LocalizationBundle
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -25,10 +26,10 @@ class ConvertTypeWorkspacePanel(
     private val previewPanel = CodePreviewPanel(project, shouldShowCopyButton = false)
     private val previewTitleLabel = JBLabel(LocalizationBundle.message("common.convert.preview"))
     private val inputLanguageLabel = JBLabel().apply {
-        foreground = UIUtil.getContextHelpForeground()
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
     }
     private val statusLabel = JBLabel().apply {
-        foreground = UIUtil.getContextHelpForeground()
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
         border = JBUI.Borders.empty(10, 0, 0, 0)
     }
     private val copyButton = JButton(LocalizationBundle.message("common.convert.copy.result"))
@@ -39,13 +40,14 @@ class ConvertTypeWorkspacePanel(
             previewPanel,
             previewTitleLabel,
             JBLabel(LocalizationBundle.message("common.convert.read.only")).apply {
-                foreground = UIUtil.getContextHelpForeground()
+                foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
             },
         )
     }
     private var onCopyRequested: (() -> Unit)? = null
 
     init {
+        Disposer.register(this, previewPanel)
         border = JBUI.Borders.empty(16, 12, 12, 12)
         add(JBPanel<JBPanel<*>>(BorderLayout()).apply {
             add(editorSplitter, BorderLayout.CENTER)
@@ -92,7 +94,6 @@ class ConvertTypeWorkspacePanel(
     fun clearPreviewWarnings() = previewPanel.clearWarnings()
 
     override fun dispose() {
-        previewPanel.dispose()
         editorSplitter.dispose()
     }
 
@@ -108,7 +109,7 @@ class ConvertTypeWorkspacePanel(
             add(detail, BorderLayout.EAST)
         }
         return JBPanel<JBPanel<*>>(BorderLayout()).apply {
-            border = JBUI.Borders.customLine(UIUtil.getBoundsColor())
+            border = JBUI.Borders.customLine(JBColor.border())
             minimumSize = JBUI.size(200, 160)
             add(header, BorderLayout.NORTH)
             add(content, BorderLayout.CENTER)
@@ -130,7 +131,7 @@ class ConvertTypeWorkspacePanel(
         }
         val copyPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
             border = JBUI.Borders.compound(
-                JBUI.Borders.customLineTop(UIUtil.getBoundsColor()),
+                JBUI.Borders.customLineTop(JBColor.border()),
                 JBUI.Borders.emptyTop(12),
             )
             add(copyButton, BorderLayout.CENTER)
@@ -144,7 +145,7 @@ class ConvertTypeWorkspacePanel(
             border = JBUI.Borders.compound(
                 JBUI.Borders.emptyLeft(12),
                 JBUI.Borders.compound(
-                    JBUI.Borders.customLineLeft(UIUtil.getBoundsColor()),
+                    JBUI.Borders.customLineLeft(JBColor.border()),
                     JBUI.Borders.empty(8, 16, 0, 0),
                 ),
             )

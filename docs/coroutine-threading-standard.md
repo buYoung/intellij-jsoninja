@@ -20,9 +20,10 @@
 2. **`createChildScope()`는 부모 context를 상속하고 `SupervisorJob`만 새로 단다.**
    - dispatcher 등 context는 부모(= 위 1번, 즉 `Dispatchers.Default`)와 동일합니다.
    - 호출자가 수명 종료 시점에 직접 `cancel()` 할 책임을 집니다.
-3. **EDT 접근 규칙**
-   - Swing/IDE UI 갱신, `Document`/`Editor` 텍스트 쓰기 트리거는 `Dispatchers.EDT`에서 수행합니다.
-   - PSI / 일부 VFS 메타데이터 읽기는 read action(`readAction { }` / `runReadAction { }`) 안에서 해야 합니다. EDT는 암시적 read 권한을 갖지만, **Default로 빠져나온 코드는 그렇지 않습니다.**
+3. **EDT 접근 및 Write-Intent Lock 규칙 (2025.1+ 필수)**
+   - Swing/IDE UI 갱신, `Document`/`Editor` 텍스트 쓰기 트리거는 `Dispatchers.EDT`에서 수행합니다. 모달 대화상자 내부에 임베드될 수 있는 컴포넌트(`FoldingAwareEditorTextField`, `JsonEditorView` 하위 등)에서 `PsiDocumentManager.commitDocument`나 `runWriteAction` 등 write-safe 컨텍스트가 필요한 작업은 `ModalityState.any()` 대신 `ModalityState.stateForComponent(component).asContextElement()`를 사용합니다(`ModalityState.any()`는 `TransactionGuard`에 의해 write-unsafe로 차단됨). 순수 UI 갱신만 수행하는 경우에는 `ModalityState.any().asContextElement()`를 사용할 수 있습니다.
+   - IntelliJ Platform **2025.1+**부터 raw Swing 콜백(`SwingUtilities.invokeLater`, `Dispatchers.Main`, 2025.3+ `Dispatchers.UI`)은 **암시적 Write-Intent / Read 권한을 갖지 않습니다.** `Dispatchers.EDT`와 `Application.invokeLater(...)`만 Write-Intent Lock을 제공합니다. 따라서 IDE 모델(PSI/Document/Editor/ColorScheme)을 건드리는 지연 UI 작업에는 raw `SwingUtilities.invokeLater` 대신 `Dispatchers.EDT` 또는 `ApplicationManager.getApplication().invokeLater({ ... }, ModalityState.stateForComponent(component))`를 사용합니다.
+   - off-EDT(`Dispatchers.Default` 등)에서 PSI / 일부 VFS 메타데이터를 읽을 때는 반드시 `readAction { }`으로 감쌉니다.
    - 문서 변경 + Undo 보존은 `WriteCommandAction.runWriteCommandAction(project) { }`로만 합니다.
 
 ## 3. 표준 패턴 (Canonical Pattern)
@@ -134,7 +135,7 @@ class SomePresenter(
 | C13 | escape/unescape | ✅ 해결 | `JsoninjaPanelPresenter`(툴윈도우) + `BaseEditorJsonAction`(에디터) 경로 모두 비동기화 |
 
 ### 6.2 정상 유지 지점 (변경 불필요)
-- 레거시 primitive: `JsonDiffService.replaceDocumentText` / `ConvertResultUtils.insertToEditor` / `BaseEditorJsonAction` / `SortJsonDiffKeysOnceAction`의 `WriteCommandAction`, `JsonDocumentFactory.createJsonDocument`의 `runReadAction`, `FoldingAwareEditorTextField` / `JsonDiffExtension`의 `Alarm`, `OnboardingTutorialDialogView`의 `SwingUtilities.invokeLater` — 모두 역할이 명확해 유지.
+- 레거시 primitive: `JsonDiffService.replaceDocumentText` / `ConvertResultUtils.insertToEditor` / `BaseEditorJsonAction` / `SortJsonDiffKeysOnceAction`의 `WriteCommandAction`, `JsonDocumentFactory.createJsonDocument`의 `runReadAction`, `JsonDiffExtension`의 `Alarm`, `OnboardingTutorialDialogView`의 `SwingUtilities.invokeLater` — 모두 역할이 명확해 유지. (`FoldingAwareEditorTextField`는 `@ApiStatus.Obsolete` `Alarm` 대신 child `CoroutineScope` + `delay(...)` debounce + `ModalityState.stateForComponent(this).asContextElement()`로 이관됨.)
 - 이미 background로 분리되어 있던 경로: `JsonQueryService.query` 실행 본체, `GenerateRandomJsonAction` 생성 본체, `ConvertPreviewExecutor` 기반 type conversion preview, schema generation 본체.
 
 ## 7. Known issues

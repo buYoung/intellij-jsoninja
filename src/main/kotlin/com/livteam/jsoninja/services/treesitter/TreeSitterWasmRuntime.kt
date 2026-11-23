@@ -7,6 +7,9 @@ import com.dylibso.chicory.runtime.Store
 import com.dylibso.chicory.wasi.WasiOptions
 import com.dylibso.chicory.wasi.WasiPreview1
 import com.dylibso.chicory.wasm.Parser
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.Service
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicReference
@@ -44,6 +47,7 @@ object TreeSitterWasmRuntime {
     private val runtimeHandleReference = AtomicReference<RuntimeHandle?>()
 
     fun getOrCreate(): RuntimeHandle {
+        ensureUnloadCleanupRegistered()
         runtimeHandleReference.get()?.let { return it }
         return synchronized(this) {
             runtimeHandleReference.get() ?: createRuntime().also(runtimeHandleReference::set)
@@ -52,6 +56,13 @@ object TreeSitterWasmRuntime {
 
     fun clear() {
         runtimeHandleReference.set(null)
+    }
+
+    private fun ensureUnloadCleanupRegistered() {
+        val application = ApplicationManager.getApplication() ?: return
+        if (!application.isDisposed) {
+            application.getService(TreeSitterWasmRuntimeCleanupService::class.java)
+        }
     }
 
     private fun createRuntime(): RuntimeHandle {
@@ -81,5 +92,12 @@ object TreeSitterWasmRuntime {
             analyzeSource = instance.export("analyze_source"),
             getLastError = instance.export("get_last_error"),
         )
+    }
+}
+
+@Service(Service.Level.APP)
+internal class TreeSitterWasmRuntimeCleanupService : Disposable {
+    override fun dispose() {
+        TreeSitterWasmRuntime.clear()
     }
 }

@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.actions
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.livteam.jsoninja.LocalizationBundle
@@ -25,4 +26,6 @@ class LoadJsonFromApiAction : AnAction(
         actionEvent.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(actionEvent) != null
         actionEvent.presentation.icon = JsoninjaIcons.getLoadJsonFromApiIcon(actionEvent.project)
     }
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 }

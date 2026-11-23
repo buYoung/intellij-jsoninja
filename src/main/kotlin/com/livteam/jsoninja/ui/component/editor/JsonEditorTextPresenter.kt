@@ -2,6 +2,8 @@ package com.livteam.jsoninja.ui.component.editor
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
@@ -83,8 +85,10 @@ class JsonEditorTextPresenter(
         normalizedContent: String,
         expectedModificationStamp: Long
     ) {
+        // Capture component modality (write-safe for runWriteAction, while still active inside modal dialogs).
+        val modalityState = ModalityState.stateForComponent(view)
         placeholderNormalizationJob = coroutineScope.launch {
-            withContext(Dispatchers.EDT) {
+            withContext(Dispatchers.EDT + modalityState.asContextElement()) {
                 if (project.isDisposed) return@withContext
 
                 val document = view.editor.document

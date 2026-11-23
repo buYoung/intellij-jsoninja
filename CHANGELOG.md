@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **IntelliJ Platform Compatibility**:
+  - Updated Kotlin bytecode/metadata target to Kotlin 2.0, excluded platform-provided runtime libraries from the plugin bundle, and aligned Jackson 2 ABI for compatibility across IntelliJ Platform 2024.3–2026.3+.
+  - Migrated deprecated/scheduled-for-removal platform APIs (`DynamicBundle(String)`, `SimpleListCellRenderer.create`, synchronous `FileChooser`, and `WindowManager.getFrame`) and added explicit `ActionUpdateThread` declarations.
+  - Fixed dynamic plugin unload lifecycle, modal dialog EDT modality, New UI icon mappings, dark plugin icon placement, and removed the `until-build` cap.
+
 ## [1.15.0] - 2026-09-28
 
 ### Added

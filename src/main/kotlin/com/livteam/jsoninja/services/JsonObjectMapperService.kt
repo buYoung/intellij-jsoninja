@@ -1,6 +1,5 @@
 package com.livteam.jsoninja.services
 
-import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -29,8 +28,8 @@ class JsonObjectMapperService {
         configure(JsonReadFeature.ALLOW_TRAILING_COMMA.mappedFeature(), true)
 
         // JSON5 support
-        configure(JsonParser.Feature.ALLOW_COMMENTS, true)
-        configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true)
-        configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, true)
+        configure(JsonReadFeature.ALLOW_JAVA_COMMENTS.mappedFeature(), true)
+        configure(JsonReadFeature.ALLOW_SINGLE_QUOTES.mappedFeature(), true)
+        configure(JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES.mappedFeature(), true)
     }
 }

@@ -1,38 +1,26 @@
 package com.livteam.jsoninja.extensions
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.intellij.codeInsight.daemon.impl.HighlightInfo
 import com.intellij.codeInsight.daemon.impl.HighlightInfoFilter
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.editor.Document
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiDocumentManager
 import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiFile
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.TemplatePlaceholderSupport
 import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
 import java.util.Collections
 import java.util.WeakHashMap
+import kotlinx.coroutines.CancellationException
 
 class JsoninjaTemplateHighlightErrorFilter : HighlightInfoFilter {
-    private data class CachedSuppressionDecision(
-        val modificationStamp: Long,
-        val shouldSuppress: Boolean
-    )
-
-    private val suppressionCache = Collections.synchronizedMap(
-        WeakHashMap<Document, CachedSuppressionDecision>()
-    )
-
-    private val objectMapper by lazy {
-        val application = ApplicationManager.getApplication()
-        if (application != null) {
-            application.getService(JsonObjectMapperService::class.java)?.objectMapper
-                ?: JsonObjectMapperService().objectMapper
-        } else {
-            JsonObjectMapperService().objectMapper
-        }
-    }
-
     override fun accept(highlightInfo: HighlightInfo, file: PsiFile?): Boolean {
         if (file == null) return true
 
@@ -49,7 +37,9 @@ class JsoninjaTemplateHighlightErrorFilter : HighlightInfoFilter {
         }
 
         val shouldSuppress = if (document != null) {
-            getSuppressionDecision(document)
+            project.service<TemplateHighlightErrorCacheService>().getOrCompute(document) {
+                shouldSuppressForDocumentText(document.text)
+            }
         } else {
             shouldSuppressForDocumentText(file.text)
         }
@@ -70,21 +60,12 @@ class JsoninjaTemplateHighlightErrorFilter : HighlightInfoFilter {
         return isJsoninjaDummyFile
     }
 
-    private fun getSuppressionDecision(document: Document): Boolean {
-        val currentModificationStamp = document.modificationStamp
-        val cachedSuppressionDecision = suppressionCache[document]
-        if (cachedSuppressionDecision != null &&
-            cachedSuppressionDecision.modificationStamp == currentModificationStamp
-        ) {
-            return cachedSuppressionDecision.shouldSuppress
+    private fun resolveObjectMapper(): ObjectMapper {
+        val application = ApplicationManager.getApplication()
+        if (application != null && !application.isDisposed) {
+            application.getService(JsonObjectMapperService::class.java)?.objectMapper?.let { return it }
         }
-
-        val computedSuppressionDecision = shouldSuppressForDocumentText(document.text)
-        suppressionCache[document] = CachedSuppressionDecision(
-            modificationStamp = currentModificationStamp,
-            shouldSuppress = computedSuppressionDecision
-        )
-        return computedSuppressionDecision
+        return JsonObjectMapperService().objectMapper
     }
 
     private fun shouldSuppressForDocumentText(documentText: String): Boolean {
@@ -96,14 +77,51 @@ class JsoninjaTemplateHighlightErrorFilter : HighlightInfoFilter {
         }
 
         return try {
-            objectMapper.factory.createParser(replacementResult.replacedText).use { parser ->
+            resolveObjectMapper().factory.createParser(replacementResult.replacedText).use { parser ->
                 parser.nextToken()
                 parser.skipChildren()
                 parser.nextToken() == null
             }
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (cancellationException: ProcessCanceledException) {
+            throw cancellationException
         } catch (_: Exception) {
             // Fail-open: keep default highlighting behavior when validation fails unexpectedly.
             false
         }
+    }
+}
+
+@Service(Service.Level.PROJECT)
+internal class TemplateHighlightErrorCacheService : Disposable {
+    private data class CachedSuppressionDecision(
+        val modificationStamp: Long,
+        val shouldSuppress: Boolean
+    )
+
+    private val suppressionCache = Collections.synchronizedMap(
+        WeakHashMap<Document, CachedSuppressionDecision>()
+    )
+
+    fun getOrCompute(document: Document, compute: () -> Boolean): Boolean {
+        val currentModificationStamp = document.modificationStamp
+        val cachedSuppressionDecision = suppressionCache[document]
+        if (cachedSuppressionDecision != null &&
+            cachedSuppressionDecision.modificationStamp == currentModificationStamp
+        ) {
+            return cachedSuppressionDecision.shouldSuppress
+        }
+
+        val computedSuppressionDecision = compute()
+        suppressionCache[document] = CachedSuppressionDecision(
+            modificationStamp = currentModificationStamp,
+            shouldSuppress = computedSuppressionDecision
+        )
+        return computedSuppressionDecision
+    }
+
+    override fun dispose() {
+        suppressionCache.clear()
     }
 }

@@ -42,7 +42,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
     private var onBeforeSearchCallback: (() -> Unit)? = null
     private val searchSequence = AtomicInteger()
 
-    private val messageBusConnection = project.messageBus.connect()
+    private val messageBusConnection = project.messageBus.connect(this)
 
     init {
         setupKeyListener()
@@ -199,6 +199,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
         isDisposed = true
         invalidatePendingSearch()
         coroutineScope.cancel()
+        view.dispose()
         messageBusConnection.disconnect()
     }
 }

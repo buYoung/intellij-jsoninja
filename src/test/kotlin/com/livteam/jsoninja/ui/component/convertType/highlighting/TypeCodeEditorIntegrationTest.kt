@@ -1,8 +1,8 @@
 package com.livteam.jsoninja.ui.component.convertType.highlighting
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
-import com.intellij.openapi.editor.colors.EditorColorsListener
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.EditorColorsScheme
 import com.intellij.openapi.editor.markup.TextAttributes
@@ -13,7 +13,6 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.components.JBTextArea
-import com.intellij.util.ComponentTreeEventDispatcher
 import com.livteam.jsoninja.ui.component.convertType.CodeInputPanel
 import com.livteam.jsoninja.ui.component.convertType.CodePreviewPanel
 import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
@@ -43,15 +42,15 @@ class TypeCodeEditorIntegrationTest : BasePlatformTestCase() {
                 assertEquals("UI font updates must not change the user's scheme", "Monospaced", scheme.editorFontName)
                 assertEquals("Code must keep the IDE editor font", "Monospaced", editor.colorsScheme.editorFontName)
             }
-            for (panel in listOf(input, preview)) ComponentTreeEventDispatcher.create(panel, EditorColorsListener::class.java).multicaster.globalSchemeChange(null)
+            ApplicationManager.getApplication().messageBus.syncPublisher(EditorColorsManager.TOPIC).globalSchemeChange(null)
             fields.take(2).forEach { field ->
                 field.font = java.awt.Font("Dialog", java.awt.Font.BOLD, 19)
                 assertEquals("Monospaced", scheme.editorFontName)
                 assertEquals("Monospaced", field.editor!!.colorsScheme.editorFontName)
             }
         } finally {
-            input.dispose()
-            preview.dispose()
+            Disposer.dispose(input)
+            Disposer.dispose(preview)
             Disposer.dispose(lifetime)
             manager.setGlobalScheme(original)
         }
@@ -88,9 +87,8 @@ class TypeCodeEditorIntegrationTest : BasePlatformTestCase() {
             manager.setGlobalScheme(scheme)
             for (color in listOf(Color(12, 110, 170), Color(170, 65, 80))) {
                 scheme.setAttributes(DefaultLanguageHighlighterColors.KEYWORD, TextAttributes(color, null, null, null, 0))
-                // The same public component-tree delivery used by EditorColorsManager, including null for same-scheme Apply.
-                ComponentTreeEventDispatcher.create(input, EditorColorsListener::class.java).multicaster.globalSchemeChange(null)
-                ComponentTreeEventDispatcher.create(preview, EditorColorsListener::class.java).multicaster.globalSchemeChange(null)
+                // Publish through EditorColorsManager.TOPIC, including null for same-scheme Apply.
+                ApplicationManager.getApplication().messageBus.syncPublisher(EditorColorsManager.TOPIC).globalSchemeChange(null)
                 editors.forEach { editor ->
                     assertEquals(color, editor.highlighter.createIterator(0).textAttributes.foregroundColor)
                     assertEquals(scheme.defaultBackground, editor.backgroundColor)
@@ -109,16 +107,15 @@ class TypeCodeEditorIntegrationTest : BasePlatformTestCase() {
             assertTrue(undoManager.isRedoAvailable(fileEditor))
             undoManager.redo(fileEditor)
             assertEquals(content, document.text)
-            input.dispose()
-            preview.dispose()
+            Disposer.dispose(input)
+            Disposer.dispose(preview)
             Disposer.dispose(lifetime)
             com.intellij.util.ui.UIUtil.dispatchAllInvocationEvents()
             assertTrue(editors.all { it.isDisposed })
-            input.globalSchemeChange(null)
-            preview.globalSchemeChange(null)
+            ApplicationManager.getApplication().messageBus.syncPublisher(EditorColorsManager.TOPIC).globalSchemeChange(null)
         } finally {
-            input.dispose()
-            preview.dispose()
+            Disposer.dispose(input)
+            Disposer.dispose(preview)
             Disposer.dispose(lifetime)
             manager.setGlobalScheme(original)
             WriteCommandAction.runWriteCommandAction(project) { fileTypes.associateExtension(originalC, "c") }
@@ -181,7 +178,7 @@ class TypeCodeEditorIntegrationTest : BasePlatformTestCase() {
             assertNull(TypeCodeHighlighterResolver.profileFor("json"))
             assertNotNull(TypeCodeHighlighterResolver.profileFor("kt"))
         } finally {
-            preview.dispose()
+            Disposer.dispose(preview)
             Disposer.dispose(lifetime)
         }
     }
@@ -219,7 +216,7 @@ class TypeCodeEditorIntegrationTest : BasePlatformTestCase() {
                         DefaultLanguageHighlighterColors.INSTANCE_FIELD, DefaultLanguageHighlighterColors.FUNCTION_DECLARATION)
                     keys.forEach { scheme.setAttributes(it, TextAttributes(custom, null, null, null, 0)) }
                     manager.setGlobalScheme(scheme)
-                    for (panel in listOf(input, preview)) ComponentTreeEventDispatcher.create(panel, EditorColorsListener::class.java).multicaster.globalSchemeChange(null)
+                    ApplicationManager.getApplication().messageBus.syncPublisher(EditorColorsManager.TOPIC).globalSchemeChange(null)
                     for (editor in editors) {
                         assertEquals(source, editor.document.text)
                         assertEquals(background, editor.backgroundColor)
@@ -241,7 +238,7 @@ class TypeCodeEditorIntegrationTest : BasePlatformTestCase() {
                     }
                 }
             } finally {
-                input.dispose(); preview.dispose(); Disposer.dispose(lifetime)
+                Disposer.dispose(input); Disposer.dispose(preview); Disposer.dispose(lifetime)
                 com.intellij.util.ui.UIUtil.dispatchAllInvocationEvents()
                 manager.setGlobalScheme(original)
                 WriteCommandAction.runWriteCommandAction(project) { fileTypes.associateExtension(previousType, extension) }

@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.actions
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.wm.ToolWindowManager
@@ -65,4 +66,6 @@ class CloseTabAction : AnAction(
         // 현재 선택된 컴포넌트가 "+" 탭이 아닌 경우에만 활성화
         e.presentation.isEnabled = selectedComponent != null && selectedComponent.name != "addNewTab"
     }
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 }

@@ -3,6 +3,8 @@ import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.PrintProductsReleasesTask
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 fun properties(key: String): String = providers.gradleProperty(key).get()
 
@@ -79,7 +81,11 @@ version = providers.gradleProperty("pluginVersion").get()
 
 // Set the JVM language level used to build the project.
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
+    compilerOptions {
+        languageVersion = KotlinVersion.KOTLIN_2_0
+        apiVersion = KotlinVersion.KOTLIN_2_0
+    }
 }
 
 // Configure project's dependencies
@@ -97,11 +103,22 @@ repositories {
 dependencies {
     // Json Library
     implementation(libs.jacksonDatabind)
-    implementation(libs.jacksonModuleKotlin)
-    implementation(libs.jsonPath)
+    implementation(libs.jacksonModuleKotlin) {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-reflect")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-common")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
+        exclude(group = "org.jetbrains", module = "annotations")
+    }
+    implementation(libs.jsonPath) {
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
     implementation(libs.jmespathJackson)
     implementation(libs.dataFaker)
-    implementation(libs.jsonSchemaValidator)
+    implementation(libs.jsonSchemaValidator) {
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
     implementation(libs.chicoryRuntime)
     implementation(libs.chicoryWasi)
 
@@ -139,12 +156,18 @@ configurations.configureEach {
     resolutionStrategy.eachDependency {
         if (requested.group == "org.jetbrains.kotlin" && requested.name.startsWith("kotlin-")) {
             useVersion(libs.versions.kotlin.get())
-            because("Keep Kotlin runtime artifacts aligned with the IntelliJ Platform test runtime.")
+            because("Keep Kotlin compiler/test artifacts aligned across configurations.")
+        }
+        if ((requested.group == "com.fasterxml.jackson.core" && requested.name in setOf("jackson-core", "jackson-databind")) ||
+            (requested.group == "com.fasterxml.jackson.module" && requested.name == "jackson-module-kotlin")
+        ) {
+            useVersion(libs.versions.jackson.databind.get())
+            because("Keep Jackson 2 ABI compatible with IntelliJ Platform 243 bundled Jackson 2.17.2.")
         }
     }
 }
 
-val checkWasmPrerequisites by tasks.registering {
+val checkWasmPrerequisites = tasks.register("checkWasmPrerequisites") {
     group = "wasm"
     description = "Verify Rust and WASM build prerequisites"
     notCompatibleWithConfigurationCache("Runs local toolchain discovery commands during task execution.")
@@ -177,7 +200,7 @@ val checkWasmPrerequisites by tasks.registering {
     }
 }
 
-val buildTreeSitterWasm by tasks.registering(Exec::class) {
+val buildTreeSitterWasm = tasks.register<Exec>("buildTreeSitterWasm") {
     group = "wasm"
     description = "Build tree-sitter WASM module from Rust source"
     notCompatibleWithConfigurationCache("Invokes a local Rust build and captures script-level task inputs.")
@@ -197,7 +220,7 @@ val buildTreeSitterWasm by tasks.registering(Exec::class) {
     outputs.file(treeSitterWasmBuildOutputFile)
 }
 
-val copyWasmToResources by tasks.registering(Copy::class) {
+val copyWasmToResources = tasks.register<Copy>("copyWasmToResources") {
     group = "wasm"
     description = "Copy built tree-sitter WASM module to plugin resources"
     notCompatibleWithConfigurationCache("Uses script-level file providers for generated WASM resources.")
@@ -262,7 +285,7 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
-            untilBuild = providers.gradleProperty("pluginUntilBuild")
+            untilBuild = provider { null }
         }
     }
 
@@ -282,6 +305,15 @@ intellijPlatform {
     }
 
     pluginVerification {
+        failureLevel = listOf(
+            VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
+            VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
+            VerifyPluginTask.FailureLevel.NOT_DYNAMIC,
+            VerifyPluginTask.FailureLevel.SCHEDULED_FOR_REMOVAL_API_USAGES,
+            VerifyPluginTask.FailureLevel.DEPRECATED_API_USAGES,
+            VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
+        )
         ides {
             val recommendedIdes = ProductReleasesValueSource()
             tasks.named<PrintProductsReleasesTask>("printProductsReleases") {

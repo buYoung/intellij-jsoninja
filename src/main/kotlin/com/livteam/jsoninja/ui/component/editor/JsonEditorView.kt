@@ -8,11 +8,11 @@ import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
+import com.intellij.ui.JBColor
 import com.intellij.ui.RoundedLineBorder
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Cursor
@@ -121,7 +121,7 @@ class JsonEditorView(
         val editorBackground = EditorColorsManager.getInstance().globalScheme.defaultBackground
         val scheme = EditorColorsManager.getInstance().globalScheme
         val dividerColor = scheme.getColor(com.intellij.openapi.editor.colors.EditorColors.LINE_NUMBERS_COLOR)
-            ?: UIUtil.getBoundsColor()
+            ?: JBColor.border()
 
         val togglePanel = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.CENTER, 4, 2))
         togglePanel.border = JBUI.Borders.compound(
@@ -133,14 +133,14 @@ class JsonEditorView(
 
         val textLabel = JBLabel("TEXT").apply {
             font = font.deriveFont(Font.BOLD, 11f)
-            foreground = UIUtil.getLabelForeground()
+            foreground = JBUI.CurrentTheme.Label.foreground()
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
         }
         textModeLabel = textLabel
 
         val treeLabel = JBLabel("TREE").apply {
             font = font.deriveFont(Font.PLAIN, 11f)
-            foreground = UIUtil.getContextHelpForeground()
+            foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
         }
         treeModeLabel = treeLabel
@@ -197,8 +197,8 @@ class JsonEditorView(
         val isTextMode = currentDisplayMode == EditorDisplayMode.TEXT
         textModeLabel.font = textModeLabel.font.deriveFont(if (isTextMode) Font.BOLD else Font.PLAIN, 11f)
         treeModeLabel.font = treeModeLabel.font.deriveFont(if (isTextMode) Font.PLAIN else Font.BOLD, 11f)
-        textModeLabel.foreground = if (isTextMode) UIUtil.getLabelForeground() else UIUtil.getContextHelpForeground()
-        treeModeLabel.foreground = if (isTextMode) UIUtil.getContextHelpForeground() else UIUtil.getLabelForeground()
+        textModeLabel.foreground = if (isTextMode) JBUI.CurrentTheme.Label.foreground() else JBUI.CurrentTheme.ContextHelp.FOREGROUND
+        treeModeLabel.foreground = if (isTextMode) JBUI.CurrentTheme.ContextHelp.FOREGROUND else JBUI.CurrentTheme.Label.foreground()
     }
 
     fun setText(text: String) = presenter.setText(text)

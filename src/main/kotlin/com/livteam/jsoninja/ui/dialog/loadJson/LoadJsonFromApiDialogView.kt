@@ -19,13 +19,12 @@ import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.EditorTextField
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
@@ -33,7 +32,6 @@ import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiRequestMethod
 import java.awt.BorderLayout
 import java.awt.Dimension
 import javax.swing.JComponent
-import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.event.DocumentEvent as SwingDocumentEvent
 
@@ -55,7 +53,7 @@ class LoadJsonFromApiDialogView(
     private lateinit var bearerTokenRow: Row
     private lateinit var requestBodyRow: Row
     private val summaryLabel = JBLabel().apply {
-        foreground = UIUtil.getContextHelpForeground()
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
     }
 
     private var currentBodyFileType: FileType? = null
@@ -118,6 +116,7 @@ class LoadJsonFromApiDialogView(
     }
 
     fun dispose() {
+        if (!::requestBodyEditorTextField.isInitialized) return
         (requestBodyEditorTextField as? Disposable)?.let { editorDisposable ->
             Disposer.dispose(editorDisposable)
         }
@@ -125,24 +124,18 @@ class LoadJsonFromApiDialogView(
 
     private fun createComponent(): JComponent {
         requestMethodComboBox = ComboBox(ApiRequestMethod.entries.toTypedArray()).apply {
-            renderer = object : SimpleListCellRenderer<ApiRequestMethod>() {
-                override fun customize(list: JList<out ApiRequestMethod>, value: ApiRequestMethod?, index: Int, selected: Boolean, hasFocus: Boolean) {
-                    text = value?.name ?: ""
-                }
-            }
+            renderer = textListCellRenderer<ApiRequestMethod?> { value -> value?.name ?: "" }
         }
         requestUrlTextField = JBTextField().apply {
             emptyText.text = LocalizationBundle.message("dialog.load.json.api.url.placeholder")
         }
         authorizationTypeComboBox = ComboBox(ApiAuthorizationType.entries.toTypedArray()).apply {
-            renderer = object : SimpleListCellRenderer<ApiAuthorizationType>() {
-                override fun customize(list: JList<out ApiAuthorizationType>, value: ApiAuthorizationType?, index: Int, selected: Boolean, hasFocus: Boolean) {
-                    text = when (value) {
-                        ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
-                        ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
-                        ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
-                        null -> ""
-                    }
+            renderer = textListCellRenderer<ApiAuthorizationType?> { value ->
+                when (value) {
+                    ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
+                    ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
+                    ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
+                    null -> ""
                 }
             }
         }

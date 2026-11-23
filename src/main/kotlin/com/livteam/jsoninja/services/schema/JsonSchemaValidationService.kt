@@ -1,6 +1,5 @@
 package com.livteam.jsoninja.services.schema
 
-import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.DeserializationFeature
@@ -23,10 +22,10 @@ class JsonSchemaValidationService(private val project: Project) {
         .registerModule(KotlinModule.Builder().build())
         .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
         .apply {
-            configure(JsonParser.Feature.ALLOW_COMMENTS, false)
+            configure(JsonReadFeature.ALLOW_JAVA_COMMENTS.mappedFeature(), false)
             configure(JsonReadFeature.ALLOW_TRAILING_COMMA.mappedFeature(), false)
-            configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, false)
-            configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, false)
+            configure(JsonReadFeature.ALLOW_SINGLE_QUOTES.mappedFeature(), false)
+            configure(JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES.mappedFeature(), false)
         }
 
     private val schemaRegistryByVersion: Map<SpecificationVersion, SchemaRegistry> =

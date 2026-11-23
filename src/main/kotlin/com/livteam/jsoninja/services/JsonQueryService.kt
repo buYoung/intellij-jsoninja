@@ -23,20 +23,24 @@ import com.fasterxml.jackson.databind.JsonNode
 @Service(Service.Level.PROJECT)
 class JsonQueryService(private val project: Project) {
     private val LOG = logger<JsonQueryService>()
-    private val objectMapper = service<JsonObjectMapperService>().objectMapper
-    
+    private val objectMapper by lazy { service<JsonObjectMapperService>().objectMapper }
+
     // Jayway JsonPath 설정 (Jackson 사용)
-    private val jsonPathConfiguration = Configuration.builder()
-        .jsonProvider(JacksonJsonProvider(objectMapper))
-        .mappingProvider(JacksonMappingProvider(objectMapper))
-        .build()
+    private val jsonPathConfiguration by lazy {
+        Configuration.builder()
+            .jsonProvider(JacksonJsonProvider(objectMapper))
+            .mappingProvider(JacksonMappingProvider(objectMapper))
+            .build()
+    }
 
     // JMESPath 런타임
-    private val jmesPathRuntime = JacksonRuntime()
+    private val jmesPathRuntime by lazy { JacksonRuntime() }
 
     // Jackson-jq Scope (built-in functions loaded once)
-    private val jqScope: Scope = Scope.newEmptyScope().also {
-        BuiltinFunctionLoader.getInstance().loadFunctions(Versions.JQ_1_6, it)
+    private val jqScope: Scope by lazy {
+        Scope.newEmptyScope().also {
+            BuiltinFunctionLoader.getInstance().loadFunctions(Versions.JQ_1_6, it)
+        }
     }
 
     /**

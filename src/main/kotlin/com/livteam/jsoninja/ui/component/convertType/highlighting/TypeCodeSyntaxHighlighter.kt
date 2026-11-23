@@ -7,6 +7,8 @@ import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.openapi.fileTypes.SyntaxHighlighterBase
 import com.intellij.psi.tree.IElementType
 
+// LexerEditorHighlighter encodes tokens via IElementType.getIndex() and decodes via IElementType.find(index),
+// so these fixed singleton tokens must remain registered (default register = true).
 internal class TypeCodeToken(name: String, key: TextAttributesKey) : IElementType(name, Language.ANY) {
     val keys: Array<TextAttributesKey> = arrayOf(key)
 

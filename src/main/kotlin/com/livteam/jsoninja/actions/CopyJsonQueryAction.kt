@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.actions
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
@@ -43,7 +44,7 @@ class CopyJsonQueryAction : AnAction() {
         var hasElement = false
         if (project != null && editor != null) {
             val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document)
-            val offset = editor.caretModel.offset
+            val offset = e.getData(CommonDataKeys.CARET)?.offset ?: editor.caretModel.offset
             if (psiFile != null) {
                 val element = psiFile.findElementAt(offset)
                 hasElement = element != null
@@ -54,5 +55,9 @@ class CopyJsonQueryAction : AnAction() {
         // Enabled only when there is a valid element to query
         e.presentation.isVisible = project != null && editor != null
         e.presentation.isEnabled = project != null && editor != null && hasElement
+    }
+
+    override fun getActionUpdateThread(): ActionUpdateThread {
+        return ActionUpdateThread.BGT
     }
 }

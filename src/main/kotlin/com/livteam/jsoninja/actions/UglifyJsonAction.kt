@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.actions
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.livteam.jsoninja.LocalizationBundle
@@ -24,4 +25,6 @@ class UglifyJsonAction : AnAction(
         e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
         e.presentation.icon = JsoninjaIcons.getUglifyIcon(e.project)
     }
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 }

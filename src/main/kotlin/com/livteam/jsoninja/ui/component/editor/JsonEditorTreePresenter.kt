@@ -2,6 +2,8 @@ package com.livteam.jsoninja.ui.component.editor
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
@@ -48,7 +50,7 @@ class JsonEditorTreePresenter(
                     buildTreeModel(jsonText)
                 }
 
-                withContext(Dispatchers.EDT) {
+                withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
                     if (project.isDisposed || isDisposed || sequence != refreshSequence.get() || !isCurrentDocument()) {
                         return@withContext
                     }

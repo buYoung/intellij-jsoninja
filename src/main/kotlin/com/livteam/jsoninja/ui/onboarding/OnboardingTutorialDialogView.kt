@@ -1,11 +1,11 @@
 package com.livteam.jsoninja.ui.onboarding
 
 import com.intellij.openapi.util.IconLoader
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import com.livteam.jsoninja.LocalizationBundle
 import java.awt.BorderLayout
 import java.awt.Component
@@ -34,7 +34,7 @@ class OnboardingTutorialDialogView(
     onNextRequested: () -> Unit
 ) {
     private val stepCounterLabel = JBLabel().apply {
-        foreground = UIUtil.getContextHelpForeground()
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
         font = JBFont.small()
     }
 
@@ -78,7 +78,7 @@ class OnboardingTutorialDialogView(
 
     private val imageCaptionLabel = JBLabel().apply {
         font = JBFont.small()
-        foreground = UIUtil.getContextHelpForeground()
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
         horizontalAlignment = SwingConstants.CENTER
     }
 
@@ -149,7 +149,7 @@ class OnboardingTutorialDialogView(
     private val heroImageCard = JPanel(BorderLayout()).apply {
         isOpaque = false
         border = JBUI.Borders.compound(
-            JBUI.Borders.customLine(UIUtil.getBoundsColor(), 1),
+            JBUI.Borders.customLine(JBColor.border(), 1),
             JBUI.Borders.empty(6)
         )
         alignmentX = Component.CENTER_ALIGNMENT
@@ -362,7 +362,7 @@ class OnboardingTutorialDialogView(
         return JPanel(BorderLayout(0, 4)).apply {
             isOpaque = false
             border = JBUI.Borders.compound(
-                JBUI.Borders.customLine(UIUtil.getBoundsColor(), 1),
+                JBUI.Borders.customLine(JBColor.border(), 1),
                 JBUI.Borders.empty(8)
             )
             add(titleLabel, BorderLayout.NORTH)
@@ -388,7 +388,7 @@ class OnboardingTutorialDialogView(
             isOpaque = false
             border = JBUI.Borders.empty()
             font = JBFont.regular().deriveFont(13f)
-            foreground = UIUtil.getContextHelpForeground()
+            foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
             alignmentX = Component.CENTER_ALIGNMENT
             isFocusable = false
             margin = JBUI.insets(0)
