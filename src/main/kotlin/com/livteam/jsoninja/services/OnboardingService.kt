@@ -1,8 +1,10 @@
 package com.livteam.jsoninja.services
 
 import com.intellij.ide.util.PropertiesComponent
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -23,7 +25,7 @@ import kotlinx.coroutines.launch
 class OnboardingService(
     private val project: Project,
     private val coroutineScope: CoroutineScope,
-) {
+) : Disposable {
 
     private var tutorialDialog: OnboardingTutorialDialog? = null
 
@@ -116,6 +118,20 @@ class OnboardingService(
     private fun markOnboardingSeen() {
         OnboardingStateService.getInstance().markWelcomeDialogSeen()
         PropertiesComponent.getInstance(project).setValue(ONBOARDING_SEEN_KEY, true)
+    }
+
+    override fun dispose() {
+        val dialog = tutorialDialog ?: return
+        tutorialDialog = null
+        val closeDialog = {
+            dialog.dispose()
+        }
+        val application = ApplicationManager.getApplication()
+        if (application == null || application.isDispatchThread) {
+            closeDialog()
+        } else {
+            application.invokeLater(closeDialog, ModalityState.any())
+        }
     }
 
     companion object {

@@ -11,7 +11,6 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.layout.selected
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationOutputFormat
@@ -122,7 +121,7 @@ class GenerateRandomJsonTabView(
                     }
                     .component
                 label(LocalizationBundle.message("dialog.generate.json.range", 1, 100))
-                    .applyToComponent { foreground = UIUtil.getContextHelpForeground() }
+                    .applyToComponent { foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND }
             }.enabledIf(rootTypeArray.selected)
 
             row(LocalizationBundle.message("dialog.generate.json.label.props.per.object")) {
@@ -136,7 +135,7 @@ class GenerateRandomJsonTabView(
                     }
                     .component
                 label(LocalizationBundle.message("dialog.generate.json.range", 1, 100))
-                    .applyToComponent { foreground = UIUtil.getContextHelpForeground() }
+                    .applyToComponent { foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND }
             }
 
             row(LocalizationBundle.message("dialog.generate.json.label.max.depth")) {
@@ -144,7 +143,7 @@ class GenerateRandomJsonTabView(
                     .applyToComponent { text = initialConfig.maxDepth.toString() }
                     .component
                 label(LocalizationBundle.message("dialog.generate.json.range", 1, 10))
-                    .applyToComponent { foreground = UIUtil.getContextHelpForeground() }
+                    .applyToComponent { foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND }
             }
 
             separator().topGap(TopGap.SMALL)

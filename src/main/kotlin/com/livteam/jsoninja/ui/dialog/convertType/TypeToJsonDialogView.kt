@@ -1,10 +1,11 @@
 package com.livteam.jsoninja.ui.dialog.convertType
 
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.SimpleListCellRenderer
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.LabelPosition
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.SupportedLanguage
@@ -40,19 +41,21 @@ class TypeToJsonDialogView(
 
     init {
         languageSelector.setAccessibleName(LocalizationBundle.message("dialog.type.to.json.language"))
-        fieldsModeComboBox.renderer = SimpleListCellRenderer.create("") { mode ->
-            LocalizationBundle.message(when (mode) {
-                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL -> "dialog.type.to.json.fields.required.and.optional"
-                SchemaPropertyGenerationMode.REQUIRED_ONLY -> "dialog.type.to.json.fields.required.only"
-                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED -> "dialog.type.to.json.fields.commented"
-            })
+        fieldsModeComboBox.renderer = textListCellRenderer<SchemaPropertyGenerationMode?> { mode ->
+            when (mode) {
+                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL -> LocalizationBundle.message("dialog.type.to.json.fields.required.and.optional")
+                SchemaPropertyGenerationMode.REQUIRED_ONLY -> LocalizationBundle.message("dialog.type.to.json.fields.required.only")
+                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED -> LocalizationBundle.message("dialog.type.to.json.fields.commented")
+                null -> ""
+            }
         }
-        formatStateComboBox.renderer = SimpleListCellRenderer.create("") { format ->
-            LocalizationBundle.message(when (format) {
-                JsonFormatState.PRETTIFY, JsonFormatState.PRETTIFY_SORTED -> "dialog.type.to.json.format.prettify"
-                JsonFormatState.PRETTIFY_COMPACT -> "dialog.type.to.json.format.prettify.compact"
-                JsonFormatState.UGLIFY -> "dialog.type.to.json.format.uglify"
-            })
+        formatStateComboBox.renderer = textListCellRenderer<JsonFormatState?> { format ->
+            when (format) {
+                JsonFormatState.PRETTIFY, JsonFormatState.PRETTIFY_SORTED -> LocalizationBundle.message("dialog.type.to.json.format.prettify")
+                JsonFormatState.PRETTIFY_COMPACT -> LocalizationBundle.message("dialog.type.to.json.format.prettify.compact")
+                JsonFormatState.UGLIFY -> LocalizationBundle.message("dialog.type.to.json.format.uglify")
+                null -> ""
+            }
         }
         val settingsPanel = panel {
             row {
@@ -172,8 +175,8 @@ class TypeToJsonDialogView(
     fun getPreferredFocusedComponent(): JComponent = inputPanel.getPreferredFocusedComponent()
 
     fun dispose() {
-        inputPanel.dispose()
-        workspace.dispose()
+        Disposer.dispose(inputPanel)
+        Disposer.dispose(workspace)
     }
 
     private fun updateInputLanguage(language: SupportedLanguage) {

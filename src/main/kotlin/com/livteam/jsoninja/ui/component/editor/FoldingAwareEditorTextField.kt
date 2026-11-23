@@ -4,6 +4,8 @@ import com.intellij.json.JsonLanguage
 import com.intellij.lang.folding.LanguageFolding
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
@@ -13,18 +15,17 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.intellij.ui.EditorTextField
-import com.intellij.util.Alarm
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -38,8 +39,6 @@ internal class FoldingAwareEditorTextField(
 ) : EditorTextField(document, project, fileType, isViewer, oneLineMode), Disposable {
     private val editorProject = project
     private var foldingCoroutineScope: CoroutineScope? = null
-    private var foldingRefreshAlarm: Alarm? = null
-    private var foldingAlarmDisposable: Disposable? = null
     private var foldingRefreshJob: Job? = null
     private var cleanupRegistrationEditor: Editor? = null
 
@@ -63,13 +62,7 @@ internal class FoldingAwareEditorTextField(
 
         val currentScope = foldingCoroutineScope
         if (currentScope == null || currentScope.coroutineContext[Job]?.isCancelled == true) {
-            val newScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
-            foldingCoroutineScope = newScope
-
-            val alarmDisposable = Disposer.newDisposable("JSONinja folding alarm")
-            Disposer.register(this, alarmDisposable)
-            foldingAlarmDisposable = alarmDisposable
-            foldingRefreshAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, alarmDisposable)
+            foldingCoroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
         }
 
         cleanupRegistrationEditor = editor
@@ -85,75 +78,78 @@ internal class FoldingAwareEditorTextField(
         }
 
         ensureRefreshInfrastructure(editor)
-        val alarm = foldingRefreshAlarm ?: return
-        val expectedModificationStamp = editor.document.modificationStamp
-        alarm.cancelAllRequests()
-        alarm.addRequest(
-            { refreshFoldRegions(editor, expectedModificationStamp) },
-            debounceDelayMs,
-        )
-    }
-
-    private fun refreshFoldRegions(
-        editor: Editor,
-        expectedModificationStamp: Long,
-    ) {
-        val project = editorProject ?: return
         val coroutineScope = foldingCoroutineScope ?: return
         val document = editor.document
+        val expectedModificationStamp = document.modificationStamp
+        // Capture component modality (write-safe for commitDocument, while still active inside modal dialogs).
+        val modalityState = ModalityState.stateForComponent(this)
 
         foldingRefreshJob?.cancel()
         foldingRefreshJob = coroutineScope.launch {
-            withContext(Dispatchers.EDT) {
+            if (debounceDelayMs > 0) {
+                delay(debounceDelayMs.toLong())
+            }
+            refreshFoldRegions(project, editor, document, expectedModificationStamp, modalityState)
+        }
+    }
+
+    private suspend fun refreshFoldRegions(
+        project: Project,
+        editor: Editor,
+        document: Document,
+        expectedModificationStamp: Long,
+        modalityState: ModalityState,
+    ) {
+        val edtModalityContext = Dispatchers.EDT + modalityState.asContextElement()
+        val canProceed = withContext(edtModalityContext) {
+            if (project.isDisposed || editor.isDisposed) {
+                return@withContext false
+            }
+            if (document.modificationStamp != expectedModificationStamp) {
+                return@withContext false
+            }
+
+            PsiDocumentManager.getInstance(project).commitDocument(document)
+            true
+        }
+        if (!canProceed) {
+            return
+        }
+
+        val foldRegions = try {
+            readAction {
                 if (project.isDisposed || editor.isDisposed) {
-                    return@withContext
+                    emptyList()
+                } else if (document.modificationStamp != expectedModificationStamp) {
+                    emptyList()
+                } else {
+                    collectFoldRegions(project, document)
                 }
-                if (document.modificationStamp != expectedModificationStamp) {
-                    return@withContext
-                }
+            }
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (_: ProcessCanceledException) {
+            return
+        } catch (throwable: Throwable) {
+            LOG.warn("Failed to refresh JSONinja folding regions", throwable)
+            emptyList()
+        }
 
-                PsiDocumentManager.getInstance(project).commitDocument(document)
+        withContext(edtModalityContext) {
+            if (project.isDisposed || editor.isDisposed) {
+                return@withContext
+            }
+            if (document.modificationStamp != expectedModificationStamp) {
+                return@withContext
             }
 
-            val foldRegions = try {
-                readAction {
-                    if (project.isDisposed || editor.isDisposed) {
-                        emptyList()
-                    } else if (document.modificationStamp != expectedModificationStamp) {
-                        emptyList()
-                    } else {
-                        collectFoldRegions(project, document)
-                    }
-                }
-            } catch (cancellationException: CancellationException) {
-                throw cancellationException
-            } catch (_: ProcessCanceledException) {
-                return@launch
-            } catch (throwable: Throwable) {
-                LOG.warn("Failed to refresh JSONinja folding regions", throwable)
-                emptyList()
-            }
-
-            withContext(Dispatchers.EDT) {
-                if (project.isDisposed || editor.isDisposed) {
-                    return@withContext
-                }
-                if (document.modificationStamp != expectedModificationStamp) {
-                    return@withContext
-                }
-
-                applyFoldRegions(editor, foldRegions)
-            }
+            applyFoldRegions(editor, foldRegions)
         }
     }
 
     private fun clearRefreshInfrastructure() {
-        foldingRefreshAlarm?.cancelAllRequests()
         foldingRefreshJob?.cancel()
         foldingCoroutineScope?.cancel()
-        foldingAlarmDisposable?.let { Disposer.dispose(it) }
-        foldingRefreshAlarm = null
-        foldingAlarmDisposable = null
         foldingRefreshJob = null
         foldingCoroutineScope = null
         cleanupRegistrationEditor = null

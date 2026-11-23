@@ -14,8 +14,8 @@ import com.livteam.jsoninja.services.treesitter.WasmMemoryBridge
 class TypeDeclarationAnalyzerService(
     private val project: Project,
 ) {
-    private val objectMapper = service<JsonObjectMapperService>().objectMapper
-    private val assetRegistryService = service<TreeSitterAssetRegistryService>()
+    private val objectMapper by lazy { service<JsonObjectMapperService>().objectMapper }
+    private val assetRegistryService by lazy { service<TreeSitterAssetRegistryService>() }
 
     fun analyzeSource(sourceCode: String, language: SupportedLanguage): TypeAnalysisResult =
         analyzeSource(sourceCode, language) {}

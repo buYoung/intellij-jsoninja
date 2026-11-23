@@ -4,7 +4,6 @@ import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import java.awt.BorderLayout
@@ -19,7 +18,7 @@ class GenerateJsonDialogView(
 ) {
     private lateinit var tabbedPane: JBTabbedPane
     private val summaryLabel = JBLabel().apply {
-        foreground = UIUtil.getContextHelpForeground()
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
     }
 
     val component: JComponent by lazy { createComponent() }

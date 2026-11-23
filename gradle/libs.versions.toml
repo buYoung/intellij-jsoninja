@@ -1,8 +1,8 @@
 [versions]
 # libraries
 junit = "4.13.2"
-jackson-databind = "2.22.3"
-jackson-module-kotlin = "2.22.3"
+jackson-databind = "2.17.2"
+jackson-module-kotlin = "2.17.2"
 json-path = "3.0.0"
 jmespath-jackson = "0.6.0"
 jackson-jq = "1.6.5"

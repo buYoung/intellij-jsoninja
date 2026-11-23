@@ -11,13 +11,12 @@ import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.SearchTextField
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
@@ -54,14 +53,16 @@ class GenerateSchemaJsonTabView(
     private lateinit var schemaOutputCountField: JBTextField
     private val schemaPropertyModeComboBox = ComboBox(SchemaPropertyGenerationMode.entries.toTypedArray()).apply {
         selectedItem = initialConfig.schemaPropertyGenerationMode
-        renderer = SimpleListCellRenderer.create("") { mode ->
-            LocalizationBundle.message(
-                when (mode) {
-                    SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL -> "dialog.generate.json.schema.property.mode.required.optional"
-                    SchemaPropertyGenerationMode.REQUIRED_ONLY -> "dialog.generate.json.schema.property.mode.required.only"
-                    SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED -> "dialog.generate.json.schema.property.mode.required.optional.commented"
-                }
-            )
+        renderer = textListCellRenderer<SchemaPropertyGenerationMode?> { mode ->
+            when (mode) {
+                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL ->
+                    LocalizationBundle.message("dialog.generate.json.schema.property.mode.required.optional")
+                SchemaPropertyGenerationMode.REQUIRED_ONLY ->
+                    LocalizationBundle.message("dialog.generate.json.schema.property.mode.required.only")
+                SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED ->
+                    LocalizationBundle.message("dialog.generate.json.schema.property.mode.required.optional.commented")
+                null -> ""
+            }
         }
     }
     private var preferredOutputFormat =
@@ -271,7 +272,7 @@ class GenerateSchemaJsonTabView(
                         .applyToComponent { text = initialConfig.schemaOutputCount.toString() }
                         .component
                     label(LocalizationBundle.message("dialog.generate.json.range", 1, 100))
-                        .applyToComponent { foreground = UIUtil.getContextHelpForeground() }
+                        .applyToComponent { foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND }
                         .gap(RightGap.COLUMNS)
                     label(LocalizationBundle.message("dialog.generate.json.output.format"))
                         .applyToComponent { labelFor = schemaOutputFormatComboBox }

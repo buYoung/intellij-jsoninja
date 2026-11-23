@@ -7,16 +7,22 @@ import com.intellij.diff.FrameDiffTool
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.util.Side
 import com.intellij.json.JsonFileType
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.fileTypes.FileType
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.util.Alarm
 import com.livteam.jsoninja.services.JsonDiffService
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
@@ -24,9 +30,11 @@ import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.dialog.LargeFileWarningDialog
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -49,36 +57,21 @@ import kotlin.math.abs
 class JsonDiffExtension : DiffExtension() {
 
     private object Constants {
-        const val DEBOUNCE_DELAY = 300 // milliseconds
+        const val DEBOUNCE_DELAY = 300L // milliseconds
         const val SMALL_EDIT_THRESHOLD = 3 // characters
         val CHANGE_GUARD_KEY = JsonDiffKeys.JSON_DIFF_CHANGE_GUARD
     }
 
-    /**
-     * memory leak을 방지하기 위한 경량 document별 state.
-     * documentStates map을 통해 동기화된 access가 이루어져야 합니다.
-     */
-    private data class DocumentState(
-        var detectionResult: JsonDetectionResult = JsonDetectionResult.UNKNOWN
+    private data class EditorContentSnapshot(
+        val fileName: String,
+        val fileType: FileType?,
+        val fileExtension: String?,
+        val text: String,
+        val textLength: Int
     )
-
-    private enum class JsonDetectionResult {
-        YES, NO, UNKNOWN
-    }
 
     companion object {
         private val LOG = Logger.getInstance(JsonDiffExtension::class.java)
-
-        // 강한 참조 없이 document별 state를 추적하는 동기화된 WeakHashMap
-        private val documentStates = Collections.synchronizedMap(WeakHashMap<Document, DocumentState>())
-
-        /**
-         * 주어진 document에 대한 document state를 가져오거나 생성합니다.
-         * document별 state에 대한 thread-safe access.
-         */
-        private fun getDocumentState(document: Document): DocumentState {
-            return documentStates.computeIfAbsent(document) { DocumentState() }
-        }
     }
 
     override fun onViewerCreated(viewer: FrameDiffTool.DiffViewer, context: DiffContext, request: DiffRequest) {
@@ -106,6 +99,7 @@ class JsonDiffExtension : DiffExtension() {
         }
 
         val formatterService = project.service<JsonFormatterService>()
+        val detectionCacheService = project.service<JsonDiffDetectionCacheService>()
         val settings = JsoninjaSettingsState.getInstance(project)
         val session = resolveSession(request, editors, settings)
         val projectName = project.name
@@ -118,7 +112,7 @@ class JsonDiffExtension : DiffExtension() {
             val startTime = System.currentTimeMillis()
             val jsonContentResults = withContext(Dispatchers.Default) {
                 editors.map { editor ->
-                    isJsonContent(editor, formatterService, projectName, settings) to editor
+                    isJsonContent(editor, formatterService, detectionCacheService, projectName, settings) to editor
                 }
             }
             val detectionTime = System.currentTimeMillis() - startTime
@@ -179,43 +173,59 @@ class JsonDiffExtension : DiffExtension() {
      *
      * @param editor 확인할 editor
      * @param formatterService JSON 검증을 위한 service
+     * @param detectionCacheService document별 감지 결과 cache service
      * @param projectName logging context를 위한 project 이름
      * @return content가 JSON으로 감지되면 true
      */
-    private fun isJsonContent(
+    private suspend fun isJsonContent(
         editor: Editor,
         formatterService: JsonFormatterService,
+        detectionCacheService: JsonDiffDetectionCacheService,
         projectName: String,
         settings: JsoninjaSettingsState
     ): Boolean {
         val document = editor.document
-        val state = getDocumentState(document)
-        val fileName = editor.virtualFile?.name ?: "<unknown>"
+        val state = detectionCacheService.getDocumentState(document)
 
         // cached 감지 결과 먼저 확인
-        if (state.detectionResult != JsonDetectionResult.UNKNOWN) {
-            LOG.debug("Using cached JSON detection result for '$fileName': ${state.detectionResult}")
-            return state.detectionResult == JsonDetectionResult.YES
+        if (state.detectionResult != JsonDiffDetectionCacheService.JsonDetectionResult.UNKNOWN) {
+            LOG.debug("Using cached JSON detection result: ${state.detectionResult}")
+            return state.detectionResult == JsonDiffDetectionCacheService.JsonDetectionResult.YES
         }
 
+        var fileName = "<unknown>"
+        var textLength = 0
         try {
+            val snapshot = readAction {
+                val virtualFile = editor.virtualFile
+                EditorContentSnapshot(
+                    fileName = virtualFile?.name ?: "<unknown>",
+                    fileType = virtualFile?.fileType,
+                    fileExtension = virtualFile?.extension,
+                    text = document.text,
+                    textLength = document.textLength
+                )
+            }
+            fileName = snapshot.fileName
+            textLength = snapshot.textLength
+
             // 1단계: 빠른 경로 - 파일 타입 확인
-            val fileType = editor.virtualFile?.fileType
+            val fileType = snapshot.fileType
             // JSON5 파일 타입 이름은 플러그인마다 다를 수 있으므로 확장자도 확인
             val isJson5 = fileType?.name?.equals("JSON5", ignoreCase = true) == true ||
                     fileType?.defaultExtension == "json5" ||
-                    editor.virtualFile?.extension?.equals("json5", ignoreCase = true) == true
+                    snapshot.fileExtension?.equals("json5", ignoreCase = true) == true
 
             if (fileType == JsonFileType.INSTANCE || isJson5) {
                 LOG.debug("File '$fileName' detected as JSON via file type")
-                state.detectionResult = JsonDetectionResult.YES
+                state.detectionResult = JsonDiffDetectionCacheService.JsonDetectionResult.YES
                 return true
             }
 
-            val text = document.text
+            val text = snapshot.text
             if (text.isBlank()) {
                 LOG.debug("File '$fileName' is blank, not JSON")
-                state.detectionResult = JsonDetectionResult.NO
+                state.detectionResult = JsonDiffDetectionCacheService.JsonDetectionResult.NO
                 return false
             }
 
@@ -233,13 +243,17 @@ class JsonDiffExtension : DiffExtension() {
             val trimmed = text.trim()
             if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) {
                 LOG.debug("File '$fileName' does not start with JSON delimiters")
-                state.detectionResult = JsonDetectionResult.NO
+                state.detectionResult = JsonDiffDetectionCacheService.JsonDetectionResult.NO
                 return false
             }
 
             // 4단계: JsonFormatterService를 통한 필수 검증
             val isValid = formatterService.isValidJson(trimmed)
-            state.detectionResult = if (isValid) JsonDetectionResult.YES else JsonDetectionResult.NO
+            state.detectionResult = if (isValid) {
+                JsonDiffDetectionCacheService.JsonDetectionResult.YES
+            } else {
+                JsonDiffDetectionCacheService.JsonDetectionResult.NO
+            }
 
             if (LOG.isDebugEnabled) {
                 LOG.debug("File '$fileName' JSON validation result: $isValid (project: '$projectName')")
@@ -247,13 +261,17 @@ class JsonDiffExtension : DiffExtension() {
 
             return isValid
 
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (cancellationException: ProcessCanceledException) {
+            throw cancellationException
         } catch (e: OutOfMemoryError) {
-            LOG.error("OutOfMemoryError during JSON detection for file '$fileName' (${document.textLength} chars)", e)
-            state.detectionResult = JsonDetectionResult.NO
+            LOG.error("OutOfMemoryError during JSON detection for file '$fileName' ($textLength chars)", e)
+            state.detectionResult = JsonDiffDetectionCacheService.JsonDetectionResult.NO
             return false
         } catch (e: Exception) {
             LOG.warn("Error during JSON detection for file '$fileName'", e)
-            state.detectionResult = JsonDetectionResult.NO
+            state.detectionResult = JsonDiffDetectionCacheService.JsonDetectionResult.NO
             return false
         }
     }
@@ -297,9 +315,9 @@ class JsonDiffExtension : DiffExtension() {
         isViewerDisposed: AtomicBoolean
     ) {
         val diffService = project.service<JsonDiffService>()
-        val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, viewer)
         val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
         val pendingSides = EnumSet.noneOf(Side::class.java)
+        var debounceJob: Job? = null
         var formattingJob: Job? = null
         val isHostActive = { !project.isDisposed && !isViewerDisposed.get() && editors.none { it.isDisposed } }
 
@@ -312,6 +330,18 @@ class JsonDiffExtension : DiffExtension() {
             formattingJob?.cancel()
             formattingJob = coroutineScope.launch {
                 diffService.formatAutomatically(session, changedSides, isHostActive)
+            }
+        }
+
+        fun scheduleFormatting() {
+            val modalityState = ModalityState.stateForComponent(viewer.component)
+            debounceJob?.cancel()
+            debounceJob = coroutineScope.launch {
+                delay(Constants.DEBOUNCE_DELAY)
+                withContext(Dispatchers.EDT + modalityState.asContextElement()) {
+                    if (!isHostActive()) return@withContext
+                    launchFormatting()
+                }
             }
         }
 
@@ -339,8 +369,7 @@ class JsonDiffExtension : DiffExtension() {
                     pendingSides.add(side)
 
                     // 대기 중인 포맷팅 취소 후 debounce로 새로운 포맷팅 예약
-                    alarm.cancelAllRequests()
-                    alarm.addRequest({ launchFormatting() }, Constants.DEBOUNCE_DELAY)
+                    scheduleFormatting()
                 }
             }
             document.addDocumentListener(documentListener, viewer)
@@ -351,14 +380,16 @@ class JsonDiffExtension : DiffExtension() {
 
         // 옵션 변경, 수동 정렬, 복원, 입력 교체는 대기 중인 이전 정책 작업을 버린다.
         session.addPendingWorkListener(viewer) {
-            alarm.cancelAllRequests()
+            debounceJob?.cancel()
+            debounceJob = null
             pendingSides.clear()
             formattingJob?.cancel()
         }
 
         // viewer가 dispose될 때 대기 작업 정리
         Disposer.register(viewer) {
-            alarm.cancelAllRequests()
+            debounceJob?.cancel()
+            debounceJob = null
             coroutineScope.cancel()
             LOG.debug("Disposed JSON diff extension")
         }
@@ -367,5 +398,26 @@ class JsonDiffExtension : DiffExtension() {
         if (session.leftDocument.text.isNotBlank()) pendingSides.add(Side.LEFT)
         if (session.rightDocument.text.isNotBlank()) pendingSides.add(Side.RIGHT)
         launchFormatting()
+    }
+}
+
+@Service(Service.Level.PROJECT)
+internal class JsonDiffDetectionCacheService : Disposable {
+    data class DocumentState(
+        var detectionResult: JsonDetectionResult = JsonDetectionResult.UNKNOWN
+    )
+
+    enum class JsonDetectionResult {
+        YES, NO, UNKNOWN
+    }
+
+    private val documentStates = Collections.synchronizedMap(WeakHashMap<Document, DocumentState>())
+
+    fun getDocumentState(document: Document): DocumentState {
+        return documentStates.computeIfAbsent(document) { DocumentState() }
+    }
+
+    override fun dispose() {
+        documentStates.clear()
     }
 }

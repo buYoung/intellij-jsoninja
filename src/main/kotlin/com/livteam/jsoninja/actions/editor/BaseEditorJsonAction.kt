@@ -1,14 +1,18 @@
 package com.livteam.jsoninja.actions.editor
 
 import com.intellij.codeInsight.hint.HintManager
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.project.Project
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
@@ -18,7 +22,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 abstract class BaseEditorJsonAction : AnAction() {
@@ -35,6 +38,7 @@ abstract class BaseEditorJsonAction : AnAction() {
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
         val document = editor.document
         val service = project.getService(JsonFormatterService::class.java)
+        val jobService = project.service<EditorJsonActionJobService>()
 
         val selectionModel = editor.selectionModel
         val hasSelection = selectionModel.hasSelection()
@@ -64,6 +68,8 @@ abstract class BaseEditorJsonAction : AnAction() {
                         EditorActionResult.Success(transformJson(service, inputText))
                     } catch (cancellationException: CancellationException) {
                         throw cancellationException
+                    } catch (cancellationException: ProcessCanceledException) {
+                        throw cancellationException
                     } catch (_: Exception) {
                         EditorActionResult.InvalidJson
                     }
@@ -71,7 +77,7 @@ abstract class BaseEditorJsonAction : AnAction() {
 
                 withContext(Dispatchers.EDT) {
                     if (project.isDisposed || editor.isDisposed) return@withContext
-                    if (synchronized(documentProcessingJobs) { documentProcessingJobs[document] } !== processingJob) {
+                    if (!jobService.isCurrentJob(document, processingJob)) {
                         return@withContext
                     }
 
@@ -102,10 +108,7 @@ abstract class BaseEditorJsonAction : AnAction() {
                 throw cancellationException
             }
         }
-        synchronized(documentProcessingJobs) {
-            documentProcessingJobs.remove(document)?.cancel()
-            documentProcessingJobs[document] = processingJob
-        }
+        jobService.replaceJob(document, processingJob)
         processingJob.start()
     }
 
@@ -113,6 +116,10 @@ abstract class BaseEditorJsonAction : AnAction() {
         val editor = e.getData(CommonDataKeys.EDITOR)
         val project = e.project
         e.presentation.isEnabledAndVisible = editor != null && project != null
+    }
+
+    override fun getActionUpdateThread(): ActionUpdateThread {
+        return ActionUpdateThread.BGT
     }
 
     private fun showErrorHint(editor: Editor, message: String) {
@@ -123,9 +130,30 @@ abstract class BaseEditorJsonAction : AnAction() {
         data object InvalidJson : EditorActionResult
         data class Success(val text: String) : EditorActionResult
     }
+}
 
-    private companion object {
-        val documentProcessingJobs: MutableMap<com.intellij.openapi.editor.Document, Job> =
-            Collections.synchronizedMap(WeakHashMap())
+@Service(Service.Level.PROJECT)
+internal class EditorJsonActionJobService : Disposable {
+    private val documentProcessingJobs: MutableMap<Document, Job> =
+        Collections.synchronizedMap(WeakHashMap())
+
+    fun replaceJob(document: Document, job: Job) {
+        synchronized(documentProcessingJobs) {
+            documentProcessingJobs.remove(document)?.cancel()
+            documentProcessingJobs[document] = job
+        }
+    }
+
+    fun isCurrentJob(document: Document, job: Job): Boolean {
+        return synchronized(documentProcessingJobs) {
+            documentProcessingJobs[document] === job
+        }
+    }
+
+    override fun dispose() {
+        synchronized(documentProcessingJobs) {
+            documentProcessingJobs.values.forEach { it.cancel() }
+            documentProcessingJobs.clear()
+        }
     }
 }

@@ -4,10 +4,9 @@ import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.components.JBCheckBox
-import com.intellij.ui.components.JBLabel
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.ui.dsl.builder.bind
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
@@ -227,7 +226,12 @@ class JsoninjaSettingsConfigurable(private val project: Project) : Configurable 
                 separator()
                 row {
                     button(LocalizationBundle.message("settings.onboarding.start.tutorial")) {
-                        SwingUtilities.getWindowAncestor(mainPanel)?.dispose()
+                        val dialogWrapper = mainPanel?.let { DialogWrapper.findInstance(it) }
+                        if (dialogWrapper != null) {
+                            dialogWrapper.close(DialogWrapper.OK_EXIT_CODE)
+                        } else {
+                            SwingUtilities.getWindowAncestor(mainPanel)?.dispose()
+                        }
                         project.getService(OnboardingService::class.java).startTutorial()
                     }
                 }

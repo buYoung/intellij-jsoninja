@@ -62,8 +62,11 @@ object ConvertResultUtils {
     }
 
     private fun resolveRootPane(project: Project?): JComponent? {
-        val projectFrame = project?.let { WindowManager.getInstance().getFrame(it) }
-        val activeWindow = projectFrame ?: KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow
+        val projectComponent = project?.let { WindowManager.getInstance().getIdeFrame(it)?.component }
+        if (projectComponent != null) {
+            return projectComponent.rootPane ?: projectComponent
+        }
+        val activeWindow = KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow
         return (activeWindow as? RootPaneContainer)?.rootPane
     }
 }

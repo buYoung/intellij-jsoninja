@@ -1,10 +1,12 @@
 package com.livteam.jsoninja.ui.component.convertType
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.editor.colors.EditorColorsListener
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
-import com.intellij.openapi.editor.colors.EditorColorsListener
-import com.intellij.openapi.editor.colors.EditorColorsScheme
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
@@ -14,19 +16,22 @@ import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.component.convertType.highlighting.TypeCodeHighlighterResolver
 import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
 import java.awt.BorderLayout
-import javax.swing.JPanel
 import javax.swing.JComponent
 
 class CodeInputPanel(
     private val project: Project,
-) : JBPanel<CodeInputPanel>(BorderLayout()), Disposable, EditorColorsListener {
+) : JBPanel<CodeInputPanel>(BorderLayout()), Disposable {
     private var editorField: EditorTextField? = null
     private var currentFileExtension: String = "txt"
     private var currentPlaceholderText: String = ""
     private var onTextChanged: ((String) -> Unit)? = null
+    @Volatile
+    private var isDisposed = false
 
     init {
         border = JBUI.Borders.empty()
+        ApplicationManager.getApplication().messageBus.connect(this)
+            .subscribe(EditorColorsManager.TOPIC, EditorColorsListener { refreshEditorColors() })
         rebuildEditor(text = "", fileExtension = currentFileExtension, placeholderText = currentPlaceholderText)
     }
 
@@ -98,16 +103,23 @@ class CodeInputPanel(
     }
 
     override fun dispose() {
+        isDisposed = true
         (editorField as? Disposable)?.let(Disposer::dispose)
         editorField = null
     }
 
-    override fun globalSchemeChange(scheme: EditorColorsScheme?) {
+    private fun refreshEditorColors() {
+        if (isDisposed || project.isDisposed) return
         val field = editorField ?: return
-        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+        val app = ApplicationManager.getApplication()
+        if (app.isDispatchThread) {
             TypeCodeHighlighterResolver.refresh(field, currentFileExtension, project)
-        } else javax.swing.SwingUtilities.invokeLater {
-            if (field === editorField) TypeCodeHighlighterResolver.refresh(field, currentFileExtension, project)
+        } else {
+            app.invokeLater({
+                if (!isDisposed && !project.isDisposed && field === editorField) {
+                    TypeCodeHighlighterResolver.refresh(field, currentFileExtension, project)
+                }
+            }, ModalityState.stateForComponent(this))
         }
     }
 }

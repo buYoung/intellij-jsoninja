@@ -302,7 +302,6 @@ data class JsoninjaSettingsData(
     }
 }
 
-@Service(Service.Level.APP)
 @State(
     name = "JsoninjaApplicationSettingsState",
     storages = [Storage("jsoninja.xml")],
@@ -364,29 +363,28 @@ class JsoninjaSettingsSyncPreferenceState : PersistentStateComponent<JsoninjaSet
 
 @Service(Service.Level.PROJECT)
 @State(name = "JsoninjaSettingsState", storages = [Storage("jsoninja.xml")])
-data class JsoninjaLegacyProjectSettingsState(
-    var indentSize: Int = 2,
-    var sortKeys: Boolean = false,
-    var jsonFormatState: String = JsonFormatState.PRETTIFY.name,
-    var iconPack: String = JsonIconPack.VERSION_3.name,
-    var pasteFormatState: String = JsonFormatState.PRETTIFY.name,
-    var diffDisplayMode: String = JsonDiffDisplayMode.WINDOW.name,
-    var diffSortKeys: Boolean = false,
-    var jsonQueryType: String = JsonQueryType.JAYWAY_JSONPATH.name,
-    var jsonToTypeLastLanguage: String = SupportedLanguage.KOTLIN.name,
-    var jsonToTypeDefaultNaming: String = "AUTO",
-    var jsonToTypeNullableByDefault: Boolean = true,
-    var jsonToTypeAnnotationStyle: String = "NONE",
-    var jsonToTypeUsesExperimentalGoUnionTypes: Boolean = false,
-    var typeToJsonLastLanguage: String = SupportedLanguage.KOTLIN.name,
-    var typeToJsonFieldsMode: String = SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL.name,
-    var typeToJsonIncludesNullableFieldWithNullValue: Boolean = true,
-    var typeToJsonUsesRealisticSampleData: Boolean = true,
-    var typeToJsonOutputCount: Int = 1,
-    var typeToJsonFormatState: String = JsonFormatState.PRETTIFY.name,
-    var largeFileThresholdMB: Int = 2,
+class JsoninjaLegacyProjectSettingsState : PersistentStateComponent<JsoninjaLegacyProjectSettingsState> {
+    var indentSize: Int = 2
+    var sortKeys: Boolean = false
+    var jsonFormatState: String = JsonFormatState.PRETTIFY.name
+    var iconPack: String = JsonIconPack.VERSION_3.name
+    var pasteFormatState: String = JsonFormatState.PRETTIFY.name
+    var diffDisplayMode: String = JsonDiffDisplayMode.WINDOW.name
+    var diffSortKeys: Boolean = false
+    var jsonQueryType: String = JsonQueryType.JAYWAY_JSONPATH.name
+    var jsonToTypeLastLanguage: String = SupportedLanguage.KOTLIN.name
+    var jsonToTypeDefaultNaming: String = "AUTO"
+    var jsonToTypeNullableByDefault: Boolean = true
+    var jsonToTypeAnnotationStyle: String = "NONE"
+    var jsonToTypeUsesExperimentalGoUnionTypes: Boolean = false
+    var typeToJsonLastLanguage: String = SupportedLanguage.KOTLIN.name
+    var typeToJsonFieldsMode: String = SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL.name
+    var typeToJsonIncludesNullableFieldWithNullValue: Boolean = true
+    var typeToJsonUsesRealisticSampleData: Boolean = true
+    var typeToJsonOutputCount: Int = 1
+    var typeToJsonFormatState: String = JsonFormatState.PRETTIFY.name
+    var largeFileThresholdMB: Int = 2
     var showLargeFileWarning: Boolean = true
-) : PersistentStateComponent<JsoninjaLegacyProjectSettingsState> {
 
     override fun getState(): JsoninjaLegacyProjectSettingsState {
         return this

@@ -27,7 +27,7 @@ class JsonDiffAlignmentService(private val project: Project) {
     private val LOG = logger<JsonDiffAlignmentService>()
     private val formatterService: JsonFormatterService
         get() = project.service<JsonFormatterService>()
-    private val objectMapper = service<JsonObjectMapperService>().objectMapper
+    private val objectMapper by lazy { service<JsonObjectMapperService>().objectMapper }
 
     suspend fun align(
         leftText: String,

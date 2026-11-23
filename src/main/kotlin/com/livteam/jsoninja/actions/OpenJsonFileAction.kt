@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.actions
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.EDT
@@ -24,24 +25,21 @@ class OpenJsonFileAction : AnAction(
         val project = e.project ?: return
         val panel = JsonHelperActionUtils.getPanel(e) ?: return
 
-        val fileChooser = FileChooser.chooseFile(
-            FileChooserDescriptor(
-                true,  // files
-                false, // directories
-                false, // jars
-                false, // jars directory
-                false, // archives
-                false  // all files
-            ).withFileFilter {
-                val name = it.name.lowercase()
-                name.endsWith(".json") ||
-                name.endsWith(".json5")
-            },
-            project,
-            null
-        )
+        val descriptor = FileChooserDescriptor(
+            true,  // files
+            false, // directories
+            false, // jars
+            false, // jars directory
+            false, // archives
+            false  // all files
+        ).withFileFilter {
+            val name = it.name.lowercase()
+            name.endsWith(".json") ||
+            name.endsWith(".json5")
+        }
 
-        fileChooser?.let { virtualFile ->
+        FileChooser.chooseFile(descriptor, project, null) { virtualFile ->
+            if (project.isDisposed) return@chooseFile
             val extension = virtualFile.extension
             project.service<JsoninjaCoroutineScopeService>().launch {
                 val content = withContext(Dispatchers.IO) {
@@ -59,5 +57,9 @@ class OpenJsonFileAction : AnAction(
     override fun update(e: AnActionEvent) {
         e.presentation.isEnabledAndVisible = JsonHelperActionUtils.getPanel(e) != null
         e.presentation.icon = JsoninjaIcons.getOpenJsonFileIcon(e.project)
+    }
+
+    override fun getActionUpdateThread(): ActionUpdateThread {
+        return ActionUpdateThread.BGT
     }
 }

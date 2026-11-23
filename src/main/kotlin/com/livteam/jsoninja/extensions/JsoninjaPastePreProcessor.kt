@@ -3,6 +3,7 @@ package com.livteam.jsoninja.extensions
 import com.intellij.codeInsight.editorActions.CopyPastePreProcessor
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.RawText
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Ref
@@ -11,6 +12,7 @@ import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.component.editor.JsonDocumentFactory
+import kotlinx.coroutines.CancellationException
 
 /**
  * Pre-processes pasted content in JSONinja editors.
@@ -46,6 +48,10 @@ class JsoninjaPastePreProcessor : CopyPastePreProcessor {
             return try {
                 val pasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
                 formatterService.formatJson(text, pasteFormatState)
+            } catch (e: ProcessCanceledException) {
+                throw e
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Fallback to original text if formatting fails
                 text

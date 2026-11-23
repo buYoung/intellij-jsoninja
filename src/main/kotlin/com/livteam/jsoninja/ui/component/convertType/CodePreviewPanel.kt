@@ -1,8 +1,10 @@
 package com.livteam.jsoninja.ui.component.convertType
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.editor.colors.EditorColorsListener
-import com.intellij.openapi.editor.colors.EditorColorsScheme
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
@@ -24,7 +26,7 @@ import javax.swing.JPanel
 class CodePreviewPanel(
     private val project: Project,
     private val shouldShowCopyButton: Boolean = true,
-) : JBPanel<CodePreviewPanel>(BorderLayout()), Disposable, EditorColorsListener {
+) : JBPanel<CodePreviewPanel>(BorderLayout()), Disposable {
     private companion object {
         private const val EMPTY_CARD = "empty"
         private const val LOADING_CARD = "loading"
@@ -51,9 +53,13 @@ class CodePreviewPanel(
     private var viewerField: EditorTextField? = null
     private var currentFileExtension: String = "txt"
     private var onCopyRequested: (() -> Unit)? = null
+    @Volatile
+    private var isDisposed = false
 
     init {
         border = JBUI.Borders.empty()
+        ApplicationManager.getApplication().messageBus.connect(this)
+            .subscribe(EditorColorsManager.TOPIC, EditorColorsListener { refreshEditorColors() })
         setupCards()
         setEmpty()
     }
@@ -172,17 +178,24 @@ class CodePreviewPanel(
     }
 
     override fun dispose() {
+        isDisposed = true
         clearWarnings()
         (viewerField as? Disposable)?.let(Disposer::dispose)
         viewerField = null
     }
 
-    override fun globalSchemeChange(scheme: EditorColorsScheme?) {
+    private fun refreshEditorColors() {
+        if (isDisposed || project.isDisposed) return
         val field = viewerField ?: return
-        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+        val app = ApplicationManager.getApplication()
+        if (app.isDispatchThread) {
             TypeCodeHighlighterResolver.refresh(field, currentFileExtension, project)
-        } else javax.swing.SwingUtilities.invokeLater {
-            if (field === viewerField) TypeCodeHighlighterResolver.refresh(field, currentFileExtension, project)
+        } else {
+            app.invokeLater({
+                if (!isDisposed && !project.isDisposed && field === viewerField) {
+                    TypeCodeHighlighterResolver.refresh(field, currentFileExtension, project)
+                }
+            }, ModalityState.stateForComponent(this))
         }
     }
 }

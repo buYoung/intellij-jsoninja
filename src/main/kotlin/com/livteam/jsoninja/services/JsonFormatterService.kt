@@ -4,12 +4,12 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
+import com.fasterxml.jackson.core.util.Separators
 import com.fasterxml.jackson.databind.SerializationFeature
-import com.fasterxml.jackson.databind.DeserializationFeature
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
@@ -28,20 +28,26 @@ class JsonFormatterService(private val project: Project) {
     private val LOG = logger<JsonFormatterService>()
     private val settings: JsoninjaSettingsState
         get() = JsoninjaSettingsState.getInstance(project)
-    
-    private val defaultMapper = service<JsonObjectMapperService>().objectMapper
-    
-    private val sortedMapper = defaultMapper.copy().apply {
-        configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+
+    private val defaultMapper: ObjectMapper by lazy {
+        service<JsonObjectMapperService>().objectMapper
     }
 
-    private val nonSortedMapper = defaultMapper.copy().apply {
-        configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, false)
+    private val sortedMapper: ObjectMapper by lazy {
+        defaultMapper.copy().apply {
+            configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+        }
     }
+
+    private val nonSortedMapper: ObjectMapper by lazy {
+        defaultMapper.copy().apply {
+            configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, false)
+        }
+    }
+
+    private val prettyPrinterCache = ConcurrentHashMap<Pair<Int, Boolean>, DefaultPrettyPrinter>()
 
     companion object {
-        private val prettyPrinterCache = ConcurrentHashMap<Pair<Int, Boolean>, DefaultPrettyPrinter>()
-        
         // 기본 들여쓰기 공백 수
         private const val DEFAULT_INDENT_SIZE = 2
     }
@@ -187,6 +193,8 @@ class JsonFormatterService(private val project: Project) {
             }
         } catch (cancellationException: CancellationException) {
             throw cancellationException
+        } catch (processCanceledException: ProcessCanceledException) {
+            throw processCanceledException
         } catch (e: Exception) {
             // 포맷팅 실패 시 원본 반환
             LOG.warn("JSON 포맷팅 실패 (${e.javaClass.simpleName})")
@@ -232,6 +240,10 @@ class JsonFormatterService(private val project: Project) {
                 // Check if there are any trailing tokens after the JSON
                 parser.nextToken() == null
             }
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (processCanceledException: ProcessCanceledException) {
+            throw processCanceledException
         } catch (e: Exception) {
             LOG.debug("유효하지 않은 JSON (${e.javaClass.simpleName})")
             false
@@ -248,7 +260,10 @@ class JsonFormatterService(private val project: Project) {
     private class CustomPrettyPrinter(
         private val indentSize: Int = 2,
         private val useCompactArrays: Boolean = false
-    ) : DefaultPrettyPrinter() {
+    ) : DefaultPrettyPrinter(
+        Separators.createDefaultInstance()
+            .withObjectFieldValueSpacing(Separators.Spacing.AFTER)
+    ) {
 
         init {
             // 들여쓰기 설정
@@ -262,9 +277,6 @@ class JsonFormatterService(private val project: Project) {
             if (!useCompactArrays) {
                 indentArraysWith(indenter)
             }
-
-            // 객체 필드 출력 설정 (콜론 뒤에만 공백)
-            _objectFieldValueSeparatorWithSpaces = ": "
         }
 
         /**
@@ -328,6 +340,10 @@ class JsonFormatterService(private val project: Project) {
             val escaped = defaultMapper.writeValueAsString(json)
             // Remove the enclosing quotes that Jackson adds
             return escaped.substring(1, escaped.length - 1)
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (processCanceledException: ProcessCanceledException) {
+            throw processCanceledException
         } catch (e: Exception) {
             LOG.warn("JSON 이스케이프 처리 실패: ${e.message}")
             return json
@@ -361,6 +377,10 @@ class JsonFormatterService(private val project: Project) {
             val quoted = "\"$json\""
             // Use Jackson to properly unescape the JSON string
             return defaultMapper.readValue(quoted, String::class.java)
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (processCanceledException: ProcessCanceledException) {
+            throw processCanceledException
         } catch (e: Exception) {
             LOG.warn("JSON 언이스케이프 처리 실패: ${e.message}")
             return json

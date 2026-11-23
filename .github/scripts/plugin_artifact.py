@@ -36,13 +36,45 @@ def report_hashes(directory):
     return {str(p.relative_to(directory)): digest(p.read_bytes()) for p in sorted(directory.rglob("*")) if p.is_file()}
 
 
+DISALLOWED_VERDICT_TERMS = (
+    "deprecated",
+    "scheduled for removal",
+    "internal",
+    "incompatible",
+    "missing",
+    "not dynamic",
+    "non-dynamic",
+    "structure",
+    "override-only",
+    "non-extendable",
+    "invalid",
+)
+DISALLOWED_VERIFIER_REPORTS = (
+    "compatibility-problems.txt",
+    "deprecated-usages.txt",
+    "scheduled-for-removal-usages.txt",
+    "internal-api-usages.txt",
+    "missing-dependencies.txt",
+    "not-dynamic-plugin.txt",
+    "plugin-structure-warnings.txt",
+    "invalid-plugin.txt",
+)
+
+
 def current_verifier_reports(directory, version):
     reports = {}
     verdicts = {}
     for verdict in sorted(directory.glob(f"*/plugins/com.livteam.jsoninja/{version}/verification-verdict.txt")):
         result = verdict.read_text().strip()
-        if not result.startswith("Compatible"):
-            raise ValueError(f"Plugin verification failed: {result}")
+        lowered = result.lower()
+        disallowed_files = [name for name in DISALLOWED_VERIFIER_REPORTS if (verdict.parent / name).is_file()]
+        if (
+            not result.startswith("Compatible")
+            or any(term in lowered for term in DISALLOWED_VERDICT_TERMS)
+            or disallowed_files
+        ):
+            details = f" ({', '.join(disallowed_files)})" if disallowed_files else ""
+            raise ValueError(f"Plugin verification failed: {result}{details}")
         ide_directory = verdict.parents[3]
         verdicts[ide_directory.name] = result
         files = [p for p in verdict.parent.rglob("*") if p.is_file()]

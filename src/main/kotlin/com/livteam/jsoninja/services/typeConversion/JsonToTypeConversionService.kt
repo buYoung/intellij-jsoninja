@@ -12,7 +12,7 @@ import com.livteam.jsoninja.services.typeConversion.languages.TypeLanguageRegist
 class JsonToTypeConversionService(
     private val project: Project,
 ) {
-    private val objectMapper = service<JsonObjectMapperService>().objectMapper
+    private val objectMapper by lazy { service<JsonObjectMapperService>().objectMapper }
     private val renderer = JsonToTypeRenderer()
 
     fun convert(

@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.actions
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
@@ -53,12 +54,23 @@ open class TypeConversionAction(
     }
 
     override fun update(event: AnActionEvent) {
-        event.presentation.isEnabledAndVisible = resolveActionContext(event) != null
+        event.presentation.isEnabledAndVisible = hasAvailableSource(event)
         event.presentation.icon = when (forcedTabIndex) {
             0 -> JsoninjaIcons.getJsonToTypeIcon(event.project)
             1 -> JsoninjaIcons.getTypeToJsonIcon(event.project)
             else -> JsoninjaIcons.getConvertTypeIcon(event.project)
         }
+    }
+
+    override fun getActionUpdateThread(): ActionUpdateThread {
+        return ActionUpdateThread.EDT
+    }
+
+    private fun hasAvailableSource(event: AnActionEvent): Boolean {
+        if (event.project == null) return false
+        if (event.getData(CommonDataKeys.EDITOR) != null) return true
+        val panelPresenter = JsonHelperActionUtils.getPanel(event)?.presenter ?: return false
+        return panelPresenter.getCurrentEditor() != null
     }
 
     private fun resolveActionContext(event: AnActionEvent): ConvertActionContext? {

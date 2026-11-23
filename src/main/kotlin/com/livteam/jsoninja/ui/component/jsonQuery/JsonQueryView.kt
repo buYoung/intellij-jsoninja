@@ -61,6 +61,11 @@ class JsonQueryView {
         updateHelpTooltip(queryType)
     }
 
+    fun dispose() {
+        HelpTooltip.dispose(infoLabel)
+        currentHelpTooltip = null
+    }
+
     private fun updateHelpTooltip(queryType: JsonQueryType) {
         HelpTooltip.dispose(infoLabel)
 

@@ -2,7 +2,6 @@
 <idea-plugin>
     <id>com.livteam.jsoninja</id>
     <name>JSONinja</name>
-    <version>1.16.0</version>
     <vendor email="leebu18@gmail.com">BuYoung</vendor>
 
     <depends>com.intellij.modules.lang</depends>
@@ -37,14 +36,13 @@
         <gotoDeclarationHandler implementation="com.livteam.jsoninja.extensions.JsoninjaTemplateGotoDeclarationHandler"
                                 order="first"/>
 
-        <postStartupActivity implementation="com.livteam.jsoninja.listeners.JsoninjaFoldingActionGuardStartupActivity"/>
+        <applicationService serviceImplementation="com.livteam.jsoninja.settings.JsoninjaSyncedSettingsState"/>
+        <applicationService serviceImplementation="com.livteam.jsoninja.services.OnboardingStateService"/>
+
+        <editorActionHandler action="ExpandCollapseToggleAction"
+                             implementationClass="com.livteam.jsoninja.ui.component.editor.JsoninjaExpandCollapseToggleHandler"/>
         <postStartupActivity implementation="com.livteam.jsoninja.listeners.JsoninjaOnboardingStartupActivity"/>
     </extensions>
-
-    <applicationListeners>
-        <listener class="com.livteam.jsoninja.listeners.JsonHelperActivationListener"
-                  topic="com.intellij.openapi.application.ApplicationActivationListener"/>
-    </applicationListeners>
 
     <actions>
         <!-- JSON Diff Actions Group -->

@@ -11,8 +11,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.databind.node.TextNode
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
+import kotlinx.coroutines.CancellationException
 import net.datafaker.Faker
 import java.time.Instant
 import java.time.LocalDate
@@ -22,8 +24,8 @@ import kotlin.random.Random
 
 @Service(Service.Level.PROJECT)
 class JsonSchemaValueGenerator(private val project: Project) {
-    private val normalizer = project.service<JsonSchemaNormalizer>()
-    private val validationService = project.service<JsonSchemaValidationService>()
+    private val normalizer by lazy { project.service<JsonSchemaNormalizer>() }
+    private val validationService by lazy { project.service<JsonSchemaValidationService>() }
     private val faker = Faker()
     private val jsonNodeFactory = JsonNodeFactory.instance
 
@@ -95,9 +97,15 @@ class JsonSchemaValueGenerator(private val project: Project) {
 
         optionalPropertyNamesToGenerate.forEach { optionalPropertyName ->
             val propertyConstraint = constraint.propertyConstraints.getValue(optionalPropertyName)
-            val optionalPropertyValue = runCatching {
+            val optionalPropertyValue = try {
                 generateValue(propertyConstraint, schemaPropertyGenerationMode)
-            }.getOrNull() ?: return@forEach
+            } catch (cancellationException: CancellationException) {
+                throw cancellationException
+            } catch (cancellationException: ProcessCanceledException) {
+                throw cancellationException
+            } catch (_: Exception) {
+                null
+            } ?: return@forEach
             generatedObjectNode.set<JsonNode>(optionalPropertyName, optionalPropertyValue)
             generatedPropertyNames.add(optionalPropertyName)
         }
@@ -105,9 +113,15 @@ class JsonSchemaValueGenerator(private val project: Project) {
         constraint.patternPropertyConstraints.forEach { (patternExpression, patternConstraint) ->
             val generatedPropertyName = generatePropertyNameFromPattern(patternExpression)
             if (generatedPropertyName != null && !generatedObjectNode.has(generatedPropertyName)) {
-                val patternPropertyValue = runCatching {
+                val patternPropertyValue = try {
                     generateValue(patternConstraint, schemaPropertyGenerationMode)
-                }.getOrNull() ?: return@forEach
+                } catch (cancellationException: CancellationException) {
+                    throw cancellationException
+                } catch (cancellationException: ProcessCanceledException) {
+                    throw cancellationException
+                } catch (_: Exception) {
+                    null
+                } ?: return@forEach
                 generatedObjectNode.set<JsonNode>(
                     generatedPropertyName,
                     patternPropertyValue

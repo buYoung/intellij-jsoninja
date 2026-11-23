@@ -7,7 +7,10 @@ import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.diff.util.DiffUserDataKeysEx
 import com.intellij.diff.util.Side
 import com.intellij.json.JsonFileType
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
@@ -18,6 +21,7 @@ import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.UnknownFileType
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.livteam.jsoninja.LocalizationBundle
@@ -43,12 +47,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Service(Service.Level.PROJECT)
-class JsonDiffService(private val project: Project) {
+class JsonDiffService(private val project: Project) : Disposable {
 
     private val LOG = logger<JsonDiffService>()
-    private val formatterService = project.service<JsonFormatterService>()
-    private val alignmentService = project.service<JsonDiffAlignmentService>()
-    private val coroutineScopeService = project.service<JsoninjaCoroutineScopeService>()
+    private val formatterService by lazy { project.service<JsonFormatterService>() }
+    private val alignmentService by lazy { project.service<JsonDiffAlignmentService>() }
+    private val coroutineScopeService by lazy { project.service<JsoninjaCoroutineScopeService>() }
 
     private data class ActiveDiffContext(
         var displayMode: JsonDiffDisplayMode,
@@ -125,6 +129,10 @@ class JsonDiffService(private val project: Project) {
             val formatState = if (semantic) JsonFormatState.PRETTIFY_SORTED else JsonFormatState.PRETTIFY
             val formatted = formatterService.formatJson(json, formatState, semantic)
             Pair(true, formatted)
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (cancellationException: ProcessCanceledException) {
+            throw cancellationException
         } catch (e: Exception) {
             Pair(false, null)
         }
@@ -293,6 +301,8 @@ class JsonDiffService(private val project: Project) {
                 formatAutomaticPair(capture, changedSides, shouldAutoSort, options)
             }
         } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (cancellationException: ProcessCanceledException) {
             throw cancellationException
         } catch (exception: Exception) {
             LOG.warn("Automatic JSON diff formatting failed (${exception.javaClass.simpleName})")
@@ -603,5 +613,28 @@ class JsonDiffService(private val project: Project) {
         val json5FileType = FileTypeManager.getInstance().getFileTypeByExtension("json5")
         val fileType = if (json5FileType is UnknownFileType) JsonFileType.INSTANCE else json5FileType
         return DiffContentFactory.getInstance().create(project, document, fileType)
+    }
+
+    override fun dispose() {
+        val context = activeDiffContext ?: return
+        activeDiffContext = null
+        context.session.close()
+        val dialog = context.windowDialog
+        context.windowDialog = null
+        context.editorTabFile = null
+
+        if (dialog != null && !dialog.isDisposed) {
+            val closeDialog = {
+                if (!dialog.isDisposed) {
+                    dialog.close(DialogWrapper.CANCEL_EXIT_CODE)
+                }
+            }
+            val application = ApplicationManager.getApplication()
+            if (application == null || application.isDispatchThread) {
+                closeDialog()
+            } else {
+                application.invokeLater(closeDialog, ModalityState.any())
+            }
+        }
     }
 }

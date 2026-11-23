@@ -1,6 +1,7 @@
 package com.livteam.jsoninja.services.typeConversion
 
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.model.typeConversion.TypeToJsonGenerationResult
@@ -12,10 +13,10 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGeneratio
 class TypeToJsonGenerationService(
     private val project: Project,
 ) {
-    private val analyzerService = project.getService(TypeDeclarationAnalyzerService::class.java)
-    private val formatterService = project.getService(JsonFormatterService::class.java)
-    private val objectMapper = project.getService(JsonObjectMapperService::class.java).objectMapper
-    private val documentBuilder = TypeToJsonDocumentBuilder(objectMapper)
+    private val analyzerService by lazy { project.service<TypeDeclarationAnalyzerService>() }
+    private val formatterService by lazy { project.service<JsonFormatterService>() }
+    private val objectMapper by lazy { service<JsonObjectMapperService>().objectMapper }
+    private val documentBuilder by lazy { TypeToJsonDocumentBuilder(objectMapper) }
 
     fun generate(
         sourceCode: String,
