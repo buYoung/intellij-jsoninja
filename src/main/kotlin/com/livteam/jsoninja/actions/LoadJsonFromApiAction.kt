@@ -1,13 +1,13 @@
 package com.livteam.jsoninja.actions
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.project.DumbAwareAction
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.ui.dialog.loadJson.LoadJsonFromApiDialog
 
-class LoadJsonFromApiAction : AnAction(
+class LoadJsonFromApiAction : DumbAwareAction(
     LocalizationBundle.messagePointer("action.load.json.api.text"),
     LocalizationBundle.messagePointer("action.load.json.api.description"),
     JsoninjaIcons.LoadJsonFromApiIconV3

@@ -1,5 +1,10 @@
 package com.livteam.jsoninja.ui.onboarding
 
+import com.intellij.ide.ui.LafManagerListener
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.editor.colors.EditorColorsListener
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
@@ -22,13 +27,14 @@ import javax.swing.ImageIcon
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.JTextPane
 import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
-import javax.swing.JTextPane
 import javax.swing.text.SimpleAttributeSet
 import javax.swing.text.StyleConstants
 
 class OnboardingTutorialDialogView(
+    parentDisposable: Disposable,
     onCancelRequested: () -> Unit,
     onPrevRequested: () -> Unit,
     onNextRequested: () -> Unit
@@ -66,10 +72,13 @@ class OnboardingTutorialDialogView(
 
     private val afterArea = createExampleTextArea()
 
-    private val beforeAfterPanel = JPanel(GridLayout(1, 2, 12, 0)).apply {
+    private val beforeCard = createBeforeAfterCard(beforeTitleLabel, beforeArea)
+    private val afterCard = createBeforeAfterCard(afterTitleLabel, afterArea)
+
+    private val beforeAfterPanel = JPanel(GridLayout(1, 2, JBUI.scale(12), 0)).apply {
         isOpaque = false
-        add(createBeforeAfterCard(beforeTitleLabel, beforeArea))
-        add(createBeforeAfterCard(afterTitleLabel, afterArea))
+        add(beforeCard)
+        add(afterCard)
     }
 
     private val stepImageLabel = JBLabel().apply {
@@ -82,7 +91,7 @@ class OnboardingTutorialDialogView(
         horizontalAlignment = SwingConstants.CENTER
     }
 
-    private val imagePanel = JPanel(BorderLayout(0, 8)).apply {
+    private val imagePanel = JPanel(BorderLayout(0, JBUI.scale(8))).apply {
         isOpaque = false
         add(stepImageLabel, BorderLayout.CENTER)
         add(imageCaptionLabel, BorderLayout.SOUTH)
@@ -140,7 +149,7 @@ class OnboardingTutorialDialogView(
         }
     }.apply {
         isOpaque = false
-        preferredSize = Dimension(HERO_IMAGE_WIDTH, HERO_IMAGE_HEIGHT)
+        preferredSize = JBUI.size(HERO_IMAGE_WIDTH, HERO_IMAGE_HEIGHT)
         minimumSize = preferredSize
         maximumSize = preferredSize
         alignmentX = Component.CENTER_ALIGNMENT
@@ -148,12 +157,9 @@ class OnboardingTutorialDialogView(
 
     private val heroImageCard = JPanel(BorderLayout()).apply {
         isOpaque = false
-        border = JBUI.Borders.compound(
-            JBUI.Borders.customLine(JBColor.border(), 1),
-            JBUI.Borders.empty(6)
-        )
+        border = createHeroCardBorder()
         alignmentX = Component.CENTER_ALIGNMENT
-        preferredSize = Dimension(HERO_IMAGE_WIDTH + 12, HERO_IMAGE_HEIGHT + 12)
+        preferredSize = JBUI.size(HERO_IMAGE_WIDTH + 12, HERO_IMAGE_HEIGHT + 12)
         minimumSize = preferredSize
         maximumSize = preferredSize
         add(heroImagePanel, BorderLayout.CENTER)
@@ -167,7 +173,7 @@ class OnboardingTutorialDialogView(
 
     private val heroDescriptionArea = createHeroDescriptionPane()
 
-    private val heroImageSpacer = Box.createVerticalStrut(16)
+    private val heroImageSpacer = Box.createVerticalStrut(JBUI.scale(16))
 
     private val heroPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -175,18 +181,18 @@ class OnboardingTutorialDialogView(
         add(heroImageCard)
         add(heroImageSpacer)
         add(heroTitleLabel)
-        add(Box.createVerticalStrut(8))
+        add(Box.createVerticalStrut(JBUI.scale(8)))
         add(heroDescriptionArea)
     }
 
-    private val detailPanel = JPanel(BorderLayout(0, 4)).apply {
+    private val detailPanel = JPanel(BorderLayout(0, JBUI.scale(4))).apply {
         isOpaque = false
         add(detailTitleLabel, BorderLayout.NORTH)
         add(detailArea, BorderLayout.CENTER)
     }
 
     private val contentPanel = JPanel().apply {
-        layout = javax.swing.BoxLayout(this, javax.swing.BoxLayout.Y_AXIS)
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
         isOpaque = false
         add(stepBodyArea)
         add(detailPanel)
@@ -210,10 +216,16 @@ class OnboardingTutorialDialogView(
 
     private lateinit var centerPanel: JPanel
 
+    init {
+        val connection = ApplicationManager.getApplication().messageBus.connect(parentDisposable)
+        connection.subscribe(EditorColorsManager.TOPIC, EditorColorsListener { applyTheme() })
+        connection.subscribe(LafManagerListener.TOPIC, LafManagerListener { applyTheme() })
+    }
+
     fun createCenterPanel(): JComponent {
-        centerPanel = JPanel(BorderLayout(0, 12)).apply {
+        centerPanel = JPanel(BorderLayout(0, JBUI.scale(12))).apply {
             border = JBUI.Borders.empty(20, 24, 10, 24)
-            preferredSize = Dimension(DIALOG_WIDTH, BASE_DIALOG_HEIGHT)
+            preferredSize = JBUI.size(DIALOG_WIDTH, BASE_DIALOG_HEIGHT)
 
             val header = JPanel(BorderLayout()).apply {
                 isOpaque = false
@@ -237,7 +249,7 @@ class OnboardingTutorialDialogView(
                 add(skipButton)
             }
 
-            val rightPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0)).apply {
+            val rightPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0)).apply {
                 isOpaque = false
                 add(prevButton)
                 add(nextButton)
@@ -246,6 +258,10 @@ class OnboardingTutorialDialogView(
             add(leftPanel, BorderLayout.WEST)
             add(rightPanel, BorderLayout.EAST)
         }
+    }
+
+    fun getPreferredFocusedComponent(): JComponent {
+        return nextButton
     }
 
     fun renderStep(
@@ -318,9 +334,11 @@ class OnboardingTutorialDialogView(
         }
 
         prevButton.isEnabled = hasPrev
-        nextButton.text = LocalizationBundle.message("onboarding.tutorial.next")
-        nextButton.isEnabled = !isLastStep
-        SwingUtilities.getRootPane(nextButton)?.defaultButton = if (nextButton.isEnabled) nextButton else null
+        nextButton.text = LocalizationBundle.message(
+            if (isLastStep) "onboarding.tutorial.done" else "onboarding.tutorial.next"
+        )
+        nextButton.isEnabled = true
+        SwingUtilities.getRootPane(nextButton)?.defaultButton = nextButton
 
         updateDialogLayout(hasDetail, hasBeforeAfter, hasImage, isHeroStep)
     }
@@ -330,6 +348,21 @@ class OnboardingTutorialDialogView(
         SwingUtilities.invokeLater {
             if (!nextButton.isShowing || !nextButton.isEnabled) return@invokeLater
             nextButton.requestFocusInWindow()
+        }
+    }
+
+    private fun applyTheme() {
+        val contextHelpForeground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
+        stepCounterLabel.foreground = contextHelpForeground
+        imageCaptionLabel.foreground = contextHelpForeground
+        heroDescriptionArea.foreground = contextHelpForeground
+        heroImageCard.border = createHeroCardBorder()
+        beforeCard.border = createBeforeAfterCardBorder()
+        afterCard.border = createBeforeAfterCardBorder()
+
+        if (::centerPanel.isInitialized) {
+            centerPanel.revalidate()
+            centerPanel.repaint()
         }
     }
 
@@ -351,20 +384,27 @@ class OnboardingTutorialDialogView(
             calculatedHeight
         }
 
-        centerPanel.preferredSize = Dimension(DIALOG_WIDTH, targetHeight)
+        centerPanel.preferredSize = JBUI.size(DIALOG_WIDTH, targetHeight)
         centerPanel.revalidate()
         centerPanel.repaint()
 
         SwingUtilities.getWindowAncestor(centerPanel)?.pack()
     }
 
+    private fun createHeroCardBorder() = JBUI.Borders.compound(
+        JBUI.Borders.customLine(JBColor.border(), 1),
+        JBUI.Borders.empty(6)
+    )
+
+    private fun createBeforeAfterCardBorder() = JBUI.Borders.compound(
+        JBUI.Borders.customLine(JBColor.border(), 1),
+        JBUI.Borders.empty(8)
+    )
+
     private fun createBeforeAfterCard(titleLabel: JBLabel, textArea: JBTextArea): JPanel {
-        return JPanel(BorderLayout(0, 4)).apply {
+        return JPanel(BorderLayout(0, JBUI.scale(4))).apply {
             isOpaque = false
-            border = JBUI.Borders.compound(
-                JBUI.Borders.customLine(JBColor.border(), 1),
-                JBUI.Borders.empty(8)
-            )
+            border = createBeforeAfterCardBorder()
             add(titleLabel, BorderLayout.NORTH)
             add(textArea, BorderLayout.CENTER)
         }
@@ -383,18 +423,19 @@ class OnboardingTutorialDialogView(
     }
 
     private fun createHeroDescriptionPane(): JTextPane {
+        val scaledWidth = JBUI.scale(HERO_DESCRIPTION_WIDTH)
         return JTextPane().apply {
             isEditable = false
             isOpaque = false
             border = JBUI.Borders.empty()
-            font = JBFont.regular().deriveFont(13f)
+            font = JBFont.regular()
             foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
             alignmentX = Component.CENTER_ALIGNMENT
             isFocusable = false
             margin = JBUI.insets(0)
-            minimumSize = Dimension(HERO_DESCRIPTION_WIDTH, 0)
-            maximumSize = Dimension(HERO_DESCRIPTION_WIDTH, Int.MAX_VALUE)
-            preferredSize = Dimension(HERO_DESCRIPTION_WIDTH, 0)
+            minimumSize = Dimension(scaledWidth, 0)
+            maximumSize = Dimension(scaledWidth, Int.MAX_VALUE)
+            preferredSize = Dimension(scaledWidth, 0)
         }
     }
 

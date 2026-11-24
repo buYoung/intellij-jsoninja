@@ -1,19 +1,23 @@
 package com.livteam.jsoninja.services
 
 import com.intellij.ide.util.PropertiesComponent
+import com.intellij.notification.NotificationAction
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.components.Service
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowManager
+import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.settings.JsoninjaSettingsConfigurable
 import com.livteam.jsoninja.ui.component.main.JsoninjaPanelView
 import com.livteam.jsoninja.ui.onboarding.OnboardingTutorialDialog
-import com.livteam.jsoninja.ui.onboarding.OnboardingWelcomeDialog
 import java.awt.Component
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JComponent
@@ -35,11 +39,29 @@ class OnboardingService(
         if (!WELCOME_DIALOG_GUARD.compareAndSet(false, true)) return
 
         try {
-            val dialog = OnboardingWelcomeDialog(project) {
-                openSettings()
-            }
-            dialog.show()
             markOnboardingSeen()
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup(NOTIFICATION_GROUP_ID)
+                .createNotification(
+                    LocalizationBundle.message("onboarding.welcome.title"),
+                    LocalizationBundle.message("onboarding.welcome.message"),
+                    NotificationType.INFORMATION
+                )
+                .addAction(
+                    NotificationAction.createSimpleExpiring(
+                        LocalizationBundle.message("settings.onboarding.start.tutorial")
+                    ) {
+                        startTutorial()
+                    }
+                )
+                .addAction(
+                    NotificationAction.createSimpleExpiring(
+                        LocalizationBundle.message("onboarding.welcome.open.settings")
+                    ) {
+                        openSettings()
+                    }
+                )
+                .notify(project)
         } finally {
             WELCOME_DIALOG_GUARD.set(false)
         }
@@ -66,8 +88,8 @@ class OnboardingService(
 
     private fun openTutorialDialog(toolWindow: ToolWindow) {
         val currentDialog = tutorialDialog
-        if (currentDialog != null && currentDialog.isShowing) {
-            currentDialog.toFront()
+        if (currentDialog != null && !currentDialog.isDisposed && currentDialog.isShowing) {
+            currentDialog.bringToFront()
             return
         }
 
@@ -124,7 +146,9 @@ class OnboardingService(
         val dialog = tutorialDialog ?: return
         tutorialDialog = null
         val closeDialog = {
-            dialog.dispose()
+            if (!dialog.isDisposed) {
+                dialog.close(DialogWrapper.CANCEL_EXIT_CODE)
+            }
         }
         val application = ApplicationManager.getApplication()
         if (application == null || application.isDispatchThread) {
@@ -137,6 +161,7 @@ class OnboardingService(
     companion object {
         private const val ONBOARDING_SEEN_KEY = "com.livteam.jsoninja.onboarding.seen"
         private const val TOOL_WINDOW_ID = "JSONinja"
+        private const val NOTIFICATION_GROUP_ID = "JSONinja"
         private val WELCOME_DIALOG_GUARD = AtomicBoolean(false)
     }
 }

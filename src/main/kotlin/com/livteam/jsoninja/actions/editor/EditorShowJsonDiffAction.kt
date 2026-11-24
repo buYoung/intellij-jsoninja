@@ -2,12 +2,12 @@ package com.livteam.jsoninja.actions.editor
 
 import com.intellij.codeInsight.hint.HintManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.project.DumbAwareAction
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.actions.ShowJsonDiffAction
 import com.livteam.jsoninja.icons.JsoninjaIcons
@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
  * 편집기의 선택 영역(선택이 없으면 문서 전체)을 JSON Diff 왼쪽에 엽니다.
  * 비교만 수행하며 원본 편집기와 tool window 내용은 변경하지 않습니다.
  */
-class EditorShowJsonDiffAction : AnAction() {
+class EditorShowJsonDiffAction : DumbAwareAction() {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return

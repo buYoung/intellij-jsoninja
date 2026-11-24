@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.ui.component.convertType
 
+import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
@@ -10,18 +11,20 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
-import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.components.JBTextArea
+import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.NamedColorUtil
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.component.convertType.highlighting.TypeCodeHighlighterResolver
 import com.livteam.jsoninja.ui.component.convertType.highlighting.TypeCodePreviewHighlighting
+import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
 import java.awt.BorderLayout
 import java.awt.CardLayout
+import java.awt.FlowLayout
 import javax.swing.JButton
-import javax.swing.JPanel
 
 class CodePreviewPanel(
     private val project: Project,
@@ -35,21 +38,45 @@ class CodePreviewPanel(
     }
 
     private val cardLayout = CardLayout()
-    private val cardPanel = JPanel(cardLayout)
-    private val emptyLabel = JBLabel(LocalizationBundle.message("common.convert.empty.preview"))
-    private val loadingLabel = JBLabel(LocalizationBundle.message("common.convert.generating"))
-    private val errorLabel = JBLabel()
+    private val cardPanel = JBPanel<JBPanel<*>>(cardLayout)
+    private val emptyLabel = JBLabel(LocalizationBundle.message("common.convert.empty.preview")).apply {
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
+    }
+    private val cardLoadingIcon = AsyncProcessIcon("JSONinjaConvertPreviewCard").apply {
+        suspend()
+    }
+    private val loadingLabel = JBLabel(LocalizationBundle.message("common.convert.generating")).apply {
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
+    }
+    private val errorTextArea = JBTextArea().apply {
+        name = "convertPreviewError"
+        isEditable = false
+        lineWrap = true
+        wrapStyleWord = true
+        isOpaque = false
+        border = JBUI.Borders.empty(12)
+        foreground = NamedColorUtil.getErrorForeground()
+    }
+    private val errorScrollPane = JBScrollPane(errorTextArea).apply {
+        border = JBUI.Borders.empty()
+        viewportBorder = JBUI.Borders.empty()
+        isOpaque = false
+        viewport.isOpaque = false
+    }
     private val copyButton = JButton(LocalizationBundle.message("common.convert.copy"))
     private val warningsText = JBTextArea().apply {
+        name = "convertPreviewWarnings"
         isEditable = false
         lineWrap = true
         wrapStyleWord = true
     }
-    private val warningsPanel = JPanel(BorderLayout()).apply {
+    private val warningsPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
         add(JBLabel(LocalizationBundle.message("common.convert.warnings")), BorderLayout.NORTH)
         add(JBScrollPane(warningsText).apply { preferredSize = java.awt.Dimension(0, JBUI.scale(80)) }, BorderLayout.CENTER)
         isVisible = false
     }
+    private val successPanel = JBPanel<JBPanel<*>>(BorderLayout())
+    private var currentCard: String = EMPTY_CARD
     private var viewerField: EditorTextField? = null
     private var currentFileExtension: String = "txt"
     private var onCopyRequested: (() -> Unit)? = null
@@ -58,8 +85,10 @@ class CodePreviewPanel(
 
     init {
         border = JBUI.Borders.empty()
-        ApplicationManager.getApplication().messageBus.connect(this)
-            .subscribe(EditorColorsManager.TOPIC, EditorColorsListener { refreshEditorColors() })
+        Disposer.register(this, cardLoadingIcon)
+        val connection = ApplicationManager.getApplication().messageBus.connect(this)
+        connection.subscribe(EditorColorsManager.TOPIC, EditorColorsListener { refreshEditorColors() })
+        connection.subscribe(LafManagerListener.TOPIC, LafManagerListener { refreshThemeColors() })
         setupCards()
         setEmpty()
     }
@@ -71,20 +100,23 @@ class CodePreviewPanel(
     fun setEmpty() {
         clearWarnings()
         copyButton.isEnabled = false
-        cardLayout.show(cardPanel, EMPTY_CARD)
+        showCard(EMPTY_CARD)
     }
 
     fun setLoading() {
         clearWarnings()
         copyButton.isEnabled = false
-        cardLayout.show(cardPanel, LOADING_CARD)
+        if (currentCard == EMPTY_CARD) {
+            showCard(LOADING_CARD)
+        }
     }
 
     fun setError(message: String) {
         clearWarnings()
         copyButton.isEnabled = false
-        errorLabel.text = LocalizationBundle.message("common.convert.error", message)
-        cardLayout.show(cardPanel, ERROR_CARD)
+        errorTextArea.text = LocalizationBundle.message("common.convert.error", message)
+        errorTextArea.caretPosition = 0
+        showCard(ERROR_CARD)
     }
 
     fun setSuccess(
@@ -95,7 +127,7 @@ class CodePreviewPanel(
     fun setSuccess(text: String, fileExtension: String, warnings: List<String>) {
         // The IDE tracks visible editors when they join a window. Creating the viewer in
         // the hidden success card leaves native highlighting inactive after a language switch.
-        cardLayout.show(cardPanel, SUCCESS_CARD)
+        showCard(SUCCESS_CARD)
         ensureViewer(fileExtension)
         setEditorTextAndRefreshCodeFolding(project, viewerField, text)
         warningsText.text = warnings.joinToString("\n")
@@ -109,24 +141,43 @@ class CodePreviewPanel(
         warningsPanel.isVisible = false
     }
 
+    private fun showCard(cardName: String) {
+        currentCard = cardName
+        if (cardName == LOADING_CARD) {
+            cardLoadingIcon.resume()
+        } else {
+            cardLoadingIcon.suspend()
+        }
+        cardLayout.show(cardPanel, cardName)
+    }
+
     private fun setupCards() {
         copyButton.addActionListener { onCopyRequested?.invoke() }
 
+        val loadingRow = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
+            isOpaque = false
+            add(cardLoadingIcon)
+            add(loadingLabel)
+        }
+        val loadingCard = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            border = JBUI.Borders.empty(12)
+            add(loadingRow, BorderLayout.NORTH)
+        }
+
+        if (shouldShowCopyButton) {
+            successPanel.add(copyButton, BorderLayout.NORTH)
+        }
+        successPanel.add(warningsPanel, BorderLayout.SOUTH)
+
         cardPanel.add(wrapStateLabel(emptyLabel), EMPTY_CARD)
-        cardPanel.add(wrapStateLabel(loadingLabel), LOADING_CARD)
-        cardPanel.add(wrapStateLabel(errorLabel), ERROR_CARD)
-        cardPanel.add(
-            JPanel(BorderLayout()).apply {
-                if (shouldShowCopyButton) add(copyButton, BorderLayout.NORTH)
-                add(warningsPanel, BorderLayout.SOUTH)
-            },
-            SUCCESS_CARD,
-        )
+        cardPanel.add(loadingCard, LOADING_CARD)
+        cardPanel.add(errorScrollPane, ERROR_CARD)
+        cardPanel.add(successPanel, SUCCESS_CARD)
         add(cardPanel, BorderLayout.CENTER)
     }
 
-    private fun wrapStateLabel(label: JBLabel): JPanel {
-        return JPanel(BorderLayout()).apply {
+    private fun wrapStateLabel(label: JBLabel): JBPanel<*> {
+        return JBPanel<JBPanel<*>>(BorderLayout()).apply {
             border = JBUI.Borders.empty(12)
             add(label, BorderLayout.NORTH)
         }
@@ -138,9 +189,6 @@ class CodePreviewPanel(
         }
 
         currentFileExtension = fileExtension
-        val successPanel = cardPanel.components
-            .filterIsInstance<JPanel>()
-            .last()
         viewerField?.let { oldViewer ->
             successPanel.remove(oldViewer)
             (oldViewer as? Disposable)?.let(Disposer::dispose)
@@ -179,9 +227,28 @@ class CodePreviewPanel(
 
     override fun dispose() {
         isDisposed = true
+        cardLoadingIcon.suspend()
         clearWarnings()
         (viewerField as? Disposable)?.let(Disposer::dispose)
         viewerField = null
+    }
+
+    private fun refreshThemeColors() {
+        if (isDisposed || project.isDisposed) return
+        val applyChanges = {
+            if (!isDisposed && !project.isDisposed) {
+                emptyLabel.foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
+                loadingLabel.foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
+                errorTextArea.foreground = NamedColorUtil.getErrorForeground()
+                refreshEditorColors()
+            }
+        }
+        val app = ApplicationManager.getApplication()
+        if (app.isDispatchThread) {
+            applyChanges()
+        } else {
+            app.invokeLater(applyChanges, ModalityState.stateForComponent(this))
+        }
     }
 
     private fun refreshEditorColors() {

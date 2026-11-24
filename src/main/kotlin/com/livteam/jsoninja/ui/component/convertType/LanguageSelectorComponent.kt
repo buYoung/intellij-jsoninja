@@ -2,6 +2,7 @@ package com.livteam.jsoninja.ui.component.convertType
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.ui.ComboboxSpeedSearch
 import com.intellij.ui.components.JBPanel
 import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.model.SupportedLanguage
@@ -31,6 +32,9 @@ class LanguageSelectorComponent(private val project: Project? = null) : JBPanel<
     private var onLanguageChanged: ((SupportedLanguage) -> Unit)? = null
 
     init {
+        ComboboxSpeedSearch.installSpeedSearch(languageComboBox) { language ->
+            language.getDisplayName()
+        }
         languageComboBox.renderer = object : DefaultListCellRenderer() {
             override fun getListCellRendererComponent(
                 list: JList<*>?,

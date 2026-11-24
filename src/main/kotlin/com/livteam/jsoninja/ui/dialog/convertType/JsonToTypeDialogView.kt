@@ -31,7 +31,7 @@ class JsonToTypeDialogView(
     private val namingConventionComboBox = ComboBox(NamingConvention.entries.toTypedArray())
     private val originalKeysLabel = JBLabel(LocalizationBundle.message("dialog.json.to.type.original.keys"))
     private val annotationStyleComboBox = ComboBox(JsonToTypeAnnotationStyle.entries.toTypedArray())
-    private val inputEditorView = JsonEditorView(project, "json5")
+    private val inputEditorView = JsonEditorView(project, "json5", isEmbeddedInDialog = true)
     private val workspace: ConvertTypeWorkspacePanel
     private lateinit var namingConventionRow: Row
     private lateinit var originalKeysRow: Row
@@ -167,6 +167,10 @@ class JsonToTypeDialogView(
         workspace.showLoadingPreview()
     }
 
+    fun stopLoadingIndicator() {
+        workspace.stopLoadingIndicator()
+    }
+
     fun showErrorPreview(message: String) {
         workspace.showErrorPreview(message)
     }
@@ -176,6 +180,10 @@ class JsonToTypeDialogView(
     }
 
     fun getValidationComponent(): JComponent = rootTypeNameTextField
+
+    fun getInputValidationComponent(): JComponent = inputEditorView.editor
+
+    fun getRootTypeNameValidationComponent(): JComponent = rootTypeNameTextField
 
     fun getPreferredFocusedComponent(): JComponent = inputEditorView.editor
 

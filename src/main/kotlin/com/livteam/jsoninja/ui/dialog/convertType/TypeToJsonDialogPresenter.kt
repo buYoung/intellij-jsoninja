@@ -18,6 +18,7 @@ import kotlinx.coroutines.cancel
 class TypeToJsonDialogPresenter(
     private val project: Project,
     initialInputText: String,
+    initialLanguageOverride: SupportedLanguage? = null,
     private val onLanguageChanged: (SupportedLanguage) -> Unit,
 ) {
     companion object {
@@ -29,7 +30,9 @@ class TypeToJsonDialogPresenter(
     private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
     private val previewExecutor = ConvertPreviewExecutor(coroutineScope)
     private val view = TypeToJsonDialogView(project)
-    private var currentConfig = settingsAdapter.load()
+    private var currentConfig = settingsAdapter.load().let { loaded ->
+        if (initialLanguageOverride != null) loaded.copy(language = initialLanguageOverride) else loaded
+    }
     private var previewState: ConvertPreviewState<TypeToJsonDialogConfig> = ConvertPreviewState.Invalid()
     private var readyInputDocument: Document? = null
     private var readyInputStamp: Long = -1L
@@ -60,9 +63,10 @@ class TypeToJsonDialogPresenter(
         return TypeToJsonDialogValidator.validate(
             sourceCode = if (isInputBlank()) "" else NON_BLANK_SENTINEL,
             outputCount = view.collectConfig().outputCount,
-            validationComponent = view.getValidationComponent(),
+            inputValidationComponent = view.getInputValidationComponent(),
+            outputCountValidationComponent = view.getOutputCountValidationComponent(),
         ) ?: (previewState as? ConvertPreviewState.Invalid)?.message?.let {
-            ValidationInfo(it, view.getValidationComponent())
+            ValidationInfo(it, view.getInputValidationComponent())
         }
     }
 
@@ -134,7 +138,8 @@ class TypeToJsonDialogPresenter(
         val validationInfo = TypeToJsonDialogValidator.validate(
             sourceCode = NON_BLANK_SENTINEL,
             outputCount = currentConfig.outputCount,
-            validationComponent = view.getValidationComponent(),
+            inputValidationComponent = view.getInputValidationComponent(),
+            outputCountValidationComponent = view.getOutputCountValidationComponent(),
         )
         if (validationInfo != null) {
             updatePreviewState(ConvertPreviewState.Invalid(validationInfo.message))
@@ -146,10 +151,15 @@ class TypeToJsonDialogPresenter(
         val expectedStamp = expectedDocument?.modificationStamp ?: -1L
         val inputText = view.getInputText()
         val previewConfig = currentConfig
-        view.showLoadingPreview()
         previewExecutor.submitDetailed(
             delayMs = 500,
-            onLoading = {},
+            onLoading = {
+                if (isInputUnchanged(expectedDocument, expectedStamp, inputText) &&
+                    previewConfig == view.collectConfig()
+                ) {
+                    view.showLoadingPreview()
+                }
+            },
             computePreview = { checkCancellation ->
                 generationService.generateDetailed(
                     sourceCode = inputText,
@@ -219,6 +229,7 @@ class TypeToJsonDialogPresenter(
         readyInputDocument = null
         readyInputStamp = -1L
         previewExecutor.cancel()
+        view.stopLoadingIndicator()
         view.clearPreviewWarnings()
         updatePreviewState(ConvertPreviewState.Pending)
     }

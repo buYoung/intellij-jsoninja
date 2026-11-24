@@ -2,14 +2,14 @@ package com.livteam.jsoninja.actions
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.project.DumbAwareAction
 import com.livteam.jsoninja.LocalizationBundle
 
 /**
  * 새 탭을 추가하는 액션 클래스입니다.
  */
-class AddTabAction : AnAction(
+class AddTabAction : DumbAwareAction(
     LocalizationBundle.messagePointer("addTab"),
     LocalizationBundle.messagePointer("addTabDescription"),
     AllIcons.General.Add

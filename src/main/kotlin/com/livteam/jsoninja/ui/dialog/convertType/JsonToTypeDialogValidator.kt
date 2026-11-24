@@ -14,21 +14,50 @@ class JsonToTypeDialogValidator(
         jsonText: String,
         rootTypeName: String,
         validationComponent: JComponent,
+    ): ValidationInfo? = validate(
+        jsonText = jsonText,
+        rootTypeName = rootTypeName,
+        inputValidationComponent = validationComponent,
+        rootTypeNameValidationComponent = validationComponent,
+    )
+
+    fun validate(
+        jsonText: String,
+        rootTypeName: String,
+        inputValidationComponent: JComponent,
+        rootTypeNameValidationComponent: JComponent,
     ): ValidationInfo? {
-        validateFields(jsonText, rootTypeName, validationComponent)?.let { return it }
-        return getJsonErrorMessage(jsonText)?.let { ValidationInfo(it, validationComponent) }
+        validateFields(
+            jsonText = jsonText,
+            rootTypeName = rootTypeName,
+            inputValidationComponent = inputValidationComponent,
+            rootTypeNameValidationComponent = rootTypeNameValidationComponent,
+        )?.let { return it }
+        return getJsonErrorMessage(jsonText)?.let { ValidationInfo(it, inputValidationComponent) }
     }
 
     fun validateFields(
         jsonText: String,
         rootTypeName: String,
         validationComponent: JComponent,
+    ): ValidationInfo? = validateFields(
+        jsonText = jsonText,
+        rootTypeName = rootTypeName,
+        inputValidationComponent = validationComponent,
+        rootTypeNameValidationComponent = validationComponent,
+    )
+
+    fun validateFields(
+        jsonText: String,
+        rootTypeName: String,
+        inputValidationComponent: JComponent,
+        rootTypeNameValidationComponent: JComponent,
     ): ValidationInfo? {
         if (jsonText.isBlank()) {
-            return ValidationInfo(LocalizationBundle.message("validation.json.to.type.empty.input"), validationComponent)
+            return ValidationInfo(LocalizationBundle.message("validation.json.to.type.empty.input"), inputValidationComponent)
         }
         if (!JsonToTypeNamingSupport.isValidTypeIdentifier(rootTypeName)) {
-            return ValidationInfo(LocalizationBundle.message("validation.json.to.type.root.name.invalid"), validationComponent)
+            return ValidationInfo(LocalizationBundle.message("validation.json.to.type.root.name.invalid"), rootTypeNameValidationComponent)
         }
         return null
     }

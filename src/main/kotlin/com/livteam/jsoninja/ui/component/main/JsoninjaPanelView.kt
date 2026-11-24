@@ -1,16 +1,18 @@
 package com.livteam.jsoninja.ui.component.main
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.DataKey
+import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.livteam.jsoninja.ui.component.tab.JsonTabsView
-import java.awt.BorderLayout
-import javax.swing.JPanel
-import javax.swing.JSeparator
-import javax.swing.SwingConstants
 
 class JsoninjaPanelView(private val project: Project) : SimpleToolWindowPanel(false, true), Disposable {
-    private val tabsView = JsonTabsView()
+    companion object {
+        val JSONINJA_PANEL_DATA_KEY: DataKey<JsoninjaPanelView> = DataKey.create("com.livteam.jsoninja.panel")
+    }
+
+    private val tabsView = JsonTabsView(project, this)
 
     val presenter = JsoninjaPanelPresenter(project, this, tabsView)
 
@@ -22,15 +24,14 @@ class JsoninjaPanelView(private val project: Project) : SimpleToolWindowPanel(fa
         // 초기 탭 추가
         presenter.initialize()
 
-        // Add content
-        val contentPanel = JPanel(BorderLayout()).apply {
-            add(JSeparator(SwingConstants.VERTICAL), BorderLayout.WEST)
-            add(tabsView, BorderLayout.CENTER)
-        }
-
         // Setup toolbar and content
         toolbar = JsoninjaToolbarFactory.create(this)
-        setContent(contentPanel)
+        setContent(tabsView)
+    }
+
+    override fun uiDataSnapshot(sink: DataSink) {
+        super.uiDataSnapshot(sink)
+        sink[JSONINJA_PANEL_DATA_KEY] = this
     }
 
     override fun dispose() {

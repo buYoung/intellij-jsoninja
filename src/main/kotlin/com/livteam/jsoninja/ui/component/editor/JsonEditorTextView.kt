@@ -1,7 +1,7 @@
 package com.livteam.jsoninja.ui.component.editor
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
-import com.intellij.ide.highlighter.HighlighterFactory
+import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
@@ -10,13 +10,19 @@ import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.actionSystem.PlatformCoreDataKeys
 import com.intellij.openapi.actionSystem.UiDataProvider
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.HighlighterColors
+import com.intellij.openapi.editor.colors.EditorColorsListener
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.editor.ex.EditorSettingsExternalizable
 import com.intellij.openapi.editor.ex.util.EmptyEditorHighlighter
+import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
 import com.intellij.openapi.fileEditor.impl.text.TextEditorProvider
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.project.Project
@@ -24,10 +30,15 @@ import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.ui.ComponentUtil
+import com.intellij.ui.EditorNotificationPanel
 import com.intellij.ui.EditorTextField
+import com.intellij.ui.HyperlinkLabel
 import com.intellij.ui.PopupHandler
 import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.actions.CopyJsonArrayQueryAction
 import com.livteam.jsoninja.actions.CopyJsonQueryAction
+import com.livteam.jsoninja.ui.component.main.JsoninjaPanelView
 import com.livteam.jsoninja.ui.onboarding.OnboardingTutorialTargetIds
 import java.awt.BorderLayout
 import javax.swing.JPanel
@@ -35,7 +46,8 @@ import javax.swing.JPanel
 class JsonEditorTextView(
     private val project: Project,
     private val fileExtension: String? = null,
-    private val documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
+    private val documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator(),
+    private val isEmbeddedInDialog: Boolean = false,
 ) : JPanel(), Disposable, UiDataProvider {
 
     companion object {
@@ -50,6 +62,11 @@ class JsonEditorTextView(
     private var editorFileType: FileType? = null
     private var isLargeDocumentFastMode = false
     private var isEmptyHighlighterActive = false
+    private var isLongLineActive = false
+    private var fastModeBanner: EditorNotificationPanel? = null
+    private var fastModePrettifyLink: HyperlinkLabel? = null
+    @Volatile
+    private var isDisposed = false
 
     private val largeDocumentDisplayModeListener = object : DocumentListener {
         override fun beforeDocumentChange(event: DocumentEvent) {
@@ -73,11 +90,16 @@ class JsonEditorTextView(
             val nextEmptyHighlighter = isEmptyHighlighterActive ||
                 isHugeProjected ||
                 hasLongIncomingLine
+            val nextLongLine = isLongLineActive || hasLongIncomingLine
 
-            if (nextLargeMode != isLargeDocumentFastMode || nextEmptyHighlighter != isEmptyHighlighterActive) {
+            if (nextLargeMode != isLargeDocumentFastMode ||
+                nextEmptyHighlighter != isEmptyHighlighterActive ||
+                nextLongLine != isLongLineActive
+            ) {
                 applyDocumentDisplayMode(
                     useFastMode = nextLargeMode,
                     useEmptyHighlighter = nextEmptyHighlighter,
+                    hasLongLine = nextLongLine,
                     document = document,
                 )
             }
@@ -90,10 +112,14 @@ class JsonEditorTextView(
             val hasLongLine = if (isHuge) false else hasLongLine(document)
             val shouldUseFastMode = isHuge || textLength >= LARGE_DOCUMENT_FAST_MODE_THRESHOLD || hasLongLine
             val shouldUseEmptyHighlighter = isHuge || hasLongLine
-            if (shouldUseFastMode != isLargeDocumentFastMode || shouldUseEmptyHighlighter != isEmptyHighlighterActive) {
+            if (shouldUseFastMode != isLargeDocumentFastMode ||
+                shouldUseEmptyHighlighter != isEmptyHighlighterActive ||
+                hasLongLine != isLongLineActive
+            ) {
                 applyDocumentDisplayMode(
                     useFastMode = shouldUseFastMode,
                     useEmptyHighlighter = shouldUseEmptyHighlighter,
+                    hasLongLine = hasLongLine,
                     document = document,
                 )
             }
@@ -102,10 +128,53 @@ class JsonEditorTextView(
 
     init {
         layout = BorderLayout()
+        if (!isEmbeddedInDialog) {
+            val banner = EditorNotificationPanel(EditorNotificationPanel.Status.Info).apply {
+                isVisible = false
+            }
+            fastModePrettifyLink = banner.createActionLabel(LocalizationBundle.message("prettify")) {
+                ComponentUtil.getParentOfType(JsoninjaPanelView::class.java, this@JsonEditorTextView)
+                    ?.presenter
+                    ?.formatJson()
+            }
+            fastModeBanner = banner
+            add(banner, BorderLayout.NORTH)
+        }
         editor = createJsonEditor()
         editor.setDisposedWith(this)
         editor.addDocumentListener(largeDocumentDisplayModeListener)
         add(editor, BorderLayout.CENTER)
+        subscribeThemeChanges()
+    }
+
+    private fun subscribeThemeChanges() {
+        val connection = ApplicationManager.getApplication().messageBus.connect(this)
+        connection.subscribe(EditorColorsManager.TOPIC, EditorColorsListener { scheduleThemeRefresh() })
+        connection.subscribe(LafManagerListener.TOPIC, LafManagerListener { scheduleThemeRefresh() })
+    }
+
+    private fun scheduleThemeRefresh() {
+        if (isDisposed || project.isDisposed) return
+        val app = ApplicationManager.getApplication()
+        if (app.isDispatchThread) {
+            refreshEditorTheme()
+        } else {
+            app.invokeLater({
+                if (!isDisposed && !project.isDisposed) {
+                    refreshEditorTheme()
+                }
+            }, ModalityState.stateForComponent(this))
+        }
+    }
+
+    private fun refreshEditorTheme() {
+        val editorEx = editor.editor as? EditorEx ?: return
+        if (editorEx.isDisposed) return
+        val scheme = EditorColorsManager.getInstance().globalScheme
+        editorEx.colorsScheme = editorEx.createBoundColorSchemeDelegate(scheme)
+        editorEx.backgroundColor = scheme.defaultBackground
+        applyEditorHighlighterMode(editorEx, isEmptyHighlighterActive, forceRecreate = true)
+        editorEx.component.repaint()
     }
 
     private fun createJsonEditor(): EditorTextField {
@@ -119,7 +188,7 @@ class JsonEditorTextView(
             shouldApplyHighlighter = true,
             shouldShowHorizontalScrollbar = true,
             shouldShowVerticalScrollbar = true,
-            shouldEmbedIntoDialogWrapper = false,
+            shouldEmbedIntoDialogWrapper = isEmbeddedInDialog,
             isSupplementary = false,
             configureEditorSettings = {
                 applyEditorSettings(isLargeDocumentFastMode)
@@ -133,10 +202,11 @@ class JsonEditorTextView(
                 val hasLongLine = if (isHuge) false else hasLongLine(document)
                 val shouldUseFastMode = isHuge || textLength >= LARGE_DOCUMENT_FAST_MODE_THRESHOLD || hasLongLine
                 val shouldUseEmptyHighlighter = isHuge || hasLongLine
-                if (shouldUseFastMode || shouldUseEmptyHighlighter || isLargeDocumentFastMode || isEmptyHighlighterActive) {
+                if (shouldUseFastMode || shouldUseEmptyHighlighter || isLargeDocumentFastMode || isEmptyHighlighterActive || hasLongLine || isLongLineActive) {
                     applyDocumentDisplayMode(
                         useFastMode = shouldUseFastMode,
                         useEmptyHighlighter = shouldUseEmptyHighlighter,
+                        hasLongLine = hasLongLine,
                         document = document,
                         editorEx = this,
                         forceApply = true,
@@ -150,25 +220,40 @@ class JsonEditorTextView(
         val actionManager = ActionManager.getInstance()
         val group = DefaultActionGroup()
 
-        val copyAction = actionManager.getAction(IdeActions.ACTION_COPY)
-        if (copyAction != null) {
-            group.add(copyAction)
+        val clipboardActions = listOfNotNull(
+            actionManager.getAction(IdeActions.ACTION_CUT),
+            actionManager.getAction(IdeActions.ACTION_COPY),
+            actionManager.getAction(IdeActions.ACTION_PASTE),
+            actionManager.getAction(IdeActions.ACTION_SELECT_ALL),
+        )
+        clipboardActions.forEach(group::add)
+
+        val editorUtilityActions = listOfNotNull(
+            actionManager.getAction(IdeActions.ACTION_FIND),
+            actionManager.getAction(IdeActions.ACTION_UNDO),
+            actionManager.getAction(IdeActions.ACTION_REDO),
+        )
+        if (editorUtilityActions.isNotEmpty()) {
+            if (group.childrenCount > 0) {
+                group.addSeparator()
+            }
+            editorUtilityActions.forEach(group::add)
         }
 
-        val pasteAction = actionManager.getAction(IdeActions.ACTION_PASTE)
-        if (pasteAction != null) {
-            group.add(pasteAction)
-        }
-
-        val copyJsonQueryAction = CopyJsonQueryAction()
-        copyJsonQueryAction.templatePresentation.text = LocalizationBundle.message("action.copy.json.query")
-        copyJsonQueryAction.templatePresentation.description =
-            LocalizationBundle.message("action.copy.json.query.description")
+        val copyJsonQueryAction = actionManager.getAction("com.livteam.jsoninja.action.CopyJsonQueryAction")
+            ?: CopyJsonQueryAction().apply {
+                templatePresentation.text = LocalizationBundle.message("action.copy.json.query")
+                templatePresentation.description =
+                    LocalizationBundle.message("action.copy.json.query.description")
+            }
+        val copyJsonArrayQueryAction = actionManager.getAction("com.livteam.jsoninja.action.CopyJsonArrayQueryAction")
+            ?: CopyJsonArrayQueryAction()
 
         if (group.childrenCount > 0) {
             group.addSeparator()
         }
         group.add(copyJsonQueryAction)
+        group.add(copyJsonArrayQueryAction)
 
         if (group.childrenCount > 0) {
             PopupHandler.installPopupMenu(
@@ -182,7 +267,7 @@ class JsonEditorTextView(
     private fun EditorSettings.applyEditorSettings(useFastMode: Boolean) {
         val enableRichVisuals = !useFastMode
         isLineNumbersShown = true
-        isWhitespacesShown = enableRichVisuals
+        isWhitespacesShown = enableRichVisuals && EditorSettingsExternalizable.getInstance().isWhitespacesShown
         isCaretRowShown = true
         isRightMarginShown = true
         // Always keep soft wraps enabled so EditorImpl's TextLayoutCache avoids laying out huge unwrapped lines.
@@ -192,8 +277,9 @@ class JsonEditorTextView(
 
     private fun EditorSettings.applyDocumentDisplayModeSettings(useFastMode: Boolean) {
         val enableRichVisuals = !useFastMode
-        if (isWhitespacesShown != enableRichVisuals) {
-            isWhitespacesShown = enableRichVisuals
+        val shouldShowWhitespaces = enableRichVisuals && EditorSettingsExternalizable.getInstance().isWhitespacesShown
+        if (isWhitespacesShown != shouldShowWhitespaces) {
+            isWhitespacesShown = shouldShowWhitespaces
         }
         if (isIndentGuidesShown != enableRichVisuals) {
             isIndentGuidesShown = enableRichVisuals
@@ -203,18 +289,21 @@ class JsonEditorTextView(
     private fun applyDocumentDisplayMode(
         useFastMode: Boolean,
         useEmptyHighlighter: Boolean,
+        hasLongLine: Boolean,
         document: Document,
         editorEx: EditorEx? = editor.editor as? EditorEx,
         forceApply: Boolean = false,
     ) {
         val fastModeChanged = forceApply || isLargeDocumentFastMode != useFastMode
         val highlighterChanged = forceApply || isEmptyHighlighterActive != useEmptyHighlighter
-        if (!fastModeChanged && !highlighterChanged) {
+        val longLineChanged = forceApply || isLongLineActive != hasLongLine
+        if (!fastModeChanged && !highlighterChanged && !longLineChanged) {
             return
         }
 
         isLargeDocumentFastMode = useFastMode
         isEmptyHighlighterActive = useEmptyHighlighter
+        isLongLineActive = hasLongLine
 
         if (editorEx != null && !editorEx.isDisposed) {
             if (fastModeChanged) {
@@ -227,20 +316,60 @@ class JsonEditorTextView(
         if (fastModeChanged) {
             setDaemonHighlightingEnabled(document, enabled = !useFastMode)
         }
+        updateFastModeBanner(
+            useFastMode = useFastMode,
+            useEmptyHighlighter = useEmptyHighlighter,
+            hasLongLine = hasLongLine,
+        )
     }
 
-    private fun applyEditorHighlighterMode(editorEx: EditorEx, useEmptyHighlighter: Boolean) {
+    private fun updateFastModeBanner(
+        useFastMode: Boolean,
+        useEmptyHighlighter: Boolean,
+        hasLongLine: Boolean,
+    ) {
+        val banner = fastModeBanner ?: return
+        val shouldShow = useFastMode || useEmptyHighlighter
+        if (!shouldShow) {
+            if (banner.isVisible) {
+                banner.isVisible = false
+                revalidate()
+                repaint()
+            }
+            return
+        }
+
+        val messageKey = if (useEmptyHighlighter && hasLongLine) {
+            "editor.fast.mode.long.line"
+        } else {
+            "editor.fast.mode.large.file"
+        }
+        banner.text = LocalizationBundle.message(messageKey)
+        fastModePrettifyLink?.isVisible = hasLongLine
+        if (!banner.isVisible) {
+            banner.isVisible = true
+        }
+        revalidate()
+        repaint()
+    }
+
+    private fun applyEditorHighlighterMode(
+        editorEx: EditorEx,
+        useEmptyHighlighter: Boolean,
+        forceRecreate: Boolean = false,
+    ) {
         if (useEmptyHighlighter) {
-            if (editorEx.highlighter !is EmptyEditorHighlighter) {
+            if (forceRecreate || editorEx.highlighter !is EmptyEditorHighlighter) {
                 editorEx.highlighter = EmptyEditorHighlighter(editorEx.colorsScheme, HighlighterColors.TEXT)
             }
             return
         }
 
-        if (editorEx.highlighter is EmptyEditorHighlighter) {
+        if (forceRecreate || editorEx.highlighter is EmptyEditorHighlighter) {
             val fileType = editorFileType ?: return
             val highlighterProject = if (!project.isDisposed) project else ProjectManager.getInstance().defaultProject
-            editorEx.highlighter = HighlighterFactory.createHighlighter(highlighterProject, fileType)
+            editorEx.highlighter = EditorHighlighterFactory.getInstance()
+                .createEditorHighlighter(fileType, editorEx.colorsScheme, highlighterProject)
         }
     }
 
@@ -332,10 +461,15 @@ class JsonEditorTextView(
             normalizedText.length >= LARGE_DOCUMENT_FAST_MODE_THRESHOLD ||
             hasLongLine
         val nextEmptyHighlighter = isEmptyHighlighterActive || isHuge || hasLongLine
-        if (nextFastMode != isLargeDocumentFastMode || nextEmptyHighlighter != isEmptyHighlighterActive) {
+        val nextLongLine = isLongLineActive || hasLongLine
+        if (nextFastMode != isLargeDocumentFastMode ||
+            nextEmptyHighlighter != isEmptyHighlighterActive ||
+            nextLongLine != isLongLineActive
+        ) {
             applyDocumentDisplayMode(
                 useFastMode = nextFastMode,
                 useEmptyHighlighter = nextEmptyHighlighter,
+                hasLongLine = nextLongLine,
                 document = editor.document,
             )
         }
@@ -343,6 +477,7 @@ class JsonEditorTextView(
     }
 
     override fun dispose() {
+        isDisposed = true
         editor.removeDocumentListener(largeDocumentDisplayModeListener)
         (editor as? Disposable)?.let { Disposer.dispose(it) }
         removeAll()

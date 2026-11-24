@@ -1,10 +1,11 @@
 package com.livteam.jsoninja.actions
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
@@ -16,7 +17,7 @@ open class TypeConversionAction(
     actionTextKey: String = "action.type.conversion.text",
     actionDescriptionKey: String = "action.type.conversion.description",
     private val forcedTabIndex: Int? = null,
-) : AnAction(
+) : DumbAwareAction(
     LocalizationBundle.messagePointer(actionTextKey),
     LocalizationBundle.messagePointer(actionDescriptionKey),
     when (forcedTabIndex) {
@@ -30,6 +31,7 @@ open class TypeConversionAction(
         val seedText: String,
         val panelPresenter: JsoninjaPanelPresenter?,
         val targetEditor: Editor?,
+        val sourceFileExtension: String?,
     )
 
     override fun actionPerformed(event: AnActionEvent) {
@@ -50,6 +52,7 @@ open class TypeConversionAction(
             forcedTabIndex = forcedTabIndex,
             panelPresenter = actionContext.panelPresenter,
             targetEditor = actionContext.targetEditor,
+            sourceFileExtension = actionContext.sourceFileExtension,
         ).show()
     }
 
@@ -85,11 +88,14 @@ open class TypeConversionAction(
             } else {
                 editor.document.text
             }
+            val sourceFileExtension = event.getData(CommonDataKeys.VIRTUAL_FILE)?.extension
+                ?: FileDocumentManager.getInstance().getFile(editor.document)?.extension
             return ConvertActionContext(
                 project = project,
                 seedText = seedText,
                 panelPresenter = panelPresenter,
                 targetEditor = editor,
+                sourceFileExtension = sourceFileExtension,
             )
         }
 
@@ -100,6 +106,7 @@ open class TypeConversionAction(
                 seedText = it.getText(),
                 panelPresenter = panelPresenter,
                 targetEditor = null,
+                sourceFileExtension = null,
             )
         }
     }

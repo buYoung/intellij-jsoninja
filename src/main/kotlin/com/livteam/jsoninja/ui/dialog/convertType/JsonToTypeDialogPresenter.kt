@@ -70,9 +70,10 @@ class JsonToTypeDialogPresenter(
         return validator.validateFields(
             jsonText = if (isInputBlank()) "" else NON_BLANK_SENTINEL,
             rootTypeName = view.collectConfig().rootTypeName,
-            validationComponent = view.getValidationComponent(),
+            inputValidationComponent = view.getInputValidationComponent(),
+            rootTypeNameValidationComponent = view.getRootTypeNameValidationComponent(),
         ) ?: (previewState as? ConvertPreviewState.Invalid)?.message?.let {
-            ValidationInfo(it, view.getValidationComponent())
+            ValidationInfo(it, view.getInputValidationComponent())
         }
     }
 
@@ -154,7 +155,8 @@ class JsonToTypeDialogPresenter(
         val validationInfo = validator.validateFields(
             jsonText = NON_BLANK_SENTINEL,
             rootTypeName = currentConfig.rootTypeName,
-            validationComponent = view.getValidationComponent(),
+            inputValidationComponent = view.getInputValidationComponent(),
+            rootTypeNameValidationComponent = view.getRootTypeNameValidationComponent(),
         )
         if (validationInfo != null) {
             updatePreviewState(ConvertPreviewState.Invalid(validationInfo.message))
@@ -166,10 +168,15 @@ class JsonToTypeDialogPresenter(
         val expectedStamp = expectedDocument?.modificationStamp ?: -1L
         val inputText = view.getInputText()
         val previewConfig = currentConfig
-        view.showLoadingPreview()
         previewExecutor.submit(
             delayMs = 300,
-            onLoading = {},
+            onLoading = {
+                if (isInputUnchanged(expectedDocument, expectedStamp, inputText) &&
+                    previewConfig == view.collectConfig()
+                ) {
+                    view.showLoadingPreview()
+                }
+            },
             computePreview = { checkCancellation ->
                 checkCancellation()
                 try {
@@ -245,6 +252,7 @@ class JsonToTypeDialogPresenter(
         readyInputDocument = null
         readyInputStamp = -1L
         previewExecutor.cancel()
+        view.stopLoadingIndicator()
         updatePreviewState(ConvertPreviewState.Pending)
     }
 

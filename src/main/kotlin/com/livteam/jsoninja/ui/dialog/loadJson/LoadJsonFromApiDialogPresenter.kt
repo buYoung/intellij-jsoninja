@@ -4,14 +4,12 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
-import com.intellij.openapi.util.text.HtmlChunk
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonObjectMapperService
-import com.livteam.jsoninja.services.JsonHttpConnection
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiAuthorizationType
 import com.livteam.jsoninja.ui.dialog.loadJson.model.ApiLoadRequest
 import java.io.IOException
@@ -21,8 +19,10 @@ import java.nio.charset.StandardCharsets
 import java.util.Base64
 import javax.swing.JComponent
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -34,40 +34,83 @@ class LoadJsonFromApiDialogPresenter(
     private val onValidationChanged: (ValidationInfo?) -> Unit,
     onLayoutChanged: () -> Unit
 ) {
+    private class ApiHttpErrorException(
+        message: String,
+        val jsonErrorBody: String?,
+    ) : IOException(message)
+
     private val view = LoadJsonFromApiDialogView(project)
     private val objectMapper = service<JsonObjectMapperService>().objectMapper
+    private val historyStorage = ApiRequestHistoryStorage(project)
     private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
 
     @Volatile
     private var isDisposed = false
     private var isLoading = false
+    private var activeRequestJob: Job? = null
+    private var requestSequence = 0L
+    private var historyItems: List<StoredApiRequestHistoryItem> = emptyList()
+    private var lastErrorResponseJson: String? = null
 
     init {
         view.setOnInputsChanged {
             if (!isLoading) {
                 onValidationChanged(null)
+                lastErrorResponseJson = null
+                view.clearRequestError()
                 updateSummary()
             }
+        }
+        view.setOnHistoryUrlSelected { selectedUrl ->
+            applyHistorySelection(selectedUrl)
+        }
+        view.setOnCurlPasted { rawCurl ->
+            applyCurlCommand(rawCurl)
+        }
+        view.setOnOpenErrorResponseRequested {
+            val errorJson = lastErrorResponseJson ?: return@setOnOpenErrorResponseRequested
+            onJsonLoaded(errorJson)
+            onDialogCloseRequested()
         }
         view.setOnLayoutChanged(onLayoutChanged)
     }
 
     fun getComponent(): JComponent {
-        return view.component.also { updateSummary() }
+        val component = view.component
+        historyItems = historyStorage.loadHistory()
+        view.setHistoryUrls(historyItems.map { it.url })
+        updateSummary()
+        return component
     }
 
     fun getPreferredFocusedComponent(): JComponent = view.getRequestUrlComponent()
 
     fun dispose() {
         isDisposed = true
+        activeRequestJob?.cancel()
         coroutineScope.cancel()
         view.dispose()
+    }
+
+    fun handleSendOrCancelRequested() {
+        if (isDisposed) return
+        if (isLoading) {
+            requestSequence++
+            activeRequestJob?.cancel()
+            activeRequestJob = null
+            setLoading(false)
+            return
+        }
+        handleSendRequested()
     }
 
     fun handleSendRequested() {
         if (isDisposed || isLoading) return
 
         onValidationChanged(null)
+        lastErrorResponseJson = null
+        view.clearRequestError()
+
         val apiLoadRequest = buildApiLoadRequest()
         val validationInfo = validateApiLoadRequest(apiLoadRequest)
         if (validationInfo != null) {
@@ -75,9 +118,10 @@ class LoadJsonFromApiDialogPresenter(
             return
         }
 
+        val currentSequence = ++requestSequence
         setLoading(true)
 
-        coroutineScope.launch {
+        activeRequestJob = coroutineScope.launch {
             val loadResult = try {
                 Result.success(
                     withContext(Dispatchers.IO) {
@@ -92,37 +136,87 @@ class LoadJsonFromApiDialogPresenter(
                 Result.failure(throwable)
             }
 
+            if (loadResult.isSuccess) {
+                withContext(Dispatchers.IO) {
+                    historyStorage.saveSecrets(apiLoadRequest)
+                }
+            }
+
             withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
-                if (isDisposed) return@withContext
+                if (isDisposed || currentSequence != requestSequence) return@withContext
+                activeRequestJob = null
                 setLoading(false)
 
                 loadResult.fold(
                     onSuccess = { responseJson ->
+                        historyItems = historyStorage.saveRequestMetadata(apiLoadRequest)
+                        view.setHistoryUrls(historyItems.map { it.url })
                         runCatching {
                             onJsonLoaded(responseJson)
                             onDialogCloseRequested()
                         }.onFailure { callbackException ->
                             showRequestError(
-                                callbackException.message
+                                message = callbackException.message
                                     ?: LocalizationBundle.message(
                                         "dialog.load.json.api.error.request.failed",
                                         callbackException.javaClass.simpleName
-                                    )
+                                    ),
+                                jsonErrorBody = null,
                             )
                         }
                     },
                     onFailure = { throwable ->
+                        val jsonErrorBody = (throwable as? ApiHttpErrorException)?.jsonErrorBody
                         showRequestError(
-                            throwable.message
+                            message = throwable.message
                                 ?: LocalizationBundle.message(
                                     "dialog.load.json.api.error.request.failed",
                                     throwable.javaClass.simpleName
-                                )
+                                ),
+                            jsonErrorBody = jsonErrorBody,
                         )
                     }
                 )
             }
         }
+    }
+
+    private fun applyHistorySelection(selectedUrl: String) {
+        if (isLoading) return
+        val matched = historyItems.firstOrNull { it.url == selectedUrl } ?: return
+        val restored = historyStorage.toApiLoadRequest(matched)
+        onValidationChanged(null)
+        lastErrorResponseJson = null
+        view.clearRequestError()
+        view.applyRequest(restored)
+        updateSummary()
+
+        if (restored.authorizationType != ApiAuthorizationType.NONE) {
+            val targetUrl = restored.requestUrl
+            val authType = restored.authorizationType
+            coroutineScope.launch {
+                val secrets = withContext(Dispatchers.IO) {
+                    historyStorage.loadSecrets(targetUrl, authType)
+                }
+                withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
+                    if (isDisposed) return@withContext
+                    if (view.getRequestUrlText() == targetUrl && view.getSelectedAuthorizationType() == authType) {
+                        view.setSecretCredentials(secrets.basicPassword, secrets.bearerToken)
+                        updateSummary()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun applyCurlCommand(rawCurl: String) {
+        if (isLoading) return
+        val parsed = CurlCommandParser.parse(rawCurl) ?: return
+        onValidationChanged(null)
+        lastErrorResponseJson = null
+        view.clearRequestError()
+        view.applyRequest(parsed)
+        updateSummary()
     }
 
     private fun setLoading(isLoading: Boolean) {
@@ -132,24 +226,23 @@ class LoadJsonFromApiDialogPresenter(
         updateSummary()
     }
 
-    private fun showRequestError(message: String) {
-        onValidationChanged(ValidationInfo(HtmlChunk.text(message), null))
+    private fun showRequestError(message: String, jsonErrorBody: String?) {
+        lastErrorResponseJson = jsonErrorBody
+        view.showRequestError(message, canOpenResponseInTab = !jsonErrorBody.isNullOrBlank())
     }
 
     private fun updateSummary() {
         val request = buildApiLoadRequest()
+        val authorization = when (request.authorizationType) {
+            ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
+            ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
+            ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
+        }
         val summary = when {
             isLoading -> LocalizationBundle.message("dialog.load.json.api.loading")
-            request.requestUrl.isBlank() -> LocalizationBundle.message("dialog.load.json.api.error.url.empty")
+            request.requestUrl.isBlank() -> LocalizationBundle.message("dialog.load.json.api.summary", request.requestMethod.name, authorization)
             validateApiLoadRequest(request) != null -> LocalizationBundle.message("dialog.load.json.api.summary.invalid")
-            else -> {
-                val authorization = when (request.authorizationType) {
-                    ApiAuthorizationType.NONE -> LocalizationBundle.message("dialog.load.json.api.auth.none")
-                    ApiAuthorizationType.BASIC -> LocalizationBundle.message("dialog.load.json.api.auth.basic")
-                    ApiAuthorizationType.BEARER -> LocalizationBundle.message("dialog.load.json.api.auth.bearer")
-                }
-                LocalizationBundle.message("dialog.load.json.api.summary", request.requestMethod.name, authorization)
-            }
+            else -> LocalizationBundle.message("dialog.load.json.api.summary", request.requestMethod.name, authorization)
         }
         view.setSummary(summary)
     }
@@ -162,7 +255,8 @@ class LoadJsonFromApiDialogPresenter(
             basicUsername = view.getBasicUsernameText(),
             basicPassword = view.getBasicPasswordText(),
             bearerToken = view.getBearerTokenText(),
-            requestBodyText = view.getRequestBodyText()
+            requestBodyText = view.getRequestBodyText(),
+            headers = view.getHeaders(),
         )
     }
 
@@ -222,15 +316,33 @@ class LoadJsonFromApiDialogPresenter(
         }
     }
 
-    private fun loadJsonResponse(apiLoadRequest: ApiLoadRequest): String {
-        return JsonHttpConnection.withConnection(apiLoadRequest.requestUrl) { httpURLConnection ->
-            httpURLConnection.requestMethod = apiLoadRequest.requestMethod.name
+    private suspend fun loadJsonResponse(apiLoadRequest: ApiLoadRequest): String {
+        val httpURLConnection = URI(apiLoadRequest.requestUrl).toURL().openConnection() as HttpURLConnection
+        val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
+            if (cause != null) {
+                runCatching { httpURLConnection.disconnect() }
+            }
+        }
+        return try {
+            configureMethod(httpURLConnection, apiLoadRequest.requestMethod.name)
             httpURLConnection.connectTimeout = 10_000
             httpURLConnection.readTimeout = 15_000
             httpURLConnection.instanceFollowRedirects = true
             httpURLConnection.useCaches = false
-            httpURLConnection.setRequestProperty("Accept", "application/json")
-            httpURLConnection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+
+            val hasAccept = apiLoadRequest.headers.any { it.name.equals("Accept", ignoreCase = true) }
+            val hasContentType = apiLoadRequest.headers.any { it.name.equals("Content-Type", ignoreCase = true) }
+            if (!hasAccept) {
+                httpURLConnection.setRequestProperty("Accept", "application/json")
+            }
+            if (!hasContentType) {
+                httpURLConnection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            }
+            apiLoadRequest.headers.forEach { header ->
+                if (header.name.isNotBlank()) {
+                    httpURLConnection.setRequestProperty(header.name, header.value)
+                }
+            }
 
             configureAuthorizationHeader(httpURLConnection, apiLoadRequest)
             writeRequestBodyIfNeeded(httpURLConnection, apiLoadRequest)
@@ -240,7 +352,11 @@ class LoadJsonFromApiDialogPresenter(
                 val responseBody = readResponseBody(httpURLConnection, responseCode)
 
                 if (responseCode !in 200..299) {
-                    throw IOException(createHttpStatusErrorMessage(responseCode, responseBody))
+                    val validJsonErrorBody = responseBody.takeIf { isValidJsonPayload(it) }
+                    throw ApiHttpErrorException(
+                        message = createHttpStatusErrorMessage(responseCode, responseBody),
+                        jsonErrorBody = validJsonErrorBody,
+                    )
                 }
 
                 if (responseBody.trim().isEmpty()) {
@@ -279,7 +395,30 @@ class LoadJsonFromApiDialogPresenter(
                     exception
                 )
             }
+        } finally {
+            cancellationHandle?.dispose()
+            httpURLConnection.disconnect()
         }
+    }
+
+    private fun configureMethod(connection: HttpURLConnection, method: String) {
+        if (method == "PATCH") {
+            // HttpURLConnection rejects PATCH directly on JDK; tunnel cleanly via X-HTTP-Method-Override if needed.
+            try {
+                connection.requestMethod = method
+            } catch (_: java.net.ProtocolException) {
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("X-HTTP-Method-Override", "PATCH")
+            }
+        } else {
+            connection.requestMethod = method
+        }
+    }
+
+    private fun isValidJsonPayload(body: String): Boolean {
+        val trimmed = body.trim()
+        if (trimmed.isEmpty()) return false
+        return runCatching { objectMapper.readTree(trimmed) != null }.getOrDefault(false)
     }
 
     private fun configureAuthorizationHeader(

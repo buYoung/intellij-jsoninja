@@ -35,7 +35,6 @@ class OnboardingStep8DiffTooltipController(
     private var actionTooltip: GotItTooltip? = null
     private var sortKeysTooltip: GotItTooltip? = null
     private var retryTimer: Timer? = null
-    private val tooltipSessionId = System.nanoTime()
     private var tooltipSequence = 0
     private var ownedDiffDialog: JsonDiffWindowDialog? = null
     private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
@@ -57,8 +56,8 @@ class OnboardingStep8DiffTooltipController(
 
         closeDiffWindow()
         val sequence = ++tooltipSequence
-        val actionTooltipId = "com.livteam.jsoninja.onboarding.step8.action.$tooltipSessionId.$sequence"
-        val sortTooltipId = "com.livteam.jsoninja.onboarding.step8.sort.$tooltipSessionId.$sequence"
+        val actionTooltipId = ACTION_TOOLTIP_ID
+        val sortTooltipId = SORT_TOOLTIP_ID
 
         coroutineScope.launch {
             val input = withContext(Dispatchers.EDT) {
@@ -155,6 +154,7 @@ class OnboardingStep8DiffTooltipController(
             LocalizationBundle.message(stepBodyKey),
             tooltipParent
         )
+            .withShowCount(Int.MAX_VALUE)
             .withHeader(LocalizationBundle.message(stepTitleKey))
             .withPosition(Balloon.Position.below)
             .withTimeout(3000)
@@ -164,6 +164,7 @@ class OnboardingStep8DiffTooltipController(
             LocalizationBundle.message("onboarding.tutorial.step8.sort.tooltip.body"),
             tooltipParent
         )
+            .withShowCount(Int.MAX_VALUE)
             .withHeader(LocalizationBundle.message("onboarding.tutorial.step8.sort.tooltip.title"))
             .withPosition(Balloon.Position.below)
             .withTimeout(10000)
@@ -273,5 +274,7 @@ class OnboardingStep8DiffTooltipController(
         private const val STEP8_STEP_NUMBER = 6
         private const val MAX_TOOLTIP_RETRY = 20
         private const val TOOLTIP_RETRY_DELAY_MS = 250
+        private const val ACTION_TOOLTIP_ID = "com.livteam.jsoninja.onboarding.step8.action"
+        private const val SORT_TOOLTIP_ID = "com.livteam.jsoninja.onboarding.step8.sort"
     }
 }

@@ -1,100 +1,126 @@
 package com.livteam.jsoninja.ui.onboarding
 
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.wm.WindowManager
 import com.livteam.jsoninja.LocalizationBundle
-import java.awt.BorderLayout
-import java.awt.Dialog
-import java.awt.Dimension
-import java.awt.Window
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import javax.swing.AbstractAction
+import javax.swing.Action
 import javax.swing.JComponent
-import javax.swing.JDialog
-import javax.swing.JPanel
 import javax.swing.KeyStroke
-import javax.swing.WindowConstants
 
 class OnboardingTutorialDialog(
-    private val project: Project,
-    private val rootComponent: JComponent,
+    project: Project,
+    rootComponent: JComponent,
     private val onClosed: () -> Unit
-) : JDialog(WindowManager.getInstance().getFrame(project) as? Window), Disposable {
+) : DialogWrapper(project, true) {
     private var closed = false
-    private val dialogDisposable = Disposer.newDisposable("JSONinja OnboardingTutorialDialog")
+    private var windowListenerAttached = false
     private val presenter = OnboardingTutorialDialogPresenter(
         project = project,
         rootComponent = rootComponent,
-        tooltipParent = dialogDisposable,
-        onCancelRequested = { dispose() }
+        tooltipParent = disposable,
+        onCancelRequested = { close(CANCEL_EXIT_CODE) }
     )
 
     init {
-        Disposer.register(dialogDisposable, presenter)
+        Disposer.register(disposable, presenter)
         title = LocalizationBundle.message("onboarding.tutorial.title")
-        modalityType = Dialog.ModalityType.MODELESS
-        isAlwaysOnTop = true
-        isAutoRequestFocus = true
-        defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
-        minimumSize = Dimension(420, 260)
+        setModal(false)
         isResizable = false
-
-        contentPane = JPanel(BorderLayout()).apply {
-            add(presenter.createCenterPanel(), BorderLayout.CENTER)
-            add(presenter.createSouthPanel(), BorderLayout.SOUTH)
-        }
-        bindEnterKeyToNextStep()
-        addWindowListener(object : WindowAdapter() {
-            override fun windowActivated(e: WindowEvent?) {
-                presenter.onDialogActivated()
-            }
-        })
+        init()
+        bindNavigationKeys()
         presenter.refreshStep(showTooltip = false)
-
         pack()
-        setLocationRelativeTo(owner)
     }
 
+    override fun createCenterPanel(): JComponent {
+        return presenter.createCenterPanel()
+    }
+
+    override fun createSouthPanel(): JComponent {
+        return presenter.createSouthPanel()
+    }
+
+    override fun createActions(): Array<Action> {
+        return emptyArray()
+    }
+
+    override fun getPreferredFocusedComponent(): JComponent {
+        return presenter.getPreferredFocusedComponent()
+    }
+
+    override fun getDimensionServiceKey(): String = "com.livteam.jsoninja.dialog.OnboardingTutorialDialog"
+
     fun open() {
-        if (!isVisible) {
-            isVisible = true
+        if (!isShowing) {
+            show()
         } else {
-            toFront()
+            bringToFront()
         }
+        attachWindowListenerIfNeeded()
         presenter.refreshStep(showTooltip = true)
         presenter.onDialogActivated()
     }
 
+    fun bringToFront() {
+        window?.toFront()
+        window?.requestFocus()
+    }
+
     override fun dispose() {
-        if (closed) {
-            super.dispose()
-            return
+        if (!closed) {
+            closed = true
+            onClosed()
         }
-        closed = true
-        Disposer.dispose(dialogDisposable)
-        onClosed()
         super.dispose()
     }
 
-    private fun bindEnterKeyToNextStep() {
-        val actionKey = ENTER_TO_NEXT_ACTION_KEY
-        rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
-            KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0),
-            actionKey
-        )
-        rootPane.actionMap.put(actionKey, object : AbstractAction() {
+    private fun attachWindowListenerIfNeeded() {
+        if (windowListenerAttached) return
+        val dialogWindow = window ?: return
+        windowListenerAttached = true
+        dialogWindow.addWindowListener(object : WindowAdapter() {
+            override fun windowActivated(e: WindowEvent?) {
+                presenter.onDialogActivated()
+            }
+        })
+    }
+
+    private fun bindNavigationKeys() {
+        val pane = rootPane ?: return
+        val inputMap = pane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+        val actionMap = pane.actionMap
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), ENTER_ACTION_KEY)
+        actionMap.put(ENTER_ACTION_KEY, object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent?) {
                 presenter.onEnterPressed()
+            }
+        })
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), NEXT_STEP_ACTION_KEY)
+        actionMap.put(NEXT_STEP_ACTION_KEY, object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent?) {
+                presenter.onNextKeyPressed()
+            }
+        })
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), PREV_STEP_ACTION_KEY)
+        actionMap.put(PREV_STEP_ACTION_KEY, object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent?) {
+                presenter.onPrevKeyPressed()
             }
         })
     }
 
     companion object {
-        private const val ENTER_TO_NEXT_ACTION_KEY = "jsoninja.onboarding.enter.to.next"
+        private const val ENTER_ACTION_KEY = "jsoninja.onboarding.enter.to.next"
+        private const val NEXT_STEP_ACTION_KEY = "jsoninja.onboarding.right.to.next"
+        private const val PREV_STEP_ACTION_KEY = "jsoninja.onboarding.left.to.prev"
     }
 }

@@ -1,7 +1,22 @@
 package com.livteam.jsoninja.ui.dialog.generateJson.schema
 
+import com.intellij.icons.AllIcons
+import com.intellij.ide.highlighter.HighlighterFactory
+import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.editor.EditorSettings
+import com.intellij.openapi.editor.ScrollType
+import com.intellij.openapi.editor.colors.EditorColorsListener
+import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogPanel
@@ -9,14 +24,19 @@ import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBList
+import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
+import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.NamedColorUtil
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
@@ -24,19 +44,22 @@ import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationOutputFormat
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import java.awt.BorderLayout
+import java.awt.Dimension
 import java.awt.Point
+import java.awt.event.ActionEvent
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
+import javax.swing.AbstractAction
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JEditorPane
 import javax.swing.JLabel
 import javax.swing.JPanel
+import javax.swing.KeyStroke
 import javax.swing.ListCellRenderer
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
-import javax.swing.UIManager
 import javax.swing.DefaultListModel
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
@@ -44,12 +67,28 @@ import com.intellij.ui.awt.RelativePoint
 
 class GenerateSchemaJsonTabView(
     private val project: Project,
-    private val initialConfig: JsonGenerationConfig
+    private val initialConfig: JsonGenerationConfig,
+    private val initialSchemaUrlText: String = "",
 ) {
+    private val viewDisposable = Disposer.newDisposable("GenerateSchemaJsonTabView")
     private lateinit var schemaEditor: EditorTextField
     private lateinit var schemaUrlSearchField: SearchTextField
     private lateinit var schemaUrlSuggestionList: JBList<SchemaUrlComboBoxItem>
     private lateinit var loadSchemaFromUrlButton: JButton
+    private lateinit var urlErrorRow: Row
+    private var isUrlErrorVisible = false
+    private val urlLoadingIcon = AsyncProcessIcon("JSONinjaSchemaUrlLoad").apply {
+        isVisible = false
+        suspend()
+    }
+    private val urlErrorTextArea = JBTextArea().apply {
+        isEditable = false
+        lineWrap = true
+        wrapStyleWord = true
+        isOpaque = false
+        foreground = NamedColorUtil.getErrorForeground()
+        border = JBUI.Borders.empty(2, 0)
+    }
     private lateinit var schemaOutputCountField: JBTextField
     private val schemaPropertyModeComboBox = ComboBox(SchemaPropertyGenerationMode.entries.toTypedArray()).apply {
         selectedItem = initialConfig.schemaPropertyGenerationMode
@@ -82,6 +121,8 @@ class GenerateSchemaJsonTabView(
 
     private var onSchemaUrlInputChangedCallback: (() -> Unit)? = null
     private var onLoadSchemaFromUrlRequestedCallback: (() -> Unit)? = null
+    private var onLoadSchemaFromFileRequestedCallback: (() -> Unit)? = null
+    private var onLoadSchemaFromTabRequestedCallback: (() -> Unit)? = null
     private var onSchemaSourceReplacedCallback: (() -> Unit)? = null
     private var onOptionsChangedCallback: (() -> Unit)? = null
 
@@ -107,6 +148,14 @@ class GenerateSchemaJsonTabView(
 
     fun setOnLoadSchemaFromUrlRequested(callback: () -> Unit) {
         onLoadSchemaFromUrlRequestedCallback = callback
+    }
+
+    fun setOnLoadSchemaFromFileRequested(callback: () -> Unit) {
+        onLoadSchemaFromFileRequestedCallback = callback
+    }
+
+    fun setOnLoadSchemaFromTabRequested(callback: () -> Unit) {
+        onLoadSchemaFromTabRequestedCallback = callback
     }
 
     fun setOnSchemaSourceReplaced(callback: () -> Unit) {
@@ -168,11 +217,42 @@ class GenerateSchemaJsonTabView(
         setEditorTextAndRefreshCodeFolding(project, schemaEditor, schemaText)
     }
 
-    fun setLoadSchemaFromUrlButtonEnabled(isEnabled: Boolean) {
-        loadSchemaFromUrlButton.isEnabled = isEnabled
+    fun navigateToOffset(offset: Int) {
+        val editor = schemaEditor.editor ?: return
+        if (editor.isDisposed) return
+        val clampedOffset = offset.coerceIn(0, editor.document.textLength)
+        editor.caretModel.moveToOffset(clampedOffset)
+        editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
+    }
+
+    fun setUrlLoading(isLoading: Boolean) {
+        loadSchemaFromUrlButton.isEnabled = true
         loadSchemaFromUrlButton.text = LocalizationBundle.message(
-            if (isEnabled) "dialog.generate.json.schema.url.load.button" else "dialog.generate.json.schema.url.loading"
+            if (isLoading) "dialog.generate.json.schema.url.cancel" else "dialog.generate.json.schema.url.load.button"
         )
+        if (isLoading) {
+            urlLoadingIcon.isVisible = true
+            urlLoadingIcon.resume()
+        } else {
+            urlLoadingIcon.suspend()
+            urlLoadingIcon.isVisible = false
+        }
+    }
+
+    fun showUrlError(errorMessage: String) {
+        urlErrorTextArea.text = errorMessage
+        urlErrorTextArea.caretPosition = 0
+        isUrlErrorVisible = true
+        urlErrorRow.visible(true)
+        onOptionsChangedCallback?.invoke()
+    }
+
+    fun clearUrlError() {
+        if (urlErrorTextArea.text.isEmpty() && !isUrlErrorVisible) return
+        urlErrorTextArea.text = ""
+        isUrlErrorVisible = false
+        urlErrorRow.visible(false)
+        onOptionsChangedCallback?.invoke()
     }
 
     fun updateSchemaUrlSuggestions(
@@ -216,14 +296,20 @@ class GenerateSchemaJsonTabView(
 
     fun dispose() {
         isDisposed = true
+        urlLoadingIcon.suspend()
+        Disposer.dispose(viewDisposable)
         hideSchemaUrlSuggestionPopup()
         (schemaEditor as? Disposable)?.let { disposableEditor ->
-            com.intellij.openapi.util.Disposer.dispose(disposableEditor)
+            Disposer.dispose(disposableEditor)
         }
     }
 
     private fun createComponent(): DialogPanel {
+        Disposer.register(viewDisposable, urlLoadingIcon)
         schemaUrlSearchField = createSchemaUrlSearchField()
+        if (initialSchemaUrlText.isNotBlank()) {
+            setSchemaUrlEditorText(initialSchemaUrlText)
+        }
         schemaUrlSuggestionList = createSchemaUrlSuggestionList()
         schemaEditor = createSchemaEditor()
         schemaEditor.addDocumentListener(object : com.intellij.openapi.editor.event.DocumentListener {
@@ -243,22 +329,29 @@ class GenerateSchemaJsonTabView(
             }
         })
 
+        val schemaSourceToolbar = createSchemaSourceToolbar()
+        val urlErrorPanel = createUrlErrorPanel()
+
         val result = panel {
             row {
                 cell(schemaUrlSearchField)
                     .label(LocalizationBundle.message("dialog.generate.json.schema.url.label"), LabelPosition.TOP)
                     .align(AlignX.FILL)
                     .resizableColumn()
+                cell(urlLoadingIcon)
                 loadSchemaFromUrlButton = button(LocalizationBundle.message("dialog.generate.json.schema.url.load.button")) {
                     onLoadSchemaFromUrlRequestedCallback?.invoke()
                 }.component
             }
 
+            urlErrorRow = row {
+                cell(urlErrorPanel).align(AlignX.FILL).resizableColumn()
+            }.visible(false)
+
             row {
                 label(LocalizationBundle.message("dialog.generate.json.schema.editor.label"))
                     .applyToComponent { labelFor = schemaEditor }
-                comment(LocalizationBundle.message("dialog.generate.json.schema.editor.comment"))
-                    .align(AlignX.RIGHT)
+                cell(schemaSourceToolbar).align(AlignX.RIGHT)
             }.topGap(TopGap.SMALL)
 
             row {
@@ -307,6 +400,7 @@ class GenerateSchemaJsonTabView(
             }
         })
         updateOutputFormatState()
+        subscribeThemeChanges()
         return result
     }
 
@@ -333,22 +427,26 @@ class GenerateSchemaJsonTabView(
         searchTextField.textEditor.accessibleContext.accessibleName =
             LocalizationBundle.message("dialog.generate.json.schema.url.label")
         attachSchemaUrlEditorDocumentListener(searchTextField)
+        searchTextField.textEditor.getInputMap(JComponent.WHEN_FOCUSED).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0),
+            "jsoninja.schemaUrl.enter"
+        )
+        searchTextField.textEditor.actionMap.put("jsoninja.schemaUrl.enter", object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                handleSchemaUrlEnter()
+            }
+        })
         searchTextField.textEditor.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(keyEvent: KeyEvent) {
                 when (keyEvent.keyCode) {
                     KeyEvent.VK_DOWN -> {
-                        shouldShowSchemaUrlSuggestions = true
-                        if (schemaUrlSuggestionItems.isNotEmpty()) {
-                            showSchemaUrlSuggestionPopup()
-                            selectFirstSelectableSuggestion()
-                            keyEvent.consume()
-                        }
+                        moveSuggestionSelection(1)
+                        keyEvent.consume()
                     }
 
-                    KeyEvent.VK_ENTER -> {
-                        if (isSchemaUrlSuggestionPopupVisible() && applySelectedSchemaUrlSuggestion()) {
-                            keyEvent.consume()
-                        }
+                    KeyEvent.VK_UP -> {
+                        moveSuggestionSelection(-1)
+                        keyEvent.consume()
                     }
 
                     KeyEvent.VK_ESCAPE -> {
@@ -470,7 +568,7 @@ class GenerateSchemaJsonTabView(
 
             if (renderedComponent is JLabel && value is SchemaUrlComboBoxItem.StatusEntry) {
                 renderedComponent.isEnabled = false
-                renderedComponent.foreground = UIManager.getColor("Label.disabledForeground")
+                renderedComponent.foreground = JBUI.CurrentTheme.Label.disabledForeground()
             }
 
             renderedComponent
@@ -505,7 +603,51 @@ class GenerateSchemaJsonTabView(
         hasPendingSchemaStoreSelectionLoad = true
         setSchemaUrlEditorText(schemaUrlSuggestionItem.schemaStoreCatalogItem.name)
         hideSchemaUrlSuggestionPopup()
+        onLoadSchemaFromUrlRequestedCallback?.invoke()
         return true
+    }
+
+    private fun handleSchemaUrlEnter(): Boolean {
+        if (isSchemaUrlSuggestionPopupVisible() && applySelectedSchemaUrlSuggestion()) {
+            return true
+        }
+        if (getSchemaUrlInputText().isNotBlank()) {
+            onLoadSchemaFromUrlRequestedCallback?.invoke()
+            return true
+        }
+        return false
+    }
+
+    private fun moveSuggestionSelection(delta: Int) {
+        shouldShowSchemaUrlSuggestions = true
+        val selectableIndices = schemaUrlSuggestionItems.indices.filter { index ->
+            schemaUrlSuggestionItems[index] is SchemaUrlComboBoxItem.CatalogEntry
+        }
+        if (selectableIndices.isEmpty()) {
+            if (schemaUrlSuggestionItems.isNotEmpty() && !isSchemaUrlSuggestionPopupVisible()) {
+                showSchemaUrlSuggestionPopup()
+            }
+            schemaUrlSuggestionList.clearSelection()
+            return
+        }
+
+        if (!isSchemaUrlSuggestionPopupVisible()) {
+            showSchemaUrlSuggestionPopup()
+            val initialIndex = if (delta >= 0) selectableIndices.first() else selectableIndices.last()
+            schemaUrlSuggestionList.selectedIndex = initialIndex
+            schemaUrlSuggestionList.ensureIndexIsVisible(initialIndex)
+            return
+        }
+
+        val currentPosition = selectableIndices.indexOf(schemaUrlSuggestionList.selectedIndex)
+        val nextPosition = if (currentPosition < 0) {
+            if (delta >= 0) 0 else selectableIndices.lastIndex
+        } else {
+            Math.floorMod(currentPosition + delta, selectableIndices.size)
+        }
+        val nextIndex = selectableIndices[nextPosition]
+        schemaUrlSuggestionList.selectedIndex = nextIndex
+        schemaUrlSuggestionList.ensureIndexIsVisible(nextIndex)
     }
 
     private fun clearSelectedSchemaStoreCatalogItem() {
@@ -601,6 +743,8 @@ class GenerateSchemaJsonTabView(
             initialText = initialSchemaText,
             placeholderText = LocalizationBundle.message("dialog.generate.json.schema.editor.comment"),
             preferredSize = JBUI.size(580, 280),
+            shouldApplyEditorColors = true,
+            shouldApplyHighlighter = true,
             shouldShowHorizontalScrollbar = true,
             shouldShowVerticalScrollbar = true,
             configureEditorSettings = {
@@ -609,6 +753,104 @@ class GenerateSchemaJsonTabView(
         ).apply {
             minimumSize = JBUI.size(360, 180)
             accessibleContext.accessibleName = LocalizationBundle.message("dialog.generate.json.schema.editor.label")
+        }
+    }
+
+    private fun subscribeThemeChanges() {
+        val connection = ApplicationManager.getApplication().messageBus.connect(viewDisposable)
+        connection.subscribe(EditorColorsManager.TOPIC, EditorColorsListener { refreshThemeAppearance() })
+        connection.subscribe(LafManagerListener.TOPIC, LafManagerListener { refreshThemeAppearance() })
+    }
+
+    private fun createSchemaSourceToolbar(): JComponent {
+        val loadFromFileAction = object : DumbAwareAction(
+            LocalizationBundle.messagePointer("dialog.generate.json.schema.load.file"),
+            LocalizationBundle.messagePointer("dialog.generate.json.schema.load.file"),
+            AllIcons.Actions.MenuOpen,
+        ) {
+            override fun actionPerformed(e: AnActionEvent) {
+                onLoadSchemaFromFileRequestedCallback?.invoke()
+            }
+
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        }
+        val loadFromTabAction = object : DumbAwareAction(
+            LocalizationBundle.messagePointer("dialog.generate.json.schema.load.tab"),
+            LocalizationBundle.messagePointer("dialog.generate.json.schema.load.tab"),
+            AllIcons.Actions.Download,
+        ) {
+            override fun actionPerformed(e: AnActionEvent) {
+                onLoadSchemaFromTabRequestedCallback?.invoke()
+            }
+
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        }
+        val toolbar = ActionManager.getInstance().createActionToolbar(
+            ActionPlaces.EDITOR_TOOLBAR,
+            DefaultActionGroup(loadFromFileAction, loadFromTabAction),
+            true,
+        )
+        toolbar.targetComponent = schemaEditor
+        toolbar.component.isOpaque = false
+        toolbar.component.border = JBUI.Borders.empty()
+        return toolbar.component
+    }
+
+    private fun createUrlErrorPanel(): JComponent {
+        val closeAction = object : DumbAwareAction(
+            LocalizationBundle.messagePointer("dialog.load.json.api.button.close"),
+            LocalizationBundle.messagePointer("dialog.load.json.api.button.close"),
+            AllIcons.Actions.Close,
+        ) {
+            override fun actionPerformed(e: AnActionEvent) {
+                clearUrlError()
+            }
+
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        }
+        val closeToolbar = ActionManager.getInstance().createActionToolbar(
+            ActionPlaces.EDITOR_TOOLBAR,
+            DefaultActionGroup(closeAction),
+            true,
+        ).apply {
+            targetComponent = urlErrorTextArea
+            component.isOpaque = false
+            component.border = JBUI.Borders.empty()
+        }
+        val scrollPane = JBScrollPane(urlErrorTextArea).apply {
+            border = JBUI.Borders.empty()
+            viewportBorder = JBUI.Borders.empty()
+            isOpaque = false
+            viewport.isOpaque = false
+            preferredSize = Dimension(0, JBUI.scale(48))
+        }
+        return JBPanel<JBPanel<*>>(BorderLayout(JBUI.scale(4), 0)).apply {
+            isOpaque = false
+            add(scrollPane, BorderLayout.CENTER)
+            add(closeToolbar.component, BorderLayout.EAST)
+        }
+    }
+
+    private fun refreshThemeAppearance() {
+        if (isDisposed || project.isDisposed) return
+        val applyChanges = {
+            if (!isDisposed && !project.isDisposed) {
+                urlErrorTextArea.foreground = NamedColorUtil.getErrorForeground()
+                val editor = schemaEditor.editor as? EditorEx
+                if (editor != null && !editor.isDisposed) {
+                    val scheme = EditorColorsManager.getInstance().globalScheme
+                    editor.colorsScheme = editor.createBoundColorSchemeDelegate(scheme)
+                    editor.backgroundColor = scheme.defaultBackground
+                    editor.highlighter = HighlighterFactory.createHighlighter(project, schemaEditor.fileType)
+                }
+                schemaUrlSuggestionList.repaint()
+            }
+        }
+        val app = ApplicationManager.getApplication()
+        if (app.isDispatchThread) {
+            applyChanges()
+        } else {
+            app.invokeLater(applyChanges, ModalityState.stateForComponent(component))
         }
     }
 

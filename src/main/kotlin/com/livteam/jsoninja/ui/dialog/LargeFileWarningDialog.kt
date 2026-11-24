@@ -1,13 +1,16 @@
 package com.livteam.jsoninja.ui.dialog
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.dsl.builder.AlignY
+import com.intellij.ui.dsl.builder.RowLayout
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
-import java.awt.Dimension
 import java.text.DecimalFormat
 import javax.swing.JComponent
 
@@ -72,23 +75,24 @@ class LargeFileWarningDialog(
         val formattedSize = formatter.format(fileSizeMB)
 
         val message = LocalizationBundle.message(messageKey, formattedSize)
+        val sizeText = LocalizationBundle.message("warning.large.file.size", formattedSize)
 
         return panel {
             row {
-                icon(com.intellij.icons.AllIcons.General.WarningDialog)
-                    .align(com.intellij.ui.dsl.builder.AlignY.TOP)
-                cell(JBLabel("<html><body style='width: 300px'>$message</body></html>"))
-                    .align(com.intellij.ui.dsl.builder.AlignY.TOP)
-            }.layout(com.intellij.ui.dsl.builder.RowLayout.PARENT_GRID)
+                icon(AllIcons.General.WarningDialog)
+                    .align(AlignY.TOP)
+                cell(JBLabel("<html><body style='width: ${JBUI.scale(300)}px'>$message</body></html>"))
+                    .align(AlignY.TOP)
+            }.layout(RowLayout.PARENT_GRID)
 
             if (fileName != null) {
                 row {
-                    text("File: $fileName")
-                        .comment("Size: ${formattedSize} MB")
+                    text(LocalizationBundle.message("warning.large.file.name", fileName))
+                        .comment(sizeText)
                 }
             } else {
                 row {
-                    text("Size: ${formattedSize} MB")
+                    text(sizeText)
                 }
             }
 
@@ -98,7 +102,7 @@ class LargeFileWarningDialog(
                 cell(dontShowAgainCheckBox)
             }
         }.apply {
-            preferredSize = Dimension(400, 130)
+            preferredSize = JBUI.size(400, 130)
         }
     }
 

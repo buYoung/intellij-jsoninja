@@ -1,5 +1,7 @@
 package com.livteam.jsoninja.ui.dialog.generateJson.schema
 
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.core.JsonToken
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
@@ -7,38 +9,42 @@ import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.fileChooser.FileChooser
+import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.progress.ProcessCanceledException
-import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.ValidationInfo
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonObjectMapperService
+import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.schema.JsonSchemaDataGenerationService
 import com.livteam.jsoninja.services.schema.JsonSchemaGenerationException
+import com.livteam.jsoninja.services.schema.SchemaStoreCatalogService
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
-import io.burt.jmespath.jackson.JacksonRuntime
+import com.livteam.jsoninja.utils.JsonHelperUtils
 import java.io.IOException
-import com.livteam.jsoninja.services.JsonHttpConnection
+import java.net.HttpURLConnection
+import java.net.URI
 import javax.swing.JComponent
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class GenerateSchemaJsonTabPresenter(
-    private val project: Project
+    private val project: Project,
+    private val initialConfig: JsonGenerationConfig = JsonGenerationConfig(generationMode = JsonGenerationMode.SCHEMA),
+    initialSchemaUrlText: String = "",
 ) {
     private val LOG = logger<GenerateSchemaJsonTabPresenter>()
-    private val initialConfig = JsonGenerationConfig()
-    private val view = GenerateSchemaJsonTabView(project, initialConfig)
-    private val objectMapper = service<JsonObjectMapperService>().objectMapper
-    private val jmesPathRuntime = JacksonRuntime()
+    private val view = GenerateSchemaJsonTabView(project, initialConfig, initialSchemaUrlText)
+    private val schemaStoreCatalogService = service<SchemaStoreCatalogService>()
     private val schemaDataGenerationService = project.getService(JsonSchemaDataGenerationService::class.java)
     private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
 
@@ -47,14 +53,24 @@ class GenerateSchemaJsonTabPresenter(
 
     private var schemaStoreCatalogItems: List<SchemaStoreCatalogItem> = emptyList()
     private var schemaStoreCatalogState = SchemaStoreCatalogState.LOADING
+    private var hasStartedCatalogLoad = false
     private var schemaStoreFilterJob: Job? = null
-    private var schemaRetrievalUri: String? = null
+    private var schemaUrlLoadJob: Job? = null
+    private var schemaUrlLoadSequence = 0L
+    private var schemaRetrievalUri: String? = initialConfig.schemaRetrievalUri
 
     init {
-        view.setOnSchemaUrlInputChanged { filterSchemaStoreCatalogItemsByInput() }
-        view.setOnLoadSchemaFromUrlRequested { loadSchemaFromUrl() }
+        view.setOnSchemaUrlInputChanged {
+            view.clearUrlError()
+            if (!hasStartedCatalogLoad || schemaStoreCatalogState == SchemaStoreCatalogState.FAILED) {
+                ensureSchemaStoreCatalogLoaded()
+            }
+            filterSchemaStoreCatalogItemsByInput()
+        }
+        view.setOnLoadSchemaFromUrlRequested { handleLoadOrCancelSchemaFromUrl() }
+        view.setOnLoadSchemaFromFileRequested { loadSchemaFromFile() }
+        view.setOnLoadSchemaFromTabRequested { loadSchemaFromCurrentTab() }
         view.setOnSchemaSourceReplaced { schemaRetrievalUri = null }
-        loadSchemaStoreCatalog()
     }
 
     fun getComponent(): JComponent {
@@ -63,7 +79,12 @@ class GenerateSchemaJsonTabPresenter(
 
     fun setOnOptionsChanged(callback: () -> Unit) = view.setOnOptionsChanged(callback)
 
-    fun setActive(isActive: Boolean) = view.setActive(isActive)
+    fun setActive(isActive: Boolean) {
+        view.setActive(isActive)
+        if (isActive) {
+            ensureSchemaStoreCatalogLoaded()
+        }
+    }
 
     fun registerValidators(parentDisposable: Disposable) = view.registerValidators(parentDisposable)
 
@@ -96,7 +117,8 @@ class GenerateSchemaJsonTabPresenter(
             return ValidationInfo(warningMessage, view.getSchemaUrlInputComponent())
         }
 
-        val schemaText = view.getSchemaText().trim()
+        val rawSchemaText = view.getSchemaText()
+        val schemaText = rawSchemaText.trim()
         if (schemaText.isBlank()) {
             return ValidationInfo(
                 LocalizationBundle.message("validation.error.schema.required"),
@@ -115,8 +137,14 @@ class GenerateSchemaJsonTabPresenter(
             schemaDataGenerationService.validateSchemaText(schemaText)
             null
         } catch (generationException: JsonSchemaGenerationException) {
+            resolveErrorOffset(rawSchemaText, generationException.jsonPointer, generationException.cause)
+                ?.let(view::navigateToOffset)
+            val pointerSuffix = generationException.jsonPointer
+                ?.takeIf { it.isNotBlank() && it != "#" }
+                ?.let { " ($it)" }
+                .orEmpty()
             ValidationInfo(
-                generationException.message ?: LocalizationBundle.message("validation.error.schema.invalid"),
+                (generationException.message ?: LocalizationBundle.message("validation.error.schema.invalid")) + pointerSuffix,
                 view.getSchemaInputComponent()
             )
         } catch (exception: Exception) {
@@ -126,6 +154,22 @@ class GenerateSchemaJsonTabPresenter(
             )
         }
     }
+
+    fun getCurrentSessionConfig(): JsonGenerationConfig {
+        val schemaPropertyGenerationMode = view.getSchemaPropertyGenerationMode()
+        val isCommentedMode = schemaPropertyGenerationMode == SchemaPropertyGenerationMode.REQUIRED_AND_OPTIONAL_COMMENTED
+        return JsonGenerationConfig(
+            generationMode = JsonGenerationMode.SCHEMA,
+            isJson5 = view.isJson5Selected() || isCommentedMode,
+            schemaText = view.getSchemaText(),
+            schemaOutputCount = view.getSchemaOutputCountText().toIntOrNull()?.coerceIn(1, 100)
+                ?: initialConfig.schemaOutputCount,
+            schemaPropertyGenerationMode = schemaPropertyGenerationMode,
+            schemaRetrievalUri = schemaRetrievalUri
+        )
+    }
+
+    fun getCurrentSchemaUrlText(): String = view.getSchemaUrlEditorText()
 
     fun getConfig(): JsonGenerationConfig {
         val schemaPropertyGenerationMode = view.getSchemaPropertyGenerationMode()
@@ -143,12 +187,31 @@ class GenerateSchemaJsonTabPresenter(
     fun dispose() {
         isDisposed = true
         schemaStoreFilterJob?.cancel()
+        schemaUrlLoadJob?.cancel()
         coroutineScope.cancel()
         view.dispose()
     }
 
+    private fun ensureSchemaStoreCatalogLoaded() {
+        if (isDisposed) return
+        if (schemaStoreCatalogState == SchemaStoreCatalogState.READY && schemaStoreCatalogItems.isNotEmpty()) {
+            return
+        }
+        schemaStoreCatalogService.getCachedCatalogOrNull()?.let { cachedItems ->
+            hasStartedCatalogLoad = true
+            schemaStoreCatalogItems = cachedItems
+            schemaStoreCatalogState = SchemaStoreCatalogState.READY
+            filterSchemaStoreCatalogItemsByInput()
+            return
+        }
+        if (hasStartedCatalogLoad && schemaStoreCatalogState == SchemaStoreCatalogState.LOADING) {
+            return
+        }
+        loadSchemaStoreCatalog()
+    }
 
     private fun loadSchemaStoreCatalog() {
+        hasStartedCatalogLoad = true
         schemaStoreCatalogState = SchemaStoreCatalogState.LOADING
         view.updateSchemaUrlSuggestions(
             schemaUrlSuggestionItems = listOf(
@@ -163,15 +226,7 @@ class GenerateSchemaJsonTabPresenter(
         coroutineScope.launch {
             if (isDisposed) return@launch
             try {
-                val schemaStoreCatalogText = withContext(Dispatchers.IO) {
-                    fetchSchemaText(SCHEMA_STORE_CATALOG_URL)
-                }
-                val parsedSchemaStoreCatalogItems = withContext(Dispatchers.Default) {
-                    parseSchemaStoreCatalog(schemaStoreCatalogText)
-                }
-                if (parsedSchemaStoreCatalogItems.isEmpty()) {
-                    throw IOException("SchemaStore catalog has no valid entries.")
-                }
+                val parsedSchemaStoreCatalogItems = schemaStoreCatalogService.getCatalog()
 
                 withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
                     if (isDisposed) return@withContext
@@ -201,37 +256,6 @@ class GenerateSchemaJsonTabPresenter(
                 }
             }
         }
-    }
-
-    private fun parseSchemaStoreCatalog(schemaStoreCatalogText: String): List<SchemaStoreCatalogItem> {
-        val schemaStoreCatalogNode = objectMapper.readTree(schemaStoreCatalogText)
-        val schemaNameExpression = jmesPathRuntime.compile("schemas[].name")
-        val schemaUrlExpression = jmesPathRuntime.compile("schemas[].url")
-        val schemaNameNodes = schemaNameExpression.search(schemaStoreCatalogNode)
-        val schemaUrlNodes = schemaUrlExpression.search(schemaStoreCatalogNode)
-
-        if (!schemaNameNodes.isArray || !schemaUrlNodes.isArray) {
-            return emptyList()
-        }
-
-        val schemaStoreCatalogItemsByUrl = linkedMapOf<String, SchemaStoreCatalogItem>()
-        val schemaCount = minOf(schemaNameNodes.size(), schemaUrlNodes.size())
-        for (index in 0 until schemaCount) {
-            val schemaName = schemaNameNodes.path(index).asText("").trim()
-            val schemaUrl = schemaUrlNodes.path(index).asText("").trim()
-            if (schemaName.isBlank() || schemaUrl.isBlank()) {
-                continue
-            }
-
-            if (!schemaStoreCatalogItemsByUrl.containsKey(schemaUrl)) {
-                schemaStoreCatalogItemsByUrl[schemaUrl] = SchemaStoreCatalogItem(
-                    name = schemaName,
-                    url = schemaUrl
-                )
-            }
-        }
-
-        return schemaStoreCatalogItemsByUrl.values.toList()
     }
 
     private fun filterSchemaStoreCatalogItemsByInput() {
@@ -429,7 +453,20 @@ class GenerateSchemaJsonTabPresenter(
         return previousDistanceRow[secondText.length]
     }
 
+    private fun handleLoadOrCancelSchemaFromUrl() {
+        val activeJob = schemaUrlLoadJob
+        if (activeJob != null && activeJob.isActive) {
+            schemaUrlLoadSequence++
+            activeJob.cancel()
+            schemaUrlLoadJob = null
+            view.setUrlLoading(false)
+            return
+        }
+        loadSchemaFromUrl()
+    }
+
     private fun loadSchemaFromUrl() {
+        view.clearUrlError()
         val schemaUrl = view.getSchemaUrlInputText()
         if (schemaUrl.isBlank()) {
             showSchemaUrlError(LocalizationBundle.message("dialog.generate.json.schema.url.empty"))
@@ -441,9 +478,11 @@ class GenerateSchemaJsonTabPresenter(
             return
         }
 
-        view.setLoadSchemaFromUrlButtonEnabled(false)
+        val loadSequence = ++schemaUrlLoadSequence
+        schemaUrlLoadJob?.cancel()
+        view.setUrlLoading(true)
 
-        coroutineScope.launch {
+        schemaUrlLoadJob = coroutineScope.launch {
             if (isDisposed) return@launch
             try {
                 val fetchedSchemaText = withContext(Dispatchers.IO) {
@@ -454,10 +493,11 @@ class GenerateSchemaJsonTabPresenter(
                 }
 
                 withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
-                    if (isDisposed) return@withContext
+                    if (isDisposed || loadSequence != schemaUrlLoadSequence) return@withContext
                     setSchemaEditorText(fetchedSchemaText)
                     schemaRetrievalUri = schemaUrl
                     view.markSchemaStoreSelectionLoaded()
+                    view.clearUrlError()
                 }
             } catch (cancellationException: CancellationException) {
                 throw cancellationException
@@ -467,20 +507,82 @@ class GenerateSchemaJsonTabPresenter(
                 val message = exception.message
                     ?: LocalizationBundle.message("dialog.generate.json.schema.url.fetch.failed")
                 withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
-                    if (isDisposed) return@withContext
+                    if (isDisposed || loadSequence != schemaUrlLoadSequence) return@withContext
                     showSchemaUrlError(message)
                 }
             } finally {
                 withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
-                    if (isDisposed) return@withContext
-                    view.setLoadSchemaFromUrlButtonEnabled(true)
+                    if (isDisposed || loadSequence != schemaUrlLoadSequence) return@withContext
+                    view.setUrlLoading(false)
                 }
             }
         }
     }
 
-    private fun fetchSchemaText(schemaUrl: String): String {
-        return JsonHttpConnection.withConnection(schemaUrl) { connection ->
+    private fun loadSchemaFromFile() {
+        view.clearUrlError()
+        val descriptor = FileChooserDescriptor(
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+        ).withFileFilter { file ->
+            val lower = file.name.lowercase()
+            lower.endsWith(".json") || lower.endsWith(".json5")
+        }
+
+        FileChooser.chooseFile(descriptor, project, null) { virtualFile ->
+            if (isDisposed || project.isDisposed) return@chooseFile
+            coroutineScope.launch {
+                try {
+                    val content = withContext(Dispatchers.IO) {
+                        String(virtualFile.contentsToByteArray(), virtualFile.charset)
+                    }
+                    val fileUri = runCatching { virtualFile.toNioPath().toUri().toString() }
+                        .getOrElse { virtualFile.url }
+                    withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
+                        if (isDisposed || project.isDisposed) return@withContext
+                        setSchemaEditorText(content)
+                        schemaRetrievalUri = fileUri
+                        view.clearUrlError()
+                    }
+                } catch (cancellationException: CancellationException) {
+                    throw cancellationException
+                } catch (cancellationException: ProcessCanceledException) {
+                    throw cancellationException
+                } catch (exception: Exception) {
+                    withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
+                        if (isDisposed || project.isDisposed) return@withContext
+                        showSchemaUrlError(
+                            exception.message ?: LocalizationBundle.message("dialog.generate.json.schema.url.fetch.failed")
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun loadSchemaFromCurrentTab() {
+        view.clearUrlError()
+        val currentJson = JsonHelperUtils.getCurrentJsonFromToolWindow(project)?.trim()
+        if (currentJson.isNullOrBlank()) {
+            showSchemaUrlError(LocalizationBundle.message("dialog.generate.json.schema.load.tab.empty"))
+            return
+        }
+        setSchemaEditorText(currentJson)
+        schemaRetrievalUri = null
+    }
+
+    private suspend fun fetchSchemaText(schemaUrl: String): String {
+        val connection = URI(schemaUrl).toURL().openConnection() as HttpURLConnection
+        val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
+            if (cause != null) {
+                runCatching { connection.disconnect() }
+            }
+        }
+        return try {
             connection.requestMethod = "GET"
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
@@ -489,14 +591,136 @@ class GenerateSchemaJsonTabPresenter(
 
             val responseCode = connection.responseCode
             if (responseCode !in 200..299) {
-                connection.errorStream.use {
+                connection.errorStream?.use {
                     throw IOException(LocalizationBundle.message("dialog.generate.json.schema.url.http.status", responseCode))
                 }
+                throw IOException(LocalizationBundle.message("dialog.generate.json.schema.url.http.status", responseCode))
             }
             connection.inputStream.bufferedReader().use { reader ->
                 reader.readText()
             }
+        } finally {
+            cancellationHandle?.dispose()
+            connection.disconnect()
         }
+    }
+
+    private fun resolveErrorOffset(schemaText: String, jsonPointer: String?, cause: Throwable?): Int? {
+        val processingException = cause as? JsonProcessingException
+        val location = processingException?.location
+        if (location != null) {
+            if (location.charOffset >= 0) {
+                return location.charOffset.toInt()
+            }
+            if (location.lineNr > 0) {
+                return lineColumnToOffset(schemaText, location.lineNr, location.columnNr.coerceAtLeast(1))
+            }
+        }
+        return findJsonPointerOffset(schemaText, jsonPointer)
+    }
+
+    private fun findJsonPointerOffset(schemaText: String, jsonPointer: String?): Int? {
+        val normalized = jsonPointer?.trim()?.removePrefix("#") ?: return null
+        if (normalized.isEmpty() || normalized == "/") return 0
+        if (!normalized.startsWith("/")) return null
+
+        val targetSegments = normalized.substring(1).split("/").map { segment ->
+            segment.replace("~1", "/").replace("~0", "~")
+        }
+        val mapper = service<JsonObjectMapperService>().standardObjectMapper
+        return runCatching {
+            mapper.factory.createParser(schemaText).use { parser ->
+                val containerTypes = ArrayDeque<Boolean>() // true = object, false = array
+                val pathSegments = ArrayDeque<String>()
+                val arrayIndices = ArrayDeque<Int>()
+                var pendingFieldName: String? = null
+
+                while (true) {
+                    val token = parser.nextToken() ?: break
+                    when (token) {
+                        JsonToken.FIELD_NAME -> {
+                            pendingFieldName = parser.currentName()
+                            val candidatePath = pathSegments.toList() + pendingFieldName
+                            if (candidatePath == targetSegments) {
+                                return@use parser.currentTokenLocation().charOffset.toInt().coerceAtLeast(0)
+                            }
+                        }
+
+                        JsonToken.START_OBJECT, JsonToken.START_ARRAY -> {
+                            val pushed = enterValue(containerTypes, pathSegments, arrayIndices, pendingFieldName)
+                            pendingFieldName = null
+                            if (pathSegments.toList() == targetSegments) {
+                                return@use parser.currentTokenLocation().charOffset.toInt().coerceAtLeast(0)
+                            }
+                            val isObject = token == JsonToken.START_OBJECT
+                            containerTypes.addLast(isObject)
+                            if (!isObject) {
+                                arrayIndices.addLast(0)
+                            }
+                            if (!pushed && containerTypes.size == 1 && targetSegments.isEmpty()) {
+                                return@use parser.currentTokenLocation().charOffset.toInt().coerceAtLeast(0)
+                            }
+                        }
+
+                        JsonToken.END_OBJECT, JsonToken.END_ARRAY -> {
+                            if (containerTypes.isNotEmpty()) {
+                                val wasObject = containerTypes.removeLast()
+                                if (!wasObject && arrayIndices.isNotEmpty()) {
+                                    arrayIndices.removeLast()
+                                }
+                            }
+                            if (pathSegments.isNotEmpty()) {
+                                pathSegments.removeLast()
+                            }
+                        }
+
+                        else -> {
+                            val pushed = enterValue(containerTypes, pathSegments, arrayIndices, pendingFieldName)
+                            pendingFieldName = null
+                            if (pathSegments.toList() == targetSegments) {
+                                return@use parser.currentTokenLocation().charOffset.toInt().coerceAtLeast(0)
+                            }
+                            if (pushed && pathSegments.isNotEmpty()) {
+                                pathSegments.removeLast()
+                            }
+                        }
+                    }
+                }
+                null
+            }
+        }.getOrNull()
+    }
+
+    private fun enterValue(
+        containerTypes: ArrayDeque<Boolean>,
+        pathSegments: ArrayDeque<String>,
+        arrayIndices: ArrayDeque<Int>,
+        pendingFieldName: String?,
+    ): Boolean {
+        val parentIsObject = containerTypes.lastOrNull() ?: return false
+        return if (parentIsObject) {
+            if (pendingFieldName != null) {
+                pathSegments.addLast(pendingFieldName)
+                true
+            } else {
+                false
+            }
+        } else {
+            val nextIndex = arrayIndices.removeLast()
+            arrayIndices.addLast(nextIndex + 1)
+            pathSegments.addLast(nextIndex.toString())
+            true
+        }
+    }
+
+    private fun lineColumnToOffset(text: String, lineNumber: Int, columnNumber: Int): Int {
+        var currentLine = 1
+        var index = 0
+        while (index < text.length && currentLine < lineNumber) {
+            if (text[index] == '\n') currentLine++
+            index++
+        }
+        return (index + (columnNumber - 1)).coerceIn(0, text.length)
     }
 
     private fun setSchemaEditorText(schemaText: String) {
@@ -506,15 +730,10 @@ class GenerateSchemaJsonTabPresenter(
     }
 
     private fun showSchemaUrlError(errorMessage: String) {
-        Messages.showErrorDialog(
-            project,
-            errorMessage,
-            LocalizationBundle.message("dialog.generate.json.error.title")
-        )
+        view.showUrlError(errorMessage)
     }
 
     companion object {
-        private const val SCHEMA_STORE_CATALOG_URL = "https://www.schemastore.org/api/json/catalog.json"
         private val SEARCH_TOKEN_SEPARATOR_REGEX = Regex("[^a-z0-9]+")
         private const val MINIMUM_SEARCH_LENGTH_FOR_FUZZY_MATCHING = 3
         private const val MINIMUM_TOKEN_SIMILARITY = 0.6

@@ -16,6 +16,11 @@ data class TemplatePathResult(
     val isInsidePlaceholder: Boolean
 )
 
+sealed interface JsonPathSegment {
+    data class Property(val name: String) : JsonPathSegment
+    data class ArrayIndex(val index: Int) : JsonPathSegment
+}
+
 object JsonPathHelper {
 
     private val IDENTIFIER_REGEX = Regex("^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -33,47 +38,88 @@ object JsonPathHelper {
     }
 
     fun getPath(element: PsiElement, queryType: JsonQueryType): String? {
-        var current: PsiElement? = element
-        
-        // Navigate up from leaf tokens to a structural JSON element
-        while (current != null && current !is JsonValue && current !is JsonProperty && current !is JsonFile) {
-            current = current.parent
-        }
-        
-        if (current == null) return null
-        if (current is JsonFile) return rootPath(queryType)
+        val segments = collectPathSegments(element) ?: return null
+        return formatPathSegments(segments, queryType, wildcardArrays = false)
+    }
 
-        val parts = mutableListOf<String>()
-        
-        while (current != null) {
-            if (current is JsonFile) break
-            
-            val parent = current.parent
-            
-            if (current is JsonProperty) {
-                // We are at a property. This edge (Parent -> Property) defines the key.
-                val name = current.name
-                addPropertyPath(parts, name, queryType)
-            } else if (parent is JsonArray && current is JsonValue) {
-                // We are a value in an array. This edge (Array -> Value) defines the index.
-                val index = parent.valueList.indexOf(current)
-                if (index >= 0) {
-                    parts.add("[$index]")
+    fun getArrayWildcardPath(element: PsiElement, queryType: JsonQueryType): String? {
+        val segments = collectPathSegments(element) ?: return null
+        if (!hasArrayIndexSegment(segments)) return null
+        return formatPathSegments(segments, queryType, wildcardArrays = true)
+    }
+
+    fun hasArrayIndexSegment(segments: List<JsonPathSegment>): Boolean {
+        return segments.any { it is JsonPathSegment.ArrayIndex }
+    }
+
+    fun formatPathSegments(
+        segments: List<JsonPathSegment>,
+        queryType: JsonQueryType,
+        wildcardArrays: Boolean = false,
+    ): String {
+        if (segments.isEmpty()) return rootPath(queryType)
+
+        val parts = StringBuilder()
+        for (segment in segments) {
+            when (segment) {
+                is JsonPathSegment.Property -> appendPropertyPath(parts, segment.name, queryType)
+                is JsonPathSegment.ArrayIndex -> {
+                    if (wildcardArrays) {
+                        parts.append(wildcardArrayToken(queryType))
+                    } else {
+                        parts.append('[').append(segment.index).append(']')
+                    }
                 }
             }
-            
-            current = parent
         }
-        
-        if (parts.isEmpty()) return rootPath(queryType)
 
-        val path = parts.asReversed().joinToString("")
-        
+        val path = parts.toString()
         return when (queryType) {
             JsonQueryType.JMESPATH -> path.removePrefix(".")
             JsonQueryType.JACKSON_JQ -> "." + path.removePrefix(".")
             JsonQueryType.JAYWAY_JSONPATH -> "$" + path
         }
+    }
+
+    private fun wildcardArrayToken(queryType: JsonQueryType): String = when (queryType) {
+        JsonQueryType.JAYWAY_JSONPATH,
+        JsonQueryType.JMESPATH -> "[*]"
+        JsonQueryType.JACKSON_JQ -> "[]"
+    }
+
+    private fun collectPathSegments(element: PsiElement): List<JsonPathSegment>? {
+        var current: PsiElement? = element
+
+        // Navigate up from leaf tokens to a structural JSON element
+        while (current != null && current !is JsonValue && current !is JsonProperty && current !is JsonFile) {
+            current = current.parent
+        }
+
+        if (current == null) return null
+        if (current is JsonFile) return emptyList()
+
+        val reversedSegments = mutableListOf<JsonPathSegment>()
+
+        while (current != null) {
+            if (current is JsonFile) break
+
+            val parent = current.parent
+
+            if (current is JsonProperty) {
+                // We are at a property. This edge (Parent -> Property) defines the key.
+                reversedSegments.add(JsonPathSegment.Property(current.name))
+            } else if (parent is JsonArray && current is JsonValue) {
+                // We are a value in an array. This edge (Array -> Value) defines the index.
+                val index = parent.valueList.indexOf(current)
+                if (index >= 0) {
+                    reversedSegments.add(JsonPathSegment.ArrayIndex(index))
+                }
+            }
+
+            current = parent
+        }
+
+        return reversedSegments.asReversed()
     }
 
     private fun rootPath(queryType: JsonQueryType): String = when (queryType) {
@@ -82,12 +128,16 @@ object JsonPathHelper {
         JsonQueryType.JACKSON_JQ -> "."
     }
 
-    private fun addPropertyPath(parts: MutableList<String>, name: String, queryType: JsonQueryType) {
+    private fun appendPropertyPath(parts: StringBuilder, name: String, queryType: JsonQueryType) {
         if (needsQuotes(name)) {
             val quotedName = "\"${StringUtil.escapeStringCharacters(name)}\""
-            parts.add(if (queryType == JsonQueryType.JAYWAY_JSONPATH) "[$quotedName]" else ".$quotedName")
+            if (queryType == JsonQueryType.JAYWAY_JSONPATH) {
+                parts.append('[').append(quotedName).append(']')
+            } else {
+                parts.append('.').append(quotedName)
+            }
         } else {
-            parts.add(".$name")
+            parts.append('.').append(name)
         }
     }
 
@@ -97,6 +147,27 @@ object JsonPathHelper {
         project: Project,
         queryType: JsonQueryType
     ): TemplatePathResult? {
+        val (element, isInsidePlaceholder) = resolveTemplateElement(documentText, offset, project) ?: return null
+        val path = getPath(element, queryType) ?: return null
+        return TemplatePathResult(path, isInsidePlaceholder)
+    }
+
+    fun getArrayWildcardPathFromTemplateText(
+        documentText: String,
+        offset: Int,
+        project: Project,
+        queryType: JsonQueryType
+    ): TemplatePathResult? {
+        val (element, isInsidePlaceholder) = resolveTemplateElement(documentText, offset, project) ?: return null
+        val path = getArrayWildcardPath(element, queryType) ?: return null
+        return TemplatePathResult(path, isInsidePlaceholder)
+    }
+
+    private fun resolveTemplateElement(
+        documentText: String,
+        offset: Int,
+        project: Project,
+    ): Pair<PsiElement, Boolean>? {
         val result = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(documentText)
         if (!result.isSuccessful || result.mappings.isEmpty()) return null
 
@@ -122,8 +193,7 @@ object JsonPathHelper {
         )
 
         val element = psiFile.findElementAt(targetOffset) ?: return null
-        val path = getPath(element, queryType) ?: return null
-        return TemplatePathResult(path, isInsidePlaceholder)
+        return element to isInsidePlaceholder
     }
 
     private fun mapOriginalOffsetToReplaced(offset: Int, mappings: List<PlaceholderMapping>): Int? {
