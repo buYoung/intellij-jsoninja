@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-24
+
 ### Added
 
 - **JSON Query**:
@@ -497,7 +499,8 @@
 
 - Support for IntelliJ 2025.1
 
-[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/buYoung/intellij-jsoninja/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.15.0...v2.0.0
 [1.15.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/buYoung/intellij-jsoninja/compare/v1.12.2...v1.13.0
