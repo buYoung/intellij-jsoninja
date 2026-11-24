@@ -1,6 +1,14 @@
 package com.livteam.jsoninja.ui.component.convertType
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.ActionToolbar
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.JBColor
@@ -8,11 +16,12 @@ import com.intellij.ui.JBSplitter
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import java.awt.BorderLayout
 import java.awt.Dimension
-import javax.swing.JButton
+import java.awt.FlowLayout
 import javax.swing.JComponent
 import javax.swing.ScrollPaneConstants
 
@@ -28,33 +37,51 @@ class ConvertTypeWorkspacePanel(
     private val inputLanguageLabel = JBLabel().apply {
         foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
     }
-    private val statusLabel = JBLabel().apply {
-        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
-        border = JBUI.Borders.empty(10, 0, 0, 0)
+    private val previewLoadingIcon = AsyncProcessIcon("JSONinjaConvertPreviewHeader").apply {
+        isVisible = false
+        suspend()
     }
-    private val copyButton = JButton(LocalizationBundle.message("common.convert.copy.result"))
-    private val editorSplitter = JBSplitter(false, 0.5f).apply {
+    private var canCopyPreview = false
+    private var onCopyRequested: (() -> Unit)? = null
+    private val copyAction = object : DumbAwareAction(
+        LocalizationBundle.messagePointer("common.convert.copy"),
+        LocalizationBundle.messagePointer("common.convert.copy"),
+        AllIcons.Actions.Copy,
+    ) {
+        override fun actionPerformed(e: AnActionEvent) {
+            onCopyRequested?.invoke()
+        }
+
+        override fun update(e: AnActionEvent) {
+            e.presentation.isEnabled = canCopyPreview
+        }
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+    }
+    private val previewCopyToolbar: ActionToolbar = ActionManager.getInstance()
+        .createActionToolbar(ActionPlaces.EDITOR_TOOLBAR, DefaultActionGroup(copyAction), true)
+        .apply {
+            targetComponent = previewPanel
+            component.isOpaque = false
+            component.border = JBUI.Borders.empty()
+        }
+    private val previewHeaderActions = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0)).apply {
+        isOpaque = false
+        add(previewLoadingIcon)
+        add(previewCopyToolbar.component)
+    }
+    private val editorSplitter = JBSplitter(false, SPLITTER_PROPORTION_KEY, 0.5f).apply {
         setHonorComponentsMinimumSize(true)
         firstComponent = createEditorPane(inputComponent, JBLabel(inputTitle), inputLanguageLabel)
-        secondComponent = createEditorPane(
-            previewPanel,
-            previewTitleLabel,
-            JBLabel(LocalizationBundle.message("common.convert.read.only")).apply {
-                foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
-            },
-        )
+        secondComponent = createEditorPane(previewPanel, previewTitleLabel, previewHeaderActions)
     }
-    private var onCopyRequested: (() -> Unit)? = null
 
     init {
         Disposer.register(this, previewPanel)
+        Disposer.register(this, previewLoadingIcon)
         border = JBUI.Borders.empty(16, 12, 12, 12)
-        add(JBPanel<JBPanel<*>>(BorderLayout()).apply {
-            add(editorSplitter, BorderLayout.CENTER)
-            add(statusLabel, BorderLayout.SOUTH)
-        }, BorderLayout.CENTER)
+        add(editorSplitter, BorderLayout.CENTER)
         add(createSettingsPanel(settingsComponent), BorderLayout.EAST)
-        copyButton.addActionListener { onCopyRequested?.invoke() }
         showEmptyPreview()
     }
 
@@ -71,42 +98,62 @@ class ConvertTypeWorkspacePanel(
     }
 
     fun showEmptyPreview() {
+        setLoadingIndicatorVisible(false)
+        setCopyEnabled(false)
         previewPanel.setEmpty()
-        setPreviewStatus(LocalizationBundle.message("common.convert.status.empty"), canCopy = false)
     }
 
     fun showLoadingPreview() {
+        setLoadingIndicatorVisible(true)
+        setCopyEnabled(false)
         previewPanel.setLoading()
-        setPreviewStatus(LocalizationBundle.message("common.convert.status.loading"), canCopy = false)
+    }
+
+    fun stopLoadingIndicator() {
+        setLoadingIndicatorVisible(false)
+        setCopyEnabled(false)
     }
 
     fun showErrorPreview(message: String) {
+        setLoadingIndicatorVisible(false)
+        setCopyEnabled(false)
         previewPanel.setError(message)
-        setPreviewStatus(LocalizationBundle.message("common.convert.status.error"), canCopy = false)
     }
 
     fun showSuccessPreview(text: String, fileExtension: String, warnings: List<String> = emptyList()) {
+        setLoadingIndicatorVisible(false)
         previewPanel.setSuccess(text, fileExtension, warnings)
-        val statusKey = if (warnings.isEmpty()) "common.convert.status.ready" else "common.convert.status.warnings"
-        setPreviewStatus(LocalizationBundle.message(statusKey), canCopy = text.isNotBlank())
+        setCopyEnabled(text.isNotBlank())
     }
 
     fun clearPreviewWarnings() = previewPanel.clearWarnings()
 
     override fun dispose() {
+        previewLoadingIcon.suspend()
         editorSplitter.dispose()
     }
 
-    private fun setPreviewStatus(text: String, canCopy: Boolean) {
-        statusLabel.text = text
-        copyButton.isEnabled = canCopy
+    private fun setLoadingIndicatorVisible(isVisible: Boolean) {
+        if (isVisible) {
+            previewLoadingIcon.isVisible = true
+            previewLoadingIcon.resume()
+        } else {
+            previewLoadingIcon.suspend()
+            previewLoadingIcon.isVisible = false
+        }
     }
 
-    private fun createEditorPane(content: JComponent, title: JBLabel, detail: JBLabel): JComponent {
+    private fun setCopyEnabled(isEnabled: Boolean) {
+        if (canCopyPreview == isEnabled) return
+        canCopyPreview = isEnabled
+        previewCopyToolbar.updateActionsAsync()
+    }
+
+    private fun createEditorPane(content: JComponent, title: JBLabel, trailing: JComponent): JComponent {
         val header = JBPanel<JBPanel<*>>(BorderLayout(JBUI.scale(12), 0)).apply {
-            border = JBUI.Borders.empty(8, 10)
+            border = JBUI.Borders.empty(6, 10)
             add(title, BorderLayout.CENTER)
-            add(detail, BorderLayout.EAST)
+            add(trailing, BorderLayout.EAST)
         }
         return JBPanel<JBPanel<*>>(BorderLayout()).apply {
             border = JBUI.Borders.customLine(JBColor.border())
@@ -129,13 +176,6 @@ class ConvertTypeWorkspacePanel(
             border = JBUI.Borders.empty()
             viewportBorder = JBUI.Borders.empty()
         }
-        val copyPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-            border = JBUI.Borders.compound(
-                JBUI.Borders.customLineTop(JBColor.border()),
-                JBUI.Borders.emptyTop(12),
-            )
-            add(copyButton, BorderLayout.CENTER)
-        }
         return object : JBPanel<JBPanel<*>>(BorderLayout(0, JBUI.scale(16))) {
             override fun getPreferredSize(): Dimension {
                 val size = super.getPreferredSize()
@@ -151,7 +191,10 @@ class ConvertTypeWorkspacePanel(
             )
             add(JBLabel(LocalizationBundle.message("common.convert.settings")), BorderLayout.NORTH)
             add(scrollPane, BorderLayout.CENTER)
-            add(copyPanel, BorderLayout.SOUTH)
         }
+    }
+
+    private companion object {
+        const val SPLITTER_PROPORTION_KEY = "com.livteam.jsoninja.convertType.editorSplitter"
     }
 }

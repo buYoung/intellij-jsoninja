@@ -1,6 +1,7 @@
 package com.livteam.jsoninja.ui.component.main
 
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.livteam.jsoninja.actions.AddTabAction
 import com.livteam.jsoninja.actions.EscapeJsonAction
@@ -30,31 +31,29 @@ object JsoninjaToolbarFactory {
     )
 
     fun create(targetComponent: JComponent): JComponent {
+        val actionManager = ActionManager.getInstance()
         val actionGroup = DefaultActionGroup().apply {
-            isPopup = true
-
             // 기본 액션 추가
-            add(AddTabAction())
-            add(OpenJsonFileAction())
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.AddTabAction", ::AddTabAction))
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.OpenJsonFileAction", ::OpenJsonFileAction))
 
             addSeparator()
 
             // JSON 변환 관련 액션 추가
-            add(PrettifyJsonAction())
-            add(UglifyJsonAction())
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.PrettifyJsonAction", ::PrettifyJsonAction))
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.UglifyJsonAction", ::UglifyJsonAction))
             addSeparator()
-            add(EscapeJsonAction())
-            add(UnescapeJsonAction())
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.EscapeJsonAction", ::EscapeJsonAction))
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.UnescapeJsonAction", ::UnescapeJsonAction))
             addSeparator()
-            add(GenerateRandomJsonAction())
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.GenerateRandomJsonAction", ::GenerateRandomJsonAction))
             // JSON Diff 액션 추가
-            add(ShowJsonDiffAction())
-            add(LoadJsonFromApiAction())
-            add(TypeConversionAction())
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.ShowJsonDiffAction", ::ShowJsonDiffAction))
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.LoadJsonFromApiAction", ::LoadJsonFromApiAction))
+            add(resolveAction(actionManager, "com.livteam.jsoninja.action.TypeConversionAction", ::TypeConversionAction))
         }
 
-        val actionToolbar = ActionManager.getInstance()
-            .createActionToolbar("JsonHelperToolbar", actionGroup, true)
+        val actionToolbar = actionManager.createActionToolbar("JsonHelperToolbar", actionGroup, false)
 
         actionToolbar.targetComponent = targetComponent
 
@@ -63,6 +62,14 @@ object JsoninjaToolbarFactory {
         bindTutorialTargets(toolbarComponent)
 
         return toolbarComponent
+    }
+
+    private fun resolveAction(
+        actionManager: ActionManager,
+        actionId: String,
+        fallback: () -> AnAction,
+    ): AnAction {
+        return actionManager.getAction(actionId) ?: fallback()
     }
 
     private fun bindTutorialTargets(toolbarComponent: JComponent) {

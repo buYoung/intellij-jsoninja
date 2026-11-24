@@ -31,6 +31,13 @@ class GenerateJsonDialogView(
         }
     }
 
+    fun setGenerationMode(mode: JsonGenerationMode) {
+        val targetIndex = if (mode == JsonGenerationMode.SCHEMA) 1 else 0
+        if (tabbedPane.selectedIndex != targetIndex) {
+            tabbedPane.selectedIndex = targetIndex
+        }
+    }
+
     fun setSummary(summary: String) {
         summaryLabel.text = summary
     }

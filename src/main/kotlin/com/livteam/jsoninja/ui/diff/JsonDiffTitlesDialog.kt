@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.ui.diff
 
+import com.intellij.diff.util.Side
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.components.JBTextField
@@ -19,7 +20,8 @@ class JsonDiffTitlesDialog(
     initialLeftTitle: String?,
     initialRightTitle: String?,
     defaultLeftTitle: String,
-    defaultRightTitle: String
+    defaultRightTitle: String,
+    private val initialFocusedSide: Side = Side.LEFT
 ) : DialogWrapper(project, parentComponent, false, IdeModalityType.IDE) {
 
     private val leftTitleField = JBTextField(initialLeftTitle.orEmpty(), 24)
@@ -35,6 +37,11 @@ class JsonDiffTitlesDialog(
         title = LocalizationBundle.message("dialog.json.diff.titles.title")
         leftTitleField.emptyText.text = defaultLeftTitle
         rightTitleField.emptyText.text = defaultRightTitle
+        if (initialFocusedSide == Side.RIGHT) {
+            rightTitleField.selectAll()
+        } else {
+            leftTitleField.selectAll()
+        }
         init()
     }
 
@@ -52,7 +59,9 @@ class JsonDiffTitlesDialog(
         }
     }
 
+    override fun getDimensionServiceKey(): String = "com.livteam.jsoninja.dialog.JsonDiffTitlesDialog"
+
     override fun getPreferredFocusedComponent(): JComponent {
-        return leftTitleField
+        return if (initialFocusedSide == Side.RIGHT) rightTitleField else leftTitleField
     }
 }

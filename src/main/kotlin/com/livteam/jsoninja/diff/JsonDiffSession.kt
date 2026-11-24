@@ -2,17 +2,27 @@ package com.livteam.jsoninja.diff
 
 import com.intellij.diff.DiffEditorTitleCustomizer
 import com.intellij.diff.util.Side
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBPanel
+import com.intellij.util.ui.JBUI
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonDiffAlignmentOptions
 import com.livteam.jsoninja.model.JsonDiffSortMode
+import java.awt.Component
+import java.awt.Cursor
+import java.awt.FlowLayout
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
+import javax.swing.JComponent
+import javax.swing.SwingUtilities
 
 /**
  * 하나의 JSON Diff 비교 세션.
@@ -36,11 +46,23 @@ class JsonDiffSession(
         val sortedRightStamp: Long
     )
 
+    data class SideValidationState(
+        val isValid: Boolean = true,
+        val errorMessage: String? = null
+    )
+
     private val generation = AtomicLong()
     private val pendingWorkListeners = CopyOnWriteArrayList<() -> Unit>()
 
     // viewer가 다시 만들어질 때마다 새 라벨이 생기므로 닫힌 viewer의 라벨은 GC가 정리하도록 약하게 보관한다.
     private val titleLabels: MutableMap<JBLabel, Side> = Collections.synchronizedMap(WeakHashMap())
+    private val statusIconLabels: MutableMap<JBLabel, Side> = Collections.synchronizedMap(WeakHashMap())
+
+    @Volatile
+    private var leftValidationState: SideValidationState = SideValidationState()
+
+    @Volatile
+    private var rightValidationState: SideValidationState = SideValidationState()
 
     @Volatile
     private var restoreSnapshot: RestoreSnapshot? = null
@@ -145,24 +167,107 @@ class JsonDiffSession(
     fun changeTitles(leftTitle: String?, rightTitle: String?) {
         customLeftTitle = leftTitle?.trim()?.takeIf { it.isNotEmpty() }
         customRightTitle = rightTitle?.trim()?.takeIf { it.isNotEmpty() }
+        refreshTitleLabels()
+    }
 
+    fun swapTitles() {
+        val previousLeftTitle = customLeftTitle
+        customLeftTitle = customRightTitle
+        customRightTitle = previousLeftTitle
+        refreshTitleLabels()
+    }
+
+    fun getValidationState(side: Side): SideValidationState {
+        return if (side == Side.LEFT) leftValidationState else rightValidationState
+    }
+
+    fun updateValidationState(side: Side, isValid: Boolean, errorMessage: String?) {
+        val nextState = SideValidationState(isValid = isValid, errorMessage = errorMessage)
+        val previousState = if (side == Side.LEFT) {
+            val prev = leftValidationState
+            leftValidationState = nextState
+            prev
+        } else {
+            val prev = rightValidationState
+            rightValidationState = nextState
+            prev
+        }
+        if (previousState == nextState) return
+
+        val visibleStatusLabels = synchronized(statusIconLabels) {
+            statusIconLabels.entries.filter { it.value == side }.map { it.key }
+        }
+        visibleStatusLabels.forEach { label ->
+            applyValidationState(label, nextState)
+            label.parent?.revalidate()
+            label.parent?.repaint()
+        }
+    }
+
+    fun swapValidationStates() {
+        val previousLeft = leftValidationState
+        val previousRight = rightValidationState
+        updateValidationState(Side.LEFT, previousRight.isValid, previousRight.errorMessage)
+        updateValidationState(Side.RIGHT, previousLeft.isValid, previousLeft.errorMessage)
+    }
+
+    /**
+     * diff viewer가 제목을 만들 때 현재 이름을 사용하고, 이후 이름 변경과 실시간 JSON 유효성 경고를 같은 헤더에 반영합니다.
+     */
+    fun createTitleCustomizers(
+        onTitleDoubleClicked: ((Side, Component) -> Unit)? = null
+    ): List<DiffEditorTitleCustomizer> {
+        return listOf(Side.LEFT, Side.RIGHT).map { side ->
+            DiffEditorTitleCustomizer { createTitleHeader(side, onTitleDoubleClicked) }
+        }
+    }
+
+    private fun refreshTitleLabels() {
         val visibleLabels = synchronized(titleLabels) { titleLabels.entries.map { it.key to it.value } }
         visibleLabels.forEach { (label, side) -> label.text = getTitle(side) }
     }
 
-    /**
-     * diff viewer가 제목을 만들 때 현재 이름을 사용하고, 이후 이름 변경을 같은 라벨에 반영합니다.
-     */
-    fun createTitleCustomizers(): List<DiffEditorTitleCustomizer> {
-        return listOf(Side.LEFT, Side.RIGHT).map { side ->
-            DiffEditorTitleCustomizer { createTitleLabel(side) }
+    private fun createTitleHeader(
+        side: Side,
+        onTitleDoubleClicked: ((Side, Component) -> Unit)?
+    ): JComponent {
+        val titleLabel = JBLabel(getTitle(side))
+        if (onTitleDoubleClicked != null) {
+            titleLabel.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            titleLabel.addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
+                    if (e.clickCount == 2 && SwingUtilities.isLeftMouseButton(e)) {
+                        onTitleDoubleClicked(side, titleLabel)
+                    }
+                }
+            })
+        } else {
+            titleLabel.setCopyable(true)
+        }
+        titleLabels[titleLabel] = side
+
+        val statusIconLabel = JBLabel(AllIcons.General.Warning).apply {
+            border = JBUI.Borders.emptyLeft(4)
+        }
+        applyValidationState(statusIconLabel, getValidationState(side))
+        statusIconLabels[statusIconLabel] = side
+
+        return JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+            isOpaque = false
+            add(titleLabel)
+            add(statusIconLabel)
         }
     }
 
-    private fun createTitleLabel(side: Side): JBLabel {
-        val label = JBLabel(getTitle(side)).setCopyable(true)
-        titleLabels[label] = side
-        return label
+    private fun applyValidationState(label: JBLabel, state: SideValidationState) {
+        label.isVisible = !state.isValid
+        label.toolTipText = if (state.isValid) {
+            null
+        } else {
+            val reason = state.errorMessage?.takeIf { it.isNotBlank() }
+                ?: LocalizationBundle.message("action.diff.sort.unavailable")
+            LocalizationBundle.message("action.diff.invalid.json.tooltip", reason)
+        }
     }
 
     fun close() {

@@ -7,13 +7,18 @@ import com.intellij.openapi.editor.colors.EditorColorsListener
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.fileTypes.FileType
+import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.fileTypes.PlainTextFileType
+import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
-import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.component.convertType.highlighting.TypeCodeHighlighterResolver
+import com.livteam.jsoninja.ui.component.editor.EditorTextFieldFactory
 import com.livteam.jsoninja.ui.component.editor.setEditorTextAndRefreshCodeFolding
 import java.awt.BorderLayout
 import javax.swing.JComponent
@@ -32,7 +37,7 @@ class CodeInputPanel(
         border = JBUI.Borders.empty()
         ApplicationManager.getApplication().messageBus.connect(this)
             .subscribe(EditorColorsManager.TOPIC, EditorColorsListener { refreshEditorColors() })
-        rebuildEditor(text = "", fileExtension = currentFileExtension, placeholderText = currentPlaceholderText)
+        createInitialEditor()
     }
 
     fun updateLanguage(
@@ -42,7 +47,12 @@ class CodeInputPanel(
         if (currentFileExtension == fileExtension && currentPlaceholderText == placeholderText) {
             return
         }
-        rebuildEditor(getText(), fileExtension, placeholderText)
+        currentFileExtension = fileExtension
+        currentPlaceholderText = placeholderText
+
+        val field = editorField ?: return
+        field.setPlaceholder(placeholderText)
+        applyCurrentLanguageAppearance(field)
     }
 
     fun setText(text: String) {
@@ -57,27 +67,21 @@ class CodeInputPanel(
         onTextChanged = callback
     }
 
-    private fun rebuildEditor(
-        text: String,
-        fileExtension: String,
-        placeholderText: String,
-    ) {
-        currentFileExtension = fileExtension
-        currentPlaceholderText = placeholderText
-        editorField?.let { oldEditorField ->
-            remove(oldEditorField)
-            (oldEditorField as? Disposable)?.let(Disposer::dispose)
-        }
-
+    private fun createInitialEditor() {
         editorField = EditorTextFieldFactory.createCodeField(
             project = project,
-            fileExtension = fileExtension,
-            initialText = text,
-            placeholderText = placeholderText,
+            fileExtension = currentFileExtension,
+            initialText = "",
+            placeholderText = currentPlaceholderText,
             shouldApplyEditorColors = true,
             shouldApplyHighlighter = true,
-            highlighterProvider = { owner, fileType, scheme ->
-                TypeCodeHighlighterResolver.create(fileExtension, owner, fileType, scheme)
+            highlighterProvider = { owner, _, scheme ->
+                TypeCodeHighlighterResolver.create(
+                    requestedExtension = currentFileExtension,
+                    project = owner,
+                    fileType = resolveCodeFileType(currentFileExtension),
+                    scheme = scheme,
+                )
             },
             shouldShowHorizontalScrollbar = true,
             shouldShowVerticalScrollbar = true,
@@ -113,13 +117,38 @@ class CodeInputPanel(
         val field = editorField ?: return
         val app = ApplicationManager.getApplication()
         if (app.isDispatchThread) {
-            TypeCodeHighlighterResolver.refresh(field, currentFileExtension, project)
+            applyCurrentLanguageAppearance(field)
         } else {
             app.invokeLater({
                 if (!isDisposed && !project.isDisposed && field === editorField) {
-                    TypeCodeHighlighterResolver.refresh(field, currentFileExtension, project)
+                    applyCurrentLanguageAppearance(field)
                 }
             }, ModalityState.stateForComponent(this))
         }
+    }
+
+    /**
+     * Updates syntax highlighting and colors on the existing EditorEx in place so switching
+     * languages preserves caret position, selection, scroll state, and Undo history.
+     */
+    private fun applyCurrentLanguageAppearance(field: EditorTextField) {
+        if (isDisposed || project.isDisposed) return
+        val editor = field.editor as? EditorEx ?: return
+        if (editor.isDisposed) return
+        val scheme = EditorColorsManager.getInstance().globalScheme
+        editor.colorsScheme = editor.createBoundColorSchemeDelegate(scheme)
+        editor.backgroundColor = scheme.defaultBackground
+        editor.highlighter = TypeCodeHighlighterResolver.create(
+            requestedExtension = currentFileExtension,
+            project = project,
+            fileType = resolveCodeFileType(currentFileExtension),
+            scheme = editor.colorsScheme,
+        )
+        editor.component.repaint()
+    }
+
+    private fun resolveCodeFileType(fileExtension: String): FileType {
+        val resolvedFileType = FileTypeManager.getInstance().getFileTypeByExtension(fileExtension)
+        return if (resolvedFileType is UnknownFileType) PlainTextFileType.INSTANCE else resolvedFileType
     }
 }

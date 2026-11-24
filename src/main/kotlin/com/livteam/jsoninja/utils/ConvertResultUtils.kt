@@ -7,16 +7,22 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.ui.popup.Balloon
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.ui.awt.RelativePoint
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.component.main.JsoninjaPanelPresenter
+import com.livteam.jsoninja.ui.component.main.JsoninjaPanelView
+import java.awt.Component
+import java.awt.Container
 import java.awt.KeyboardFocusManager
 import java.awt.datatransfer.StringSelection
 import javax.swing.JComponent
 import javax.swing.RootPaneContainer
 
 object ConvertResultUtils {
+    private const val TOOL_WINDOW_ID = "JSONinja"
+
     fun copyToClipboard(text: String, project: Project?) {
         runCatching {
             CopyPasteManager.getInstance().setContents(StringSelection(text))
@@ -34,6 +40,35 @@ object ConvertResultUtils {
     fun insertToNewTab(text: String, panel: JsoninjaPanelPresenter, fileExtension: String?) {
         panel.addNewTab(content = text, fileExtension = fileExtension)
         showBalloon(panel.getProject(), LocalizationBundle.message("notification.convert.inserted"), MessageType.INFO)
+    }
+
+    fun hasToolWindow(project: Project): Boolean {
+        return !project.isDisposed && ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID) != null
+    }
+
+    fun insertToNewTabInToolWindow(text: String, project: Project, fileExtension: String?) {
+        if (project.isDisposed) return
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID) ?: return
+        toolWindow.show {
+            if (project.isDisposed) return@show
+            val panelView = findPanelView(toolWindow.contentManager.selectedContent?.component)
+                ?: (0 until toolWindow.contentManager.contentCount)
+                    .asSequence()
+                    .mapNotNull { index -> findPanelView(toolWindow.contentManager.getContent(index)?.component) }
+                    .firstOrNull()
+                ?: return@show
+            insertToNewTab(text, panelView.presenter, fileExtension)
+        }
+    }
+
+    private fun findPanelView(component: Component?): JsoninjaPanelView? {
+        if (component == null) return null
+        if (component is JsoninjaPanelView) return component
+        if (component !is Container) return null
+        for (child in component.components) {
+            findPanelView(child)?.let { return it }
+        }
+        return null
     }
 
     fun insertToEditor(

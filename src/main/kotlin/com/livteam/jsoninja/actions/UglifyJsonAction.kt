@@ -1,8 +1,8 @@
 package com.livteam.jsoninja.actions
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.project.DumbAwareAction
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.model.JsonFormatState
@@ -10,7 +10,7 @@ import com.livteam.jsoninja.model.JsonFormatState
 /**
  * JSON을 압축하는 액션 클래스입니다.
  */
-class UglifyJsonAction : AnAction(
+class UglifyJsonAction : DumbAwareAction(
     LocalizationBundle.messagePointer("uglify"),
     LocalizationBundle.messagePointer("uglifyDescription"),
     null as javax.swing.Icon?

@@ -3,6 +3,7 @@ package com.livteam.jsoninja.actions
 import com.intellij.codeInsight.hint.HintManager
 import com.intellij.diff.EditorDiffViewer
 import com.intellij.diff.tools.util.DiffDataKeys
+import com.intellij.diff.util.Side
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
@@ -22,8 +23,13 @@ class JsonDiffActionTarget(
         return editors.none { it.isDisposed }
     }
 
-    fun showSortUnavailableHint() {
-        val editor = editors.firstOrNull { !it.isDisposed } ?: return
+    fun showSortUnavailableHint(invalidSide: Side? = null) {
+        val preferredEditor = when (invalidSide) {
+            Side.LEFT -> editors.getOrNull(0)?.takeUnless { it.isDisposed }
+            Side.RIGHT -> editors.getOrNull(1)?.takeUnless { it.isDisposed }
+            null -> null
+        }
+        val editor = preferredEditor ?: editors.firstOrNull { !it.isDisposed } ?: return
         HintManager.getInstance().showErrorHint(
             editor,
             "JSONinja: ${LocalizationBundle.message("action.diff.sort.unavailable")}"

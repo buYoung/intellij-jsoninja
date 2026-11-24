@@ -214,7 +214,7 @@ class TypeConversionRobotTest {
         """.trimIndent(), true)
         try {
             waitUntil("$prefix Type to JSON") {
-                dialog.callJs<Boolean>(FIND_PREVIEW + "var insert = find(component, 'JButton', 'Insert to Editor'); field != null && insert != null && insert.isEnabled() && String(field.getText()).trim().charAt(0) == '{';", true)
+                dialog.callJs<Boolean>(FIND_PREVIEW + "var insert = find(component, 'JBOptionButton', 'Insert to Editor') || find(component, 'JButton', 'Insert to Editor'); field != null && insert != null && insert.isEnabled() && String(field.getText()).trim().charAt(0) == '{';", true)
             }
             val inputTokens = dialog.callJs<String>(FIND_PREVIEW + """
                 var input = find(component, 'CodeInputPanel');

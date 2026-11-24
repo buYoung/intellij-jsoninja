@@ -1,15 +1,15 @@
 package com.livteam.jsoninja.actions
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.project.DumbAwareAction
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
 
 /**
  * JSON의 이스케이프를 해제하는 액션 클래스입니다.
  */
-class UnescapeJsonAction : AnAction(
+class UnescapeJsonAction : DumbAwareAction(
     LocalizationBundle.messagePointer("unescape"),
     LocalizationBundle.messagePointer("unescapeDescription"),
     null as javax.swing.Icon?

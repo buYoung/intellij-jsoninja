@@ -68,6 +68,7 @@ class OnboardingTutorialDialogPresenter(
     )
 
     private val view = OnboardingTutorialDialogView(
+        parentDisposable = tooltipParent,
         onCancelRequested = onCancelRequested,
         onPrevRequested = ::moveToPrevStep,
         onNextRequested = ::moveToNextStep
@@ -80,7 +81,6 @@ class OnboardingTutorialDialogPresenter(
     private var lastRenderedStepIndex: Int? = null
     private var currentTooltip: GotItTooltip? = null
     private var tooltipRetryTimer: Timer? = null
-    private val tooltipSessionId = System.nanoTime()
     private val step8DiffTooltipController = OnboardingStep8DiffTooltipController(
         project = project,
         rootComponent = rootComponent,
@@ -97,6 +97,10 @@ class OnboardingTutorialDialogPresenter(
 
     fun createSouthPanel(): JComponent {
         return view.createSouthPanel()
+    }
+
+    fun getPreferredFocusedComponent(): JComponent {
+        return view.getPreferredFocusedComponent()
     }
 
     fun refreshStep(showTooltip: Boolean = true) {
@@ -158,6 +162,17 @@ class OnboardingTutorialDialogPresenter(
         moveToNextStep()
     }
 
+    fun onNextKeyPressed() {
+        if (currentStepIndex < steps.lastIndex) {
+            currentStepIndex++
+            refreshStep()
+        }
+    }
+
+    fun onPrevKeyPressed() {
+        moveToPrevStep()
+    }
+
     override fun dispose() {
         if (disposed) return
         disposed = true
@@ -175,6 +190,8 @@ class OnboardingTutorialDialogPresenter(
         if (currentStepIndex < steps.lastIndex) {
             currentStepIndex++
             refreshStep()
+        } else {
+            onCancelRequested()
         }
     }
 
@@ -190,10 +207,11 @@ class OnboardingTutorialDialogPresenter(
         }
 
         val tooltip = GotItTooltip(
-            "com.livteam.jsoninja.onboarding.step.$tooltipSessionId.$currentStepIndex",
+            "com.livteam.jsoninja.onboarding.step.${step.stepNumber}",
             LocalizationBundle.message(step.bodyKey),
             tooltipParent
         )
+            .withShowCount(Int.MAX_VALUE)
             .withHeader(LocalizationBundle.message(step.titleKey))
             .withTimeout(10000)
 

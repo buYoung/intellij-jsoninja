@@ -1,5 +1,8 @@
 package com.livteam.jsoninja.services
 
+import com.fasterxml.jackson.core.JsonFactory
+import com.fasterxml.jackson.core.JsonLocation
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.editor.DiffEditorTabFilesManager
 import com.intellij.diff.requests.SimpleDiffRequest
@@ -8,6 +11,9 @@ import com.intellij.diff.util.DiffUserDataKeysEx
 import com.intellij.diff.util.Side
 import com.intellij.json.JsonFileType
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
@@ -30,6 +36,8 @@ import com.livteam.jsoninja.actions.RenameJsonDiffTitlesAction
 import com.livteam.jsoninja.actions.RestoreJsonDiffSortAction
 import com.livteam.jsoninja.actions.SelectJsonDiffSortModeAction
 import com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction
+import com.livteam.jsoninja.actions.SwapJsonDiffSidesAction
+import com.livteam.jsoninja.actions.SwitchJsonDiffDisplayModeAction
 import com.livteam.jsoninja.actions.ToggleJsonDiffArrayOrderAction
 import com.livteam.jsoninja.actions.ToggleJsonDiffAutoSortAction
 import com.livteam.jsoninja.diff.JsonDiffKeys
@@ -39,9 +47,11 @@ import com.livteam.jsoninja.model.JsonDiffAlignmentStatus
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 import com.livteam.jsoninja.model.JsonDiffSortMode
 import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.ui.diff.JsonDiffTitlesDialog
 import com.livteam.jsoninja.ui.diff.JsonDiffVirtualFile
 import com.livteam.jsoninja.ui.diff.JsonDiffWindowDialog
 import com.livteam.jsoninja.ui.dialog.LargeFileWarningDialog
+import java.awt.Component
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,6 +62,7 @@ class JsonDiffService(private val project: Project) : Disposable {
 
     private val LOG = logger<JsonDiffService>()
     private val formatterService by lazy { project.service<JsonFormatterService>() }
+    private val objectMapperService by lazy { service<JsonObjectMapperService>() }
     private val alignmentService by lazy { project.service<JsonDiffAlignmentService>() }
     private val coroutineScopeService by lazy { project.service<JsoninjaCoroutineScopeService>() }
 
@@ -183,20 +194,99 @@ class JsonDiffService(private val project: Project) : Disposable {
         request.putUserData(JsonDiffKeys.JSON_DIFF_SORT_KEYS, session.shouldAutoSort)
         request.putUserData(JsonDiffKeys.JSON_DIFF_SESSION, session)
         // 양쪽 이름 변경은 viewer를 다시 만들지 않고 이 라벨에 반영해 Document와 정렬 상태를 유지한다.
-        request.putUserData(DiffUserDataKeysEx.EDITORS_TITLE_CUSTOMIZER, session.createTitleCustomizers())
+        request.putUserData(
+            DiffUserDataKeysEx.EDITORS_TITLE_CUSTOMIZER,
+            session.createTitleCustomizers { side, sourceComponent ->
+                openRenameTitlesDialog(session, side, sourceComponent)
+            }
+        )
         request.putUserData(
             DiffUserDataKeys.CONTEXT_ACTIONS,
             listOf(
-                SortJsonDiffKeysOnceAction(),
-                SelectJsonDiffSortModeAction(),
-                ToggleJsonDiffAutoSortAction(),
-                ToggleJsonDiffArrayOrderAction(),
-                RestoreJsonDiffSortAction(),
-                RenameJsonDiffTitlesAction()
+                resolveContextAction(ACTION_ID_SORT_ONCE, ::SortJsonDiffKeysOnceAction),
+                resolveContextAction(ACTION_ID_SORT_MODE, ::SelectJsonDiffSortModeAction),
+                resolveContextAction(ACTION_ID_AUTO_SORT, ::ToggleJsonDiffAutoSortAction),
+                resolveContextAction(ACTION_ID_ARRAY_ORDER, ::ToggleJsonDiffArrayOrderAction),
+                resolveContextAction(ACTION_ID_RESTORE_SORT, ::RestoreJsonDiffSortAction),
+                Separator.getInstance(),
+                resolveContextAction(ACTION_ID_SWAP_SIDES, ::SwapJsonDiffSidesAction),
+                resolveContextAction(ACTION_ID_RENAME_TITLES, ::RenameJsonDiffTitlesAction),
+                resolveContextAction(ACTION_ID_SWITCH_DISPLAY_MODE, ::SwitchJsonDiffDisplayModeAction)
             )
         )
 
         return request
+    }
+
+    fun openRenameTitlesDialog(
+        session: JsonDiffSession,
+        initialFocusedSide: Side = Side.LEFT,
+        parentComponent: Component? = null
+    ) {
+        if (project.isDisposed || session.isClosed) return
+
+        val dialog = JsonDiffTitlesDialog(
+            project = project,
+            parentComponent = parentComponent,
+            initialLeftTitle = session.getCustomTitle(Side.LEFT),
+            initialRightTitle = session.getCustomTitle(Side.RIGHT),
+            defaultLeftTitle = session.getDefaultTitle(Side.LEFT),
+            defaultRightTitle = session.getDefaultTitle(Side.RIGHT),
+            initialFocusedSide = initialFocusedSide
+        )
+        dialog.show()
+        if (!dialog.isOK || session.isClosed) return
+
+        session.changeTitles(dialog.leftTitle, dialog.rightTitle)
+    }
+
+    fun swapSides(session: JsonDiffSession, isHostActive: () -> Boolean) {
+        if (project.isDisposed || session.isClosed || !isHostActive()) return
+
+        val leftText = session.leftDocument.text
+        val rightText = session.rightDocument.text
+        session.invalidatePendingWork()
+        session.clearRestoreSnapshot()
+
+        if (leftText != rightText) {
+            WriteCommandAction.runWriteCommandAction(
+                project,
+                LocalizationBundle.message("action.diff.swap.sides"),
+                null,
+                {
+                    setGuardedText(session.leftDocument, rightText)
+                    setGuardedText(session.rightDocument, leftText)
+                }
+            )
+        }
+
+        session.swapTitles()
+        session.swapValidationStates()
+    }
+
+    fun getDisplayMode(session: JsonDiffSession): JsonDiffDisplayMode? {
+        val context = activeDiffContext ?: return null
+        if (context.session !== session || session.isClosed) return null
+        return getCurrentDisplayMode(context)
+    }
+
+    fun canSwitchDisplayMode(session: JsonDiffSession): Boolean {
+        val context = activeDiffContext ?: return false
+        return context.session === session && !session.isClosed && !project.isDisposed
+    }
+
+    fun switchDisplayMode(session: JsonDiffSession) {
+        val context = activeDiffContext ?: return
+        if (project.isDisposed || context.session !== session || session.isClosed) return
+
+        val nextMode = when (getCurrentDisplayMode(context)) {
+            JsonDiffDisplayMode.EDITOR_TAB -> JsonDiffDisplayMode.WINDOW
+            JsonDiffDisplayMode.WINDOW -> JsonDiffDisplayMode.EDITOR_TAB
+        }
+
+        closeOpenHosts(context)
+        context.displayMode = nextMode
+        openCurrentHost(context)
     }
 
     /**
@@ -205,7 +295,7 @@ class JsonDiffService(private val project: Project) : Disposable {
     fun applySortOnce(
         session: JsonDiffSession,
         isHostActive: () -> Boolean,
-        onUnavailable: () -> Unit
+        onUnavailable: (Side?) -> Unit
     ) {
         startManualSort(session, isHostActive, onUnavailable)
     }
@@ -214,7 +304,7 @@ class JsonDiffService(private val project: Project) : Disposable {
         session: JsonDiffSession,
         sortMode: JsonDiffSortMode,
         isHostActive: () -> Boolean,
-        onUnavailable: () -> Unit
+        onUnavailable: (Side?) -> Unit
     ) {
         session.changeSortMode(sortMode)
         startManualSort(session, isHostActive, onUnavailable)
@@ -227,7 +317,7 @@ class JsonDiffService(private val project: Project) : Disposable {
         session: JsonDiffSession,
         isEnabled: Boolean,
         isHostActive: () -> Boolean,
-        onUnavailable: () -> Unit
+        onUnavailable: (Side?) -> Unit
     ) {
         session.changeAutoSort(isEnabled)
         if (isEnabled) {
@@ -239,7 +329,7 @@ class JsonDiffService(private val project: Project) : Disposable {
         session: JsonDiffSession,
         isEnabled: Boolean,
         isHostActive: () -> Boolean,
-        onUnavailable: () -> Unit
+        onUnavailable: (Side?) -> Unit
     ) {
         session.changeIgnoreArrayOrder(isEnabled)
         if (isEnabled) {
@@ -273,6 +363,9 @@ class JsonDiffService(private val project: Project) : Disposable {
             isRestored = true
         })
         session.clearRestoreSnapshot()
+        if (isRestored) {
+            refreshValidationStatesAsync(session, isHostActive)
+        }
         return isRestored
     }
 
@@ -286,7 +379,16 @@ class JsonDiffService(private val project: Project) : Disposable {
         changedSides: Set<Side>,
         isHostActive: () -> Boolean
     ) {
-        if (changedSides.isEmpty()) return
+        formatAndValidateAutomatically(session, changedSides, changedSides, isHostActive)
+    }
+
+    internal suspend fun formatAndValidateAutomatically(
+        session: JsonDiffSession,
+        changedSides: Set<Side>,
+        validationSides: Set<Side>,
+        isHostActive: () -> Boolean
+    ) {
+        if (changedSides.isEmpty() && validationSides.isEmpty()) return
 
         // generation을 먼저 읽어야 이후 옵션 변경이 적용 시점에 거부된다.
         val generation = session.currentGeneration
@@ -294,9 +396,24 @@ class JsonDiffService(private val project: Project) : Disposable {
         val options = session.alignmentOptions
         val capture = readAction { capturePair(session) }
 
-        val formattedPair = try {
+        val computed = try {
             withContext(Dispatchers.Default) {
-                formatAutomaticPair(capture, changedSides, shouldAutoSort, options)
+                val formattedPair = if (changedSides.isNotEmpty()) {
+                    formatAutomaticPair(capture, changedSides, shouldAutoSort, options)
+                } else {
+                    Pair(capture.leftText, capture.rightText)
+                }
+                val leftValidation = if (Side.LEFT in validationSides || Side.LEFT in changedSides) {
+                    validateSideJson(formattedPair.first)
+                } else {
+                    null
+                }
+                val rightValidation = if (Side.RIGHT in validationSides || Side.RIGHT in changedSides) {
+                    validateSideJson(formattedPair.second)
+                } else {
+                    null
+                }
+                Triple(formattedPair, leftValidation, rightValidation)
             }
         } catch (cancellationException: CancellationException) {
             throw cancellationException
@@ -307,16 +424,21 @@ class JsonDiffService(private val project: Project) : Disposable {
             return
         }
 
+        val (formattedPair, leftValidation, rightValidation) = computed
         withContext(Dispatchers.EDT) {
             if (!canApply(session, generation, capture, isHostActive)) return@withContext
-            applyPair(session, capture, formattedPair.first, formattedPair.second, null)
+            if (changedSides.isNotEmpty()) {
+                applyPair(session, capture, formattedPair.first, formattedPair.second, null)
+            }
+            leftValidation?.let { session.updateValidationState(Side.LEFT, it.isValid, it.errorMessage) }
+            rightValidation?.let { session.updateValidationState(Side.RIGHT, it.isValid, it.errorMessage) }
         }
     }
 
     private fun startManualSort(
         session: JsonDiffSession,
         isHostActive: () -> Boolean,
-        onUnavailable: () -> Unit
+        onUnavailable: (Side?) -> Unit
     ) {
         if (project.isDisposed || session.isClosed || !isHostActive()) return
         if (!confirmLargeInput(session)) return
@@ -326,15 +448,24 @@ class JsonDiffService(private val project: Project) : Disposable {
 
         coroutineScopeService.launch {
             val capture = readAction { capturePair(session) }
-            val result = withContext(Dispatchers.Default) {
-                alignmentService.align(capture.leftText, capture.rightText, options)
+            val (result, leftValidation, rightValidation) = withContext(Dispatchers.Default) {
+                val alignResult = alignmentService.align(capture.leftText, capture.rightText, options)
+                val leftState = validateSideJson(alignResult.leftText)
+                val rightState = validateSideJson(alignResult.rightText)
+                Triple(alignResult, leftState, rightState)
             }
 
             withContext(Dispatchers.EDT) {
                 if (!canApply(session, generation, capture, isHostActive)) return@withContext
 
+                session.updateValidationState(Side.LEFT, leftValidation.isValid, leftValidation.errorMessage)
+                session.updateValidationState(Side.RIGHT, rightValidation.isValid, rightValidation.errorMessage)
+
                 when (result.status) {
-                    JsonDiffAlignmentStatus.INVALID_INPUT -> onUnavailable()
+                    JsonDiffAlignmentStatus.INVALID_INPUT -> {
+                        val invalidSide = resolveInvalidSide(capture, leftValidation, rightValidation)
+                        onUnavailable(invalidSide)
+                    }
                     JsonDiffAlignmentStatus.NO_CHANGE -> Unit
                     JsonDiffAlignmentStatus.APPLIED -> {
                         val isApplied = applyPair(
@@ -358,6 +489,111 @@ class JsonDiffService(private val project: Project) : Disposable {
                 }
             }
         }
+    }
+
+    private fun refreshValidationStatesAsync(session: JsonDiffSession, isHostActive: () -> Boolean) {
+        val generation = session.currentGeneration
+        coroutineScopeService.launch {
+            val capture = readAction { capturePair(session) }
+            val (leftValidation, rightValidation) = withContext(Dispatchers.Default) {
+                validateSideJson(capture.leftText) to validateSideJson(capture.rightText)
+            }
+            withContext(Dispatchers.EDT) {
+                if (!canApply(session, generation, capture, isHostActive)) return@withContext
+                session.updateValidationState(Side.LEFT, leftValidation.isValid, leftValidation.errorMessage)
+                session.updateValidationState(Side.RIGHT, rightValidation.isValid, rightValidation.errorMessage)
+            }
+        }
+    }
+
+    internal fun validateSideJson(text: String): JsonDiffSession.SideValidationState {
+        if (text.isBlank()) {
+            return JsonDiffSession.SideValidationState(isValid = true, errorMessage = null)
+        }
+
+        val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(text)
+        if (!replacementResult.isSuccessful) {
+            return JsonDiffSession.SideValidationState(
+                isValid = false,
+                errorMessage = LocalizationBundle.message("dialog.json.diff.invalid.json.format")
+            )
+        }
+
+        val replacedText = replacementResult.replacedText
+        if (isValidWithFactory(objectMapperService.standardJsonFactory, replacedText)) {
+            return JsonDiffSession.SideValidationState(isValid = true, errorMessage = null)
+        }
+
+        val json5Error = validateWithFactory(objectMapperService.objectMapper.factory, replacedText)
+            ?: return JsonDiffSession.SideValidationState(isValid = true, errorMessage = null)
+
+        if (formatterService.containsEscapeCharacters(text)) {
+            val unescapedText = formatterService.fullyUnescapeJson(text)
+            if (unescapedText != text && formatterService.isValidJson(unescapedText)) {
+                return JsonDiffSession.SideValidationState(isValid = true, errorMessage = null)
+            }
+        }
+
+        return JsonDiffSession.SideValidationState(isValid = false, errorMessage = json5Error)
+    }
+
+    private fun isValidWithFactory(factory: JsonFactory, text: String): Boolean {
+        return try {
+            factory.createParser(text).use { parser ->
+                if (parser.nextToken() == null) return false
+                parser.skipChildren()
+                parser.nextToken() == null
+            }
+        } catch (_: JsonProcessingException) {
+            false
+        }
+    }
+
+    private fun validateWithFactory(factory: JsonFactory, text: String): String? {
+        return try {
+            factory.createParser(text).use { parser ->
+                if (parser.nextToken() == null) {
+                    return LocalizationBundle.message("dialog.json.diff.invalid.json.format")
+                }
+                parser.skipChildren()
+                if (parser.nextToken() != null) {
+                    return "Unexpected trailing token"
+                }
+                null
+            }
+        } catch (e: JsonProcessingException) {
+            val message = e.originalMessage?.lineSequence()?.firstOrNull()?.trim()
+                ?: e.message?.lineSequence()?.firstOrNull()?.trim()
+                ?: LocalizationBundle.message("dialog.json.diff.invalid.json.format")
+            formatParseError(message, e.location)
+        }
+    }
+
+    private fun formatParseError(message: String, location: JsonLocation?): String {
+        if (location == null || location.lineNr <= 0) return message
+        return if (location.columnNr > 0) {
+            "Line ${location.lineNr}, col ${location.columnNr}: $message"
+        } else {
+            "Line ${location.lineNr}: $message"
+        }
+    }
+
+    private fun resolveInvalidSide(
+        capture: DiffPairCapture,
+        leftValidation: JsonDiffSession.SideValidationState,
+        rightValidation: JsonDiffSession.SideValidationState
+    ): Side {
+        return when {
+            !leftValidation.isValid && rightValidation.isValid -> Side.LEFT
+            leftValidation.isValid && !rightValidation.isValid -> Side.RIGHT
+            capture.leftText.isBlank() && capture.rightText.isNotBlank() -> Side.LEFT
+            capture.rightText.isBlank() && capture.leftText.isNotBlank() -> Side.RIGHT
+            else -> Side.LEFT
+        }
+    }
+
+    private fun resolveContextAction(actionId: String, fallback: () -> AnAction): AnAction {
+        return ActionManager.getInstance()?.getAction(actionId) ?: fallback()
     }
 
     /**
@@ -563,8 +799,9 @@ class JsonDiffService(private val project: Project) : Disposable {
             diffContext.editorTabFile?.let { FileEditorManager.getInstance(project).closeFile(it) }
         }
 
-        if (isWindowOpen(diffContext)) {
-            diffContext.windowDialog?.close(DialogWrapper.CANCEL_EXIT_CODE)
+        val windowDialog = diffContext.windowDialog
+        if (windowDialog != null && !windowDialog.isDisposed) {
+            windowDialog.close(DialogWrapper.CANCEL_EXIT_CODE)
         }
     }
 
@@ -643,5 +880,16 @@ class JsonDiffService(private val project: Project) : Disposable {
                 application.invokeLater(closeDialog, ModalityState.any())
             }
         }
+    }
+
+    private companion object {
+        const val ACTION_ID_SORT_ONCE = "com.livteam.jsoninja.action.SortJsonDiffKeysOnceAction"
+        const val ACTION_ID_SORT_MODE = "com.livteam.jsoninja.action.SelectJsonDiffSortModeAction"
+        const val ACTION_ID_AUTO_SORT = "com.livteam.jsoninja.action.ToggleJsonDiffAutoSortAction"
+        const val ACTION_ID_ARRAY_ORDER = "com.livteam.jsoninja.action.ToggleJsonDiffArrayOrderAction"
+        const val ACTION_ID_RESTORE_SORT = "com.livteam.jsoninja.action.RestoreJsonDiffSortAction"
+        const val ACTION_ID_SWAP_SIDES = "com.livteam.jsoninja.action.SwapJsonDiffSidesAction"
+        const val ACTION_ID_RENAME_TITLES = "com.livteam.jsoninja.action.RenameJsonDiffTitlesAction"
+        const val ACTION_ID_SWITCH_DISPLAY_MODE = "com.livteam.jsoninja.action.SwitchJsonDiffDisplayModeAction"
     }
 }

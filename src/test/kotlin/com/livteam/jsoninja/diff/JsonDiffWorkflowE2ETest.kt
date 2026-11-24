@@ -22,6 +22,7 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.Presentation
+import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.Toggleable
 import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.application.ApplicationManager
@@ -46,6 +47,8 @@ import com.livteam.jsoninja.actions.RestoreJsonDiffSortAction
 import com.livteam.jsoninja.actions.SelectJsonDiffSortModeAction
 import com.livteam.jsoninja.actions.ShowJsonDiffAction
 import com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction
+import com.livteam.jsoninja.actions.SwapJsonDiffSidesAction
+import com.livteam.jsoninja.actions.SwitchJsonDiffDisplayModeAction
 import com.livteam.jsoninja.actions.ToggleJsonDiffArrayOrderAction
 import com.livteam.jsoninja.actions.ToggleJsonDiffAutoSortAction
 import com.livteam.jsoninja.actions.editor.EditorShowJsonDiffAction
@@ -131,7 +134,10 @@ class JsonDiffWorkflowE2ETest : FileEditorManagerTestCase() {
                         ToggleJsonDiffAutoSortAction::class,
                         ToggleJsonDiffArrayOrderAction::class,
                         RestoreJsonDiffSortAction::class,
-                        RenameJsonDiffTitlesAction::class
+                        Separator::class,
+                        SwapJsonDiffSidesAction::class,
+                        RenameJsonDiffTitlesAction::class,
+                        SwitchJsonDiffDisplayModeAction::class
                     ),
                     contextActions.map { it::class }
                 )
@@ -161,7 +167,9 @@ class JsonDiffWorkflowE2ETest : FileEditorManagerTestCase() {
                 val restorePresentation = update(host, host.contextAction<RestoreJsonDiffSortAction>())
                 assertTrue(restorePresentation.isVisible)
                 assertFalse("Restore must be unavailable before any sort", restorePresentation.isEnabled)
+                assertTrue(update(host, host.contextAction<SwapJsonDiffSidesAction>()).isEnabledAndVisible)
                 assertTrue(update(host, host.contextAction<RenameJsonDiffTitlesAction>()).isEnabledAndVisible)
+                assertTrue(update(host, host.contextAction<SwitchJsonDiffDisplayModeAction>()).isEnabledAndVisible)
             } finally {
                 host.close()
             }

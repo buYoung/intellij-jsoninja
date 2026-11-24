@@ -1,365 +1,270 @@
 package com.livteam.jsoninja.settings
 
-import com.intellij.openapi.options.Configurable
-import com.intellij.openapi.project.ProjectManager
+import com.intellij.CommonBundle
+import com.intellij.openapi.components.service
+import com.intellij.openapi.options.BoundSearchableConfigurable
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.ui.Messages
+import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.dsl.builder.Cell
+import com.intellij.ui.dsl.builder.bindIntValue
+import com.intellij.ui.dsl.builder.bindItem
+import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.selected
+import com.intellij.ui.dsl.builder.toNullableProperty
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.livteam.jsoninja.LocalizationBundle
-import com.livteam.jsoninja.model.JsonFormatState
+import com.livteam.jsoninja.icons.JsoninjaIcons
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
-import com.livteam.jsoninja.model.JsonQueryType
+import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.model.JsonIconPack
+import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.services.OnboardingService
-import javax.swing.*
+import javax.swing.JList
+import javax.swing.ListCellRenderer
+import javax.swing.SwingUtilities
 
-class JsoninjaSettingsConfigurable(private val project: Project) : Configurable {
+class JsoninjaSettingsConfigurable(private val project: Project) : BoundSearchableConfigurable(
+    displayName = LocalizationBundle.message("settings.display.name"),
+    helpTopic = CONFIGURABLE_ID,
+    _id = CONFIGURABLE_ID
+) {
 
-    private var settings: JsoninjaSettingsState = JsoninjaSettingsState.getInstance(project)
+    private var settingsSyncEnabled: Boolean = false
+    private var indentSize: Int = 2
+    private var sortKeys: Boolean = false
+    private var defaultFormatState: JsonFormatState = JsonFormatState.PRETTIFY
+    private var pasteFormatState: JsonFormatState = JsonFormatState.PRETTIFY
+    private var diffDisplayMode: JsonDiffDisplayMode = JsonDiffDisplayMode.EDITOR_TAB
+    private var diffSortKeys: Boolean = false
+    private var jsonQueryType: JsonQueryType = JsonQueryType.JAYWAY_JSONPATH
+    private var iconPack: JsonIconPack = JsonIconPack.VERSION_3
+    private var showLargeFileWarning: Boolean = true
+    private var largeFileThresholdMB: Int = 10
 
-    private var settingsSyncCheckBox: JBCheckBox? = null
-    private var indentSizeSpinner: JSpinner? = null
-    private var sortKeysCheckBox: JBCheckBox? = null
-    private var jsonFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
-    private var iconPackComboBox: ComboBox<JsonIconPackWrapper>? = null
-    private var pasteFormatStateComboBox: ComboBox<JsonFormatStateWrapper>? = null
-    private var diffDisplayModeComboBox: ComboBox<JsonDiffDisplayModeWrapper>? = null
-    private var diffSortKeysCheckBox: JBCheckBox? = null
-    private var jsonQueryTypeComboBox: ComboBox<JsonQueryTypeWrapper>? = null
-    private var largeFileThresholdSpinner: JSpinner? = null
-    private var showLargeFileWarningCheckBox: JBCheckBox? = null
-    private var mainPanel: JPanel? = null
+    private var mainDialogPanel: DialogPanel? = null
 
-    // Wrapper class for JComboBox to display enum values nicely
-    data class JsonFormatStateWrapper(val state: JsonFormatState) {
-        override fun toString(): String {
-            // This could be localized in the future if needed
-            return state.name.lowercase().replaceFirstChar { it.uppercase() }.replace("_", " ")
-        }
-
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other !is JsonFormatStateWrapper) return false
-            return state == other.state
-        }
-
-        override fun hashCode(): Int {
-            return state.hashCode()
-        }
+    init {
+        loadFromSettings()
     }
-    
-    // Wrapper class for JsonDiffDisplayMode
-    data class JsonDiffDisplayModeWrapper(val mode: JsonDiffDisplayMode) {
-        override fun toString(): String {
-            return when (mode) {
-                JsonDiffDisplayMode.EDITOR_TAB -> LocalizationBundle.message("settings.diff.display.editor.tab")
-                JsonDiffDisplayMode.WINDOW -> LocalizationBundle.message("settings.diff.display.window")
+
+    override fun createPanel(): DialogPanel {
+        val defaultFormatStates = JsonFormatState.entries.filter { it != JsonFormatState.UGLIFY }
+        val allFormatStates = JsonFormatState.entries
+
+        return panel {
+            row {
+                checkBox(LocalizationBundle.message("settings.sync.enabled.label"))
+                    .bindSelected(::settingsSyncEnabled)
             }
-        }
 
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other !is JsonDiffDisplayModeWrapper) return false
-            return mode == other.mode
-        }
-
-        override fun hashCode(): Int {
-            return mode.hashCode()
-        }
-    }
-
-    // Wrapper class for JsonQueryType
-    data class JsonQueryTypeWrapper(val type: JsonQueryType) {
-        override fun toString(): String {
-            return when (type) {
-                JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
-                JsonQueryType.JMESPATH -> "JMESPath"
-                JsonQueryType.JACKSON_JQ -> "jq (jackson-jq)"
-            }
-        }
-
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other !is JsonQueryTypeWrapper) return false
-            return type == other.type
-        }
-
-        override fun hashCode(): Int {
-            return type.hashCode()
-        }
-    }
-
-    // Wrapper class for JsonIconPack
-    data class JsonIconPackWrapper(val pack: JsonIconPack) {
-        override fun toString(): String {
-            return when (pack) {
-                JsonIconPack.VERSION_1 -> LocalizationBundle.message("settings.icon.pack.v1")
-                JsonIconPack.VERSION_2 -> LocalizationBundle.message("settings.icon.pack.v2")
-                JsonIconPack.VERSION_3 -> LocalizationBundle.message("settings.icon.pack.v3")
-            }
-        }
-
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other !is JsonIconPackWrapper) return false
-            return pack == other.pack
-        }
-
-        override fun hashCode(): Int {
-            return pack.hashCode()
-        }
-    }
-
-    override fun getDisplayName(): String {
-        return LocalizationBundle.message("settings.display.name")
-    }
-
-    override fun createComponent(): JComponent? {
-        if (mainPanel == null) {
-            settingsSyncCheckBox = JBCheckBox(
-                LocalizationBundle.message("settings.sync.enabled.label"),
-                JsoninjaSettingsState.isSettingsSyncEnabled()
-            )
-            indentSizeSpinner = JSpinner(SpinnerNumberModel(settings.indentSize, 0, 32, 1))
-            sortKeysCheckBox = JBCheckBox(LocalizationBundle.message("settings.sortkeys.label"), settings.sortKeys)
-            diffSortKeysCheckBox = JBCheckBox(LocalizationBundle.message("settings.diff.sort.label"), settings.diffSortKeys)
-            largeFileThresholdSpinner = JSpinner(SpinnerNumberModel(settings.largeFileThresholdMB, 1, 100, 1))
-            showLargeFileWarningCheckBox = JBCheckBox(LocalizationBundle.message("settings.show.large.file.warning.label"), settings.showLargeFileWarning)
-
-            // Filter out UGLIFY for default format dropdown
-            val defaultFormatStates = JsonFormatState.entries
-                .filter { it != JsonFormatState.UGLIFY }
-                .map { JsonFormatStateWrapper(it) }
-                .toTypedArray()
-
-            // Include all states for paste format dropdown
-            val allFormatStates = JsonFormatState.entries
-                .map { JsonFormatStateWrapper(it) }
-                .toTypedArray()
-
-            jsonFormatStateComboBox = ComboBox(defaultFormatStates)
-            
-            // Create icon pack combobox
-            val iconPacks = JsonIconPack.entries
-                .map { JsonIconPackWrapper(it) }
-                .toTypedArray()
-            iconPackComboBox = ComboBox(iconPacks)
-            val currentIconPack = JsonIconPack.fromPersistedValue(settings.iconPack)
-            val selectedIconPackWrapper = iconPacks.find { it.pack == currentIconPack }
-            iconPackComboBox?.selectedItem = selectedIconPackWrapper
-
-            pasteFormatStateComboBox = ComboBox(allFormatStates)
-
-            // Find the matching wrapper for the current state
-            val currentFormatState = JsonFormatState.fromString(settings.jsonFormatState)
-            val selectedWrapper = defaultFormatStates.find { it.state == currentFormatState }
-            jsonFormatStateComboBox?.selectedItem = selectedWrapper
-
-            // Find the matching wrapper for the paste format state
-            val currentPasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
-            val selectedPasteWrapper = allFormatStates.find { it.state == currentPasteFormatState }
-            pasteFormatStateComboBox?.selectedItem = selectedPasteWrapper
-            
-            // Create diff display mode combobox
-            val diffDisplayModes = JsonDiffDisplayMode.entries
-                .map { JsonDiffDisplayModeWrapper(it) }
-                .toTypedArray()
-            
-            diffDisplayModeComboBox = ComboBox(diffDisplayModes)
-            
-            // Find the matching wrapper for the current diff display mode
-            val currentDiffDisplayMode = try {
-                JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
-            } catch (e: IllegalArgumentException) {
-                JsonDiffDisplayMode.EDITOR_TAB
-            }
-            val selectedDiffModeWrapper = diffDisplayModes.find { it.mode == currentDiffDisplayMode }
-            diffDisplayModeComboBox?.selectedItem = selectedDiffModeWrapper
-
-            // Create json query type combobox
-            val jsonQueryTypes = JsonQueryType.entries
-                .map { JsonQueryTypeWrapper(it) }
-                .toTypedArray()
-            jsonQueryTypeComboBox = ComboBox(jsonQueryTypes)
-            val currentJsonQueryType = JsonQueryType.fromString(settings.jsonQueryType)
-            val selectedJsonQueryTypeWrapper = jsonQueryTypes.find { it.type == currentJsonQueryType }
-            jsonQueryTypeComboBox?.selectedItem = selectedJsonQueryTypeWrapper
-
-            mainPanel = panel {
-                row {
-                    cell(settingsSyncCheckBox!!)
-                }
-                separator()
+            group(LocalizationBundle.message("settings.group.formatting")) {
                 row(LocalizationBundle.message("settings.indent.label")) {
-                    cell(indentSizeSpinner!!)
+                    spinner(0..32, step = 1)
+                        .bindIntValue(::indentSize)
                 }
                 row {
-                    cell(sortKeysCheckBox!!)
+                    checkBox(LocalizationBundle.message("settings.sortkeys.label"))
+                        .bindSelected(::sortKeys)
                 }
                 row(LocalizationBundle.message("settings.format.label")) {
-                    cell(jsonFormatStateComboBox!!)
-                }
-                row(LocalizationBundle.message("settings.icon.pack.label")) {
-                    cell(iconPackComboBox!!)
+                    comboBox(defaultFormatStates, createFormatStateRenderer())
+                        .bindItem(::defaultFormatState.toNullableProperty())
                 }
                 row(LocalizationBundle.message("settings.paste.format.label")) {
-                    cell(pasteFormatStateComboBox!!)
-                }
-                row(LocalizationBundle.message("settings.diff.display.label")) {
-                    cell(diffDisplayModeComboBox!!)
-                }
-                row {
-                    cell(diffSortKeysCheckBox!!)
-                }
-                row(LocalizationBundle.message("settings.query.type.label")) {
-                    cell(jsonQueryTypeComboBox!!)
-                }
-                separator()
-                row(LocalizationBundle.message("settings.large.file.threshold.label")) {
-                    cell(largeFileThresholdSpinner!!)
-                }
-                row {
-                    cell(showLargeFileWarningCheckBox!!)
-                }
-                separator()
-                row {
-                    button(LocalizationBundle.message("settings.onboarding.start.tutorial")) {
-                        val dialogWrapper = mainPanel?.let { DialogWrapper.findInstance(it) }
-                        if (dialogWrapper != null) {
-                            dialogWrapper.close(DialogWrapper.OK_EXIT_CODE)
-                        } else {
-                            SwingUtilities.getWindowAncestor(mainPanel)?.dispose()
-                        }
-                        project.getService(OnboardingService::class.java).startTutorial()
-                    }
+                    comboBox(allFormatStates, createFormatStateRenderer())
+                        .bindItem(::pasteFormatState.toNullableProperty())
                 }
             }
-        }
 
-        return mainPanel
-    }
+            group(LocalizationBundle.message("settings.group.diff")) {
+                row(LocalizationBundle.message("settings.diff.display.label")) {
+                    comboBox(JsonDiffDisplayMode.entries, createDiffDisplayModeRenderer())
+                        .bindItem(::diffDisplayMode.toNullableProperty())
+                }
+                row {
+                    checkBox(LocalizationBundle.message("settings.diff.sort.label"))
+                        .bindSelected(::diffSortKeys)
+                }
+            }
 
-    override fun isModified(): Boolean {
-        val currentFormatState = JsonFormatState.fromString(settings.jsonFormatState)
-        val currentIconPack = JsonIconPack.fromPersistedValue(settings.iconPack)
-        val currentPasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
-        val currentDiffDisplayMode = try {
-            JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
-        } catch (e: IllegalArgumentException) {
-            JsonDiffDisplayMode.EDITOR_TAB
-        }
-        val currentJsonQueryType = JsonQueryType.fromString(settings.jsonQueryType)
-        return settingsSyncCheckBox?.isSelected != JsoninjaSettingsState.isSettingsSyncEnabled() ||
-                indentSizeSpinner?.value != settings.indentSize ||
-                sortKeysCheckBox?.isSelected != settings.sortKeys ||
-                (jsonFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentFormatState.name ||
-                (iconPackComboBox?.selectedItem as? JsonIconPackWrapper)?.pack?.name != currentIconPack.name ||
-                (pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper)?.state?.name != currentPasteFormatState.name ||
-                (diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper)?.mode?.name != currentDiffDisplayMode.name ||
-                diffSortKeysCheckBox?.isSelected != settings.diffSortKeys ||
-                (jsonQueryTypeComboBox?.selectedItem as? JsonQueryTypeWrapper)?.type?.name != currentJsonQueryType.name ||
-                largeFileThresholdSpinner?.value != settings.largeFileThresholdMB ||
-                showLargeFileWarningCheckBox?.isSelected != settings.showLargeFileWarning
+            group(LocalizationBundle.message("settings.group.query")) {
+                row(LocalizationBundle.message("settings.query.type.label")) {
+                    comboBox(JsonQueryType.entries, createQueryTypeRenderer())
+                        .bindItem(::jsonQueryType.toNullableProperty())
+                }
+            }
+
+            group(LocalizationBundle.message("settings.group.appearance")) {
+                row(LocalizationBundle.message("settings.icon.pack.label")) {
+                    comboBox(JsonIconPack.entries, createIconPackRenderer())
+                        .bindItem(::iconPack.toNullableProperty())
+                }
+            }
+
+            group(LocalizationBundle.message("settings.group.performance")) {
+                lateinit var showWarningCheckBox: Cell<JBCheckBox>
+                row {
+                    showWarningCheckBox = checkBox(LocalizationBundle.message("settings.show.large.file.warning.label"))
+                        .bindSelected(::showLargeFileWarning)
+                }
+                row(LocalizationBundle.message("settings.large.file.threshold.label")) {
+                    spinner(1..100, step = 1)
+                        .bindIntValue(::largeFileThresholdMB)
+                }.enabledIf(showWarningCheckBox.selected)
+            }
+
+            separator()
+
+            row {
+                button(LocalizationBundle.message("settings.onboarding.start.tutorial")) {
+                    startTutorialFromSettings()
+                }
+            }
+        }.also { mainDialogPanel = it }
     }
 
     override fun apply() {
-        settings = JsoninjaSettingsState.setSettingsSyncEnabled(
-            project,
-            settingsSyncCheckBox?.isSelected ?: JsoninjaSettingsState.isSettingsSyncEnabled()
-        )
-        settings.indentSize = indentSizeSpinner?.value as? Int ?: settings.indentSize
-        settings.sortKeys = sortKeysCheckBox?.isSelected ?: settings.sortKeys
-        val selectedFormatWrapper = jsonFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper
-        settings.jsonFormatState = selectedFormatWrapper?.state?.name ?: settings.jsonFormatState
-        val selectedIconPackWrapper = iconPackComboBox?.selectedItem as? JsonIconPackWrapper
-        settings.iconPack = selectedIconPackWrapper?.pack?.name ?: settings.iconPack
-        val selectedPasteFormatWrapper = pasteFormatStateComboBox?.selectedItem as? JsonFormatStateWrapper
-        settings.pasteFormatState = selectedPasteFormatWrapper?.state?.name ?: settings.pasteFormatState
-        val selectedDiffModeWrapper = diffDisplayModeComboBox?.selectedItem as? JsonDiffDisplayModeWrapper
-        settings.diffDisplayMode = selectedDiffModeWrapper?.mode?.name ?: settings.diffDisplayMode
-        settings.diffSortKeys = diffSortKeysCheckBox?.isSelected ?: settings.diffSortKeys
-        val selectedJsonQueryTypeWrapper = jsonQueryTypeComboBox?.selectedItem as? JsonQueryTypeWrapper
-        settings.jsonQueryType = selectedJsonQueryTypeWrapper?.type?.name ?: settings.jsonQueryType
-        settings.largeFileThresholdMB = largeFileThresholdSpinner?.value as? Int ?: settings.largeFileThresholdMB
-        settings.showLargeFileWarning = showLargeFileWarningCheckBox?.isSelected ?: settings.showLargeFileWarning
+        super.apply()
+
+        val activeSettings = JsoninjaSettingsState.setSettingsSyncEnabled(project, settingsSyncEnabled)
+        activeSettings.indentSize = indentSize
+        activeSettings.sortKeys = sortKeys
+        activeSettings.jsonFormatState = defaultFormatState.name
+        activeSettings.pasteFormatState = pasteFormatState.name
+        activeSettings.diffDisplayMode = diffDisplayMode.name
+        activeSettings.diffSortKeys = diffSortKeys
+        activeSettings.jsonQueryType = jsonQueryType.name
+        activeSettings.iconPack = iconPack.name
+        activeSettings.showLargeFileWarning = showLargeFileWarning
+        activeSettings.largeFileThresholdMB = largeFileThresholdMB
 
         ProjectManager.getInstance().openProjects
             .filter { !it.isDisposed }
             .forEach { openProject ->
-                openProject.messageBus.syncPublisher(JsoninjaSettingsListener.TOPIC).onSettingsChanged(settings)
+                openProject.messageBus.syncPublisher(JsoninjaSettingsListener.TOPIC).onSettingsChanged(activeSettings)
             }
     }
 
     override fun reset() {
-        settings = JsoninjaSettingsState.getInstance(project)
-        settingsSyncCheckBox?.isSelected = JsoninjaSettingsState.isSettingsSyncEnabled()
-        indentSizeSpinner?.value = settings.indentSize
-        sortKeysCheckBox?.isSelected = settings.sortKeys
-
-        // Find the matching wrapper for the current state
-        val currentFormatState = JsonFormatState.fromString(settings.jsonFormatState)
-        val defaultFormatStates = JsonFormatState.entries
-            .filter { it != JsonFormatState.UGLIFY }
-            .map { JsonFormatStateWrapper(it) }
-            .toTypedArray()
-        val selectedWrapper = defaultFormatStates.find { it.state == currentFormatState }
-        jsonFormatStateComboBox?.selectedItem = selectedWrapper
-
-        // Find the matching wrapper for the current icon pack
-        val currentIconPack = JsonIconPack.fromPersistedValue(settings.iconPack)
-        val iconPacks = JsonIconPack.entries
-            .map { JsonIconPackWrapper(it) }
-            .toTypedArray()
-        val selectedIconPackWrapper = iconPacks.find { it.pack == currentIconPack }
-        iconPackComboBox?.selectedItem = selectedIconPackWrapper
-
-        // Find the matching wrapper for the paste format state
-        val currentPasteFormatState = JsonFormatState.fromString(settings.pasteFormatState)
-        val allFormatStates = JsonFormatState.entries
-            .map { JsonFormatStateWrapper(it) }
-            .toTypedArray()
-        val selectedPasteWrapper = allFormatStates.find { it.state == currentPasteFormatState }
-        pasteFormatStateComboBox?.selectedItem = selectedPasteWrapper
-        
-        // Find the matching wrapper for the current diff display mode
-        val currentDiffDisplayMode = try {
-            JsonDiffDisplayMode.valueOf(settings.diffDisplayMode)
-        } catch (e: IllegalArgumentException) {
-            JsonDiffDisplayMode.EDITOR_TAB
-        }
-        val diffDisplayModes = JsonDiffDisplayMode.entries
-            .map { JsonDiffDisplayModeWrapper(it) }
-            .toTypedArray()
-        val selectedDiffModeWrapper = diffDisplayModes.find { it.mode == currentDiffDisplayMode }
-        diffDisplayModeComboBox?.selectedItem = selectedDiffModeWrapper
-        diffSortKeysCheckBox?.isSelected = settings.diffSortKeys
-        
-        // Find the matching wrapper for the current json query type
-        val currentJsonQueryType = JsonQueryType.fromString(settings.jsonQueryType)
-        val jsonQueryTypes = JsonQueryType.entries
-            .map { JsonQueryTypeWrapper(it) }
-            .toTypedArray()
-        val selectedJsonQueryTypeWrapper = jsonQueryTypes.find { it.type == currentJsonQueryType }
-        jsonQueryTypeComboBox?.selectedItem = selectedJsonQueryTypeWrapper
-
-        largeFileThresholdSpinner?.value = settings.largeFileThresholdMB
-        showLargeFileWarningCheckBox?.isSelected = settings.showLargeFileWarning
+        loadFromSettings()
+        super.reset()
     }
 
     override fun disposeUIResources() {
-        mainPanel = null
-        settingsSyncCheckBox = null
-        indentSizeSpinner = null
-        sortKeysCheckBox = null
-        jsonFormatStateComboBox = null
-        iconPackComboBox = null
-        pasteFormatStateComboBox = null
-        diffDisplayModeComboBox = null
-        diffSortKeysCheckBox = null
-        jsonQueryTypeComboBox = null
-        largeFileThresholdSpinner = null
-        showLargeFileWarningCheckBox = null
+        mainDialogPanel = null
+        super.disposeUIResources()
+    }
+
+    private fun loadFromSettings() {
+        val activeSettings = JsoninjaSettingsState.getInstance(project)
+        settingsSyncEnabled = JsoninjaSettingsState.isSettingsSyncEnabled()
+        indentSize = activeSettings.indentSize.coerceIn(0, 32)
+        sortKeys = activeSettings.sortKeys
+        val parsedDefaultFormat = JsonFormatState.fromString(activeSettings.jsonFormatState)
+        defaultFormatState = if (parsedDefaultFormat == JsonFormatState.UGLIFY) {
+            JsonFormatState.PRETTIFY
+        } else {
+            parsedDefaultFormat
+        }
+        pasteFormatState = JsonFormatState.fromString(activeSettings.pasteFormatState)
+        diffDisplayMode = runCatching { JsonDiffDisplayMode.valueOf(activeSettings.diffDisplayMode) }
+            .getOrDefault(JsonDiffDisplayMode.EDITOR_TAB)
+        diffSortKeys = activeSettings.diffSortKeys
+        jsonQueryType = JsonQueryType.fromString(activeSettings.jsonQueryType)
+        iconPack = JsonIconPack.fromPersistedValue(activeSettings.iconPack)
+        showLargeFileWarning = activeSettings.showLargeFileWarning
+        largeFileThresholdMB = activeSettings.largeFileThresholdMB.coerceIn(1, 100)
+    }
+
+    private fun startTutorialFromSettings() {
+        if (isModified) {
+            val choice = Messages.showYesNoCancelDialog(
+                project,
+                LocalizationBundle.message("settings.unsaved.changes.message"),
+                LocalizationBundle.message("settings.unsaved.changes.title"),
+                LocalizationBundle.message("settings.unsaved.changes.apply"),
+                LocalizationBundle.message("settings.unsaved.changes.discard"),
+                CommonBundle.getCancelButtonText(),
+                Messages.getQuestionIcon()
+            )
+            when (choice) {
+                Messages.YES -> apply()
+                Messages.NO -> reset()
+                else -> return
+            }
+        }
+
+        val sourceComponent = mainDialogPanel
+        val dialogWrapper = sourceComponent?.let { DialogWrapper.findInstance(it) }
+        if (dialogWrapper != null) {
+            dialogWrapper.close(DialogWrapper.OK_EXIT_CODE)
+        } else {
+            sourceComponent?.let { SwingUtilities.getWindowAncestor(it)?.dispose() }
+        }
+        project.service<OnboardingService>().startTutorial()
+    }
+
+    private fun createFormatStateRenderer() = textListCellRenderer<JsonFormatState?> { value ->
+        value?.let(::formatJsonFormatState).orEmpty()
+    }
+
+    private fun createDiffDisplayModeRenderer() = textListCellRenderer<JsonDiffDisplayMode?> { value ->
+        when (value) {
+            JsonDiffDisplayMode.EDITOR_TAB -> LocalizationBundle.message("settings.diff.display.editor.tab")
+            JsonDiffDisplayMode.WINDOW -> LocalizationBundle.message("settings.diff.display.window")
+            null -> ""
+        }
+    }
+
+    private fun createQueryTypeRenderer() = textListCellRenderer<JsonQueryType?> { value ->
+        when (value) {
+            JsonQueryType.JAYWAY_JSONPATH -> "Jayway JsonPath"
+            JsonQueryType.JMESPATH -> "JMESPath"
+            JsonQueryType.JACKSON_JQ -> "jq (jackson-jq)"
+            null -> ""
+        }
+    }
+
+    private fun createIconPackRenderer(): ListCellRenderer<JsonIconPack?> = object : ColoredListCellRenderer<JsonIconPack?>() {
+        override fun customizeCellRenderer(
+            list: JList<out JsonIconPack?>,
+            value: JsonIconPack?,
+            index: Int,
+            selected: Boolean,
+            hasFocus: Boolean
+        ) {
+            if (value == null) return
+            icon = when (value) {
+                JsonIconPack.VERSION_1 -> JsoninjaIcons.PrettyIcon
+                JsonIconPack.VERSION_2 -> JsoninjaIcons.PrettyIconV2
+                JsonIconPack.VERSION_3 -> JsoninjaIcons.PrettyIconV3
+            }
+            append(
+                when (value) {
+                    JsonIconPack.VERSION_1 -> LocalizationBundle.message("settings.icon.pack.v1")
+                    JsonIconPack.VERSION_2 -> LocalizationBundle.message("settings.icon.pack.v2")
+                    JsonIconPack.VERSION_3 -> LocalizationBundle.message("settings.icon.pack.v3")
+                }
+            )
+        }
+    }
+
+    private fun formatJsonFormatState(state: JsonFormatState): String {
+        return when (state) {
+            JsonFormatState.PRETTIFY -> LocalizationBundle.message("dialog.type.to.json.format.prettify")
+            JsonFormatState.PRETTIFY_COMPACT -> LocalizationBundle.message("dialog.type.to.json.format.prettify.compact")
+            JsonFormatState.PRETTIFY_SORTED -> LocalizationBundle.message("settings.format.prettify.sorted")
+            JsonFormatState.UGLIFY -> LocalizationBundle.message("dialog.type.to.json.format.uglify")
+        }
+    }
+
+    companion object {
+        private const val CONFIGURABLE_ID = "com.livteam.jsoninja.settings.JsoninjaSettingsConfigurable"
     }
 }

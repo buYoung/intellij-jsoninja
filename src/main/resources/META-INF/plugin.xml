@@ -42,6 +42,7 @@
         <editorActionHandler action="ExpandCollapseToggleAction"
                              implementationClass="com.livteam.jsoninja.ui.component.editor.JsoninjaExpandCollapseToggleHandler"/>
         <postStartupActivity implementation="com.livteam.jsoninja.listeners.JsoninjaOnboardingStartupActivity"/>
+        <notificationGroup id="JSONinja" displayType="BALLOON"/>
     </extensions>
 
     <actions>
@@ -61,6 +62,30 @@
                     icon="AllIcons.Actions.MoveToWindow"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </group>
+
+        <!-- JSON Diff Viewer Toolbar Actions (Keymap / Find Action) -->
+        <action id="com.livteam.jsoninja.action.SortJsonDiffKeysOnceAction"
+                class="com.livteam.jsoninja.actions.SortJsonDiffKeysOnceAction"
+                icon="AllIcons.ObjectBrowser.SortByType"/>
+        <action id="com.livteam.jsoninja.action.SelectJsonDiffSortModeAction"
+                class="com.livteam.jsoninja.actions.SelectJsonDiffSortModeAction"/>
+        <action id="com.livteam.jsoninja.action.ToggleJsonDiffAutoSortAction"
+                class="com.livteam.jsoninja.actions.ToggleJsonDiffAutoSortAction"
+                icon="AllIcons.ObjectBrowser.Sorted"/>
+        <action id="com.livteam.jsoninja.action.ToggleJsonDiffArrayOrderAction"
+                class="com.livteam.jsoninja.actions.ToggleJsonDiffArrayOrderAction"
+                icon="AllIcons.Json.Array"/>
+        <action id="com.livteam.jsoninja.action.RestoreJsonDiffSortAction"
+                class="com.livteam.jsoninja.actions.RestoreJsonDiffSortAction"
+                icon="AllIcons.Actions.Rollback"/>
+        <action id="com.livteam.jsoninja.action.SwapJsonDiffSidesAction"
+                class="com.livteam.jsoninja.actions.SwapJsonDiffSidesAction"
+                icon="AllIcons.Actions.SwapPanels"/>
+        <action id="com.livteam.jsoninja.action.RenameJsonDiffTitlesAction"
+                class="com.livteam.jsoninja.actions.RenameJsonDiffTitlesAction"
+                icon="AllIcons.Actions.Edit"/>
+        <action id="com.livteam.jsoninja.action.SwitchJsonDiffDisplayModeAction"
+                class="com.livteam.jsoninja.actions.SwitchJsonDiffDisplayModeAction"/>
 
         <!-- JSONinja Tool Window Actions -->
         <group id="com.livteam.jsoninja.action.group.ToolWindowActions">
@@ -87,6 +112,7 @@
             <action id="com.livteam.jsoninja.action.GenerateRandomJsonAction"
                     class="com.livteam.jsoninja.actions.GenerateRandomJsonAction"
                     icon="com.livteam.jsoninja.icons.JsoninjaIcons.GenerateIconV3"/>
+            <reference ref="com.livteam.jsoninja.action.ShowJsonDiffAction"/>
             <action id="com.livteam.jsoninja.action.TypeConversionAction"
                     class="com.livteam.jsoninja.actions.TypeConversionAction"/>
             <action id="com.livteam.jsoninja.action.LoadJsonFromApiAction"
@@ -94,12 +120,7 @@
                     icon="com.livteam.jsoninja.icons.JsoninjaIcons.LoadJsonFromApiIconV3"/>
             <separator/>
             <action id="com.livteam.jsoninja.action.CloseTabAction"
-                    class="com.livteam.jsoninja.actions.CloseTabAction">
-                <keyboard-shortcut first-keystroke="ctrl W" keymap="$default"/>
-                <keyboard-shortcut first-keystroke="meta W" keymap="Mac OS X" replace-all="true"/>
-                <keyboard-shortcut first-keystroke="meta W" keymap="Mac OS X 10.5+" replace-all="true"/>
-                <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
-            </action>
+                    class="com.livteam.jsoninja.actions.CloseTabAction"/>
             <action id="com.livteam.jsoninja.action.OpenSettingsAction"
                     class="com.livteam.jsoninja.actions.OpenSettingsAction"
                     icon="AllIcons.General.Settings"/>
@@ -108,6 +129,8 @@
                 class="com.livteam.jsoninja.actions.CopyJsonQueryAction"
         >
         </action>
+        <action id="com.livteam.jsoninja.action.CopyJsonArrayQueryAction"
+                class="com.livteam.jsoninja.actions.CopyJsonArrayQueryAction"/>
 
         <action id="com.livteam.jsoninja.action.TypeConversionAction.Menu"
                 class="com.livteam.jsoninja.actions.TypeConversionAction">
@@ -117,6 +140,7 @@
 
         <group id="com.livteam.jsoninja.action.group.EditorPopup" popup="false">
             <reference ref="com.livteam.jsoninja.action.CopyJsonQueryAction"/>
+            <reference ref="com.livteam.jsoninja.action.CopyJsonArrayQueryAction"/>
         </group>
 
         <!-- JSONinja Editor Context Menu Actions -->

@@ -16,7 +16,7 @@ class GenerateJsonDialog(
 
     private val presenter = GenerateJsonDialogPresenter(project, ::scheduleLayoutUpdate, ::scheduleAdvancedOptionsLayoutUpdate)
     private val tabSizes = mutableMapOf<JsonGenerationMode, Dimension>()
-    private var currentGenerationMode = JsonGenerationMode.RANDOM
+    private var currentGenerationMode = presenter.getGenerationMode()
     private var isLayoutUpdateScheduled = false
     private var shouldRestoreTabSize = false
     private var shouldPackHeight = false
@@ -32,6 +32,8 @@ class GenerateJsonDialog(
     override fun createCenterPanel(): JComponent {
         return presenter.getComponent()
     }
+
+    override fun getDimensionServiceKey(): String = "com.livteam.jsoninja.dialog.GenerateJsonDialog"
 
     override fun doValidate(): ValidationInfo? {
         return presenter.validate() ?: super.doValidate()

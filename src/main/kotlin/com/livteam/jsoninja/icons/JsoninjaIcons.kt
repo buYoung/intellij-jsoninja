@@ -58,37 +58,37 @@ object JsoninjaIcons {
     val DiffIconV2: Icon = load("/icons/classic/v2/diffIcon-v2-16.svg")
 
     @JvmField
-    val PrettyIconV3: Icon = load("/icons/classic/v3/prettyIcon-v3-20.svg")
+    val PrettyIconV3: Icon = load("/icons/classic/v3/prettyIcon-v3-16.svg")
 
     @JvmField
-    val UglyIconV3: Icon = load("/icons/classic/v3/uglyIcon-v3-20.svg")
+    val UglyIconV3: Icon = load("/icons/classic/v3/uglyIcon-v3-16.svg")
 
     @JvmField
-    val EscapeIconV3: Icon = load("/icons/classic/v3/escapeIcon-v3-20.svg")
+    val EscapeIconV3: Icon = load("/icons/classic/v3/escapeIcon-v3-16.svg")
 
     @JvmField
-    val UnescapeIconV3: Icon = load("/icons/classic/v3/unescapeIcon-v3-20.svg")
+    val UnescapeIconV3: Icon = load("/icons/classic/v3/unescapeIcon-v3-16.svg")
 
     @JvmField
-    val GenerateIconV3: Icon = load("/icons/classic/v3/generateIcon-v3-20.svg")
+    val GenerateIconV3: Icon = load("/icons/classic/v3/generateIcon-v3-16.svg")
 
     @JvmField
-    val DiffIconV3: Icon = load("/icons/classic/v3/diffIcon-v3-20.svg")
+    val DiffIconV3: Icon = load("/icons/classic/v3/diffIcon-v3-16.svg")
 
     @JvmField
-    val OpenJsonFileIconV3: Icon = load("/icons/classic/v3/openJsonFileIcon-v3-20.svg")
+    val OpenJsonFileIconV3: Icon = load("/icons/classic/v3/openJsonFileIcon-v3-16.svg")
 
     @JvmField
-    val LoadJsonFromApiIconV3: Icon = load("/icons/classic/v3/loadJsonFromApiIcon-v3-20.svg")
+    val LoadJsonFromApiIconV3: Icon = load("/icons/classic/v3/loadJsonFromApiIcon-v3-16.svg")
 
     @JvmField
-    val ConvertTypeIconV3: Icon = load("/icons/classic/v3/convertTypeIcon-v3-20.svg")
+    val ConvertTypeIconV3: Icon = load("/icons/classic/v3/convertTypeIcon-v3-16.svg")
 
     @JvmField
-    val JsonToTypeIconV3: Icon = load("/icons/classic/v3/jsonToTypeIcon-v3-20.svg")
+    val JsonToTypeIconV3: Icon = load("/icons/classic/v3/jsonToTypeIcon-v3-16.svg")
 
     @JvmField
-    val TypeToJsonIconV3: Icon = load("/icons/classic/v3/typeToJsonIcon-v3-20.svg")
+    val TypeToJsonIconV3: Icon = load("/icons/classic/v3/typeToJsonIcon-v3-16.svg")
 
     fun getPrettyIcon(project: Project?): Icon = getIcon(project, PrettyIcon, PrettyIconV2, PrettyIconV3)
     fun getUglifyIcon(project: Project?): Icon = getIcon(project, UglyIcon, UglyIconV2, UglyIconV3)

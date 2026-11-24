@@ -17,9 +17,9 @@ class LoadJsonFromApiDialog(
         onJsonLoaded = onJsonLoaded,
         onDialogCloseRequested = { close(OK_EXIT_CODE) },
         onLoadingChanged = { isLoading ->
-            isOKActionEnabled = !isLoading
+            isOKActionEnabled = true
             setOKButtonText(LocalizationBundle.message(
-                if (isLoading) "dialog.load.json.api.loading" else "dialog.load.json.api.send"
+                if (isLoading) "dialog.load.json.api.cancel.request" else "dialog.load.json.api.send"
             ))
         },
         onValidationChanged = ::showValidation,
@@ -40,10 +40,12 @@ class LoadJsonFromApiDialog(
         return presenter.getComponent()
     }
 
+    override fun getDimensionServiceKey(): String = "com.livteam.jsoninja.dialog.LoadJsonFromApiDialog"
+
     override fun getPreferredFocusedComponent(): JComponent = presenter.getPreferredFocusedComponent()
 
     override fun doOKAction() {
-        presenter.handleSendRequested()
+        presenter.handleSendOrCancelRequested()
     }
 
     override fun dispose() {

@@ -1,18 +1,18 @@
 package com.livteam.jsoninja.actions
 
 import com.intellij.icons.AllIcons
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.project.DumbAwareAction
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonDiffDisplayMode
 
 /**
  * Action to show JSON Diff in separate Window
  */
-class ShowJsonDiffInWindowAction : AnAction(
-    LocalizationBundle.message("action.show.json.diff.window"),
-    LocalizationBundle.message("action.show.json.diff.window.description"),
+class ShowJsonDiffInWindowAction : DumbAwareAction(
+    LocalizationBundle.messagePointer("action.show.json.diff.window"),
+    LocalizationBundle.messagePointer("action.show.json.diff.window.description"),
     AllIcons.Actions.MoveToWindow
 ) {
     override fun actionPerformed(e: AnActionEvent) {

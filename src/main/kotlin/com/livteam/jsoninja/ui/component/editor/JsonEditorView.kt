@@ -1,26 +1,25 @@
 package com.livteam.jsoninja.ui.component.editor
 
+import com.intellij.codeInsight.hint.HintManager
+import com.intellij.ide.ui.LafManagerListener
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.LogicalPosition
+import com.intellij.openapi.editor.ScrollType
+import com.intellij.openapi.editor.colors.EditorColorsListener
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.wm.IdeFocusManager
 import com.intellij.ui.EditorTextField
-import com.intellij.ui.JBColor
-import com.intellij.ui.RoundedLineBorder
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBPanel
-import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import java.awt.CardLayout
-import java.awt.Cursor
-import java.awt.FlowLayout
-import java.awt.Font
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
-import javax.swing.JLayeredPane
 import javax.swing.JPanel
 
 /**
@@ -29,7 +28,8 @@ import javax.swing.JPanel
 class JsonEditorView(
     private val project: Project,
     fileExtension: String? = null,
-    documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator()
+    documentCreator: JsonDocumentCreator = SimpleJsonDocumentCreator(),
+    isEmbeddedInDialog: Boolean = false,
 ) : JPanel(), Disposable {
 
     private enum class EditorDisplayMode {
@@ -40,20 +40,21 @@ class JsonEditorView(
     companion object {
         private const val TEXT_CARD = "TEXT_CARD"
         private const val TREE_CARD = "TREE_CARD"
+        private const val NOTIFICATION_GROUP_ID = "JSONinja"
     }
 
     val presenter: JsonEditorTextPresenter
     val editor: EditorTextField
         get() = jsonEditorTextView.editor
 
-    private lateinit var floatingTogglePanel: JPanel
     private val contentContainer = JPanel(CardLayout())
-    private val jsonEditorTextView = JsonEditorTextView(project, fileExtension, documentCreator)
-    private val jsonEditorTreeView = JsonEditorTreeView()
-    private lateinit var textModeLabel: JBLabel
-    private lateinit var treeModeLabel: JBLabel
+    private val jsonEditorTextView = JsonEditorTextView(project, fileExtension, documentCreator, isEmbeddedInDialog)
+    private val jsonEditorTreeView = JsonEditorTreeView(project)
     private val treePresenter = JsonEditorTreePresenter(project, jsonEditorTreeView)
     private var currentDisplayMode = EditorDisplayMode.TEXT
+    private var onDisplayModeChangedListener: ((Boolean) -> Unit)? = null
+    @Volatile
+    private var isDisposed = false
     private val treeDocumentListener = object : DocumentListener {
         override fun documentChanged(event: DocumentEvent) {
             if (currentDisplayMode == EditorDisplayMode.TREE) refreshVisibleTree()
@@ -64,9 +65,41 @@ class JsonEditorView(
         presenter = JsonEditorTextPresenter(project, jsonEditorTextView)
 
         initializeUI()
+        jsonEditorTreeView.setOnSwitchToTextRequested { line, column ->
+            switchToTextMode(line = line, column = column)
+        }
+        subscribeThemeChanges()
         presenter.setupContentChangeListener()
         editor.addDocumentListener(treeDocumentListener)
         setupMouseListener()
+    }
+
+    private fun subscribeThemeChanges() {
+        val connection = ApplicationManager.getApplication().messageBus.connect(this)
+        connection.subscribe(EditorColorsManager.TOPIC, EditorColorsListener { scheduleThemeRefresh() })
+        connection.subscribe(LafManagerListener.TOPIC, LafManagerListener { scheduleThemeRefresh() })
+    }
+
+    private fun scheduleThemeRefresh() {
+        if (isDisposed || project.isDisposed) return
+        val app = ApplicationManager.getApplication()
+        if (app.isDispatchThread) {
+            refreshThemeColors()
+        } else {
+            app.invokeLater({
+                if (!isDisposed && !project.isDisposed) {
+                    refreshThemeColors()
+                }
+            }, ModalityState.stateForComponent(this))
+        }
+    }
+
+    private fun refreshThemeColors() {
+        val backgroundColor = EditorColorsManager.getInstance().globalScheme.defaultBackground
+        background = backgroundColor
+        contentContainer.background = backgroundColor
+        revalidate()
+        repaint()
     }
 
     private fun setupMouseListener() {
@@ -84,104 +117,66 @@ class JsonEditorView(
         contentContainer.background = backgroundColor
         contentContainer.add(jsonEditorTextView, TEXT_CARD)
         contentContainer.add(jsonEditorTreeView, TREE_CARD)
-
-        floatingTogglePanel = createFloatingTogglePanel()
-        updateToggleLabelStyles()
-
-        val layeredPane = object : JLayeredPane() {
-            override fun doLayout() {
-                super.doLayout()
-                contentContainer.setBounds(0, 0, width, height)
-
-                val floatingPanelSize = floatingTogglePanel.preferredSize
-                val paddingRight = JBUI.scale(24)
-                val paddingBottom = JBUI.scale(12)
-                floatingTogglePanel.setBounds(
-                    width - floatingPanelSize.width - paddingRight,
-                    height - floatingPanelSize.height - paddingBottom,
-                    floatingPanelSize.width,
-                    floatingPanelSize.height
-                )
-            }
-
-            override fun getPreferredSize(): java.awt.Dimension {
-                return contentContainer.preferredSize
-            }
-        }
-
-        layeredPane.setLayer(contentContainer, JLayeredPane.DEFAULT_LAYER)
-        layeredPane.add(contentContainer)
-        layeredPane.setLayer(floatingTogglePanel, JLayeredPane.PALETTE_LAYER)
-        layeredPane.add(floatingTogglePanel)
-
-        add(layeredPane, BorderLayout.CENTER)
+        add(contentContainer, BorderLayout.CENTER)
     }
 
-    private fun createFloatingTogglePanel(): JPanel {
-        val editorBackground = EditorColorsManager.getInstance().globalScheme.defaultBackground
-        val scheme = EditorColorsManager.getInstance().globalScheme
-        val dividerColor = scheme.getColor(com.intellij.openapi.editor.colors.EditorColors.LINE_NUMBERS_COLOR)
-            ?: JBColor.border()
-
-        val togglePanel = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.CENTER, 4, 2))
-        togglePanel.border = JBUI.Borders.compound(
-            RoundedLineBorder(dividerColor, 10),
-            JBUI.Borders.empty(4, 8)
-        )
-        togglePanel.background = editorBackground
-        togglePanel.isOpaque = true
-
-        val textLabel = JBLabel("TEXT").apply {
-            font = font.deriveFont(Font.BOLD, 11f)
-            foreground = JBUI.CurrentTheme.Label.foreground()
-            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        }
-        textModeLabel = textLabel
-
-        val treeLabel = JBLabel("TREE").apply {
-            font = font.deriveFont(Font.PLAIN, 11f)
-            foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
-            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        }
-        treeModeLabel = treeLabel
-
-        val separator = JBLabel("|").apply {
-            font = font.deriveFont(Font.PLAIN, 10f)
-            foreground = dividerColor
-            border = JBUI.Borders.empty(0, 4)
-        }
-
-        togglePanel.add(textLabel)
-        togglePanel.add(separator)
-        togglePanel.add(treeLabel)
-
-        textLabel.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(event: MouseEvent?) {
-                switchToTextMode()
-            }
-        })
-
-        treeLabel.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(event: MouseEvent?) {
-                switchToTreeMode()
-            }
-        })
-
-        return togglePanel
-    }
-
-    private fun switchToTextMode() {
+    fun switchToTextMode(line: Int? = null, column: Int? = null) {
+        if (isDisposed || project.isDisposed) return
         treePresenter.cancelRefresh()
         currentDisplayMode = EditorDisplayMode.TEXT
         (contentContainer.layout as CardLayout).show(contentContainer, TEXT_CARD)
-        updateToggleLabelStyles()
+        onDisplayModeChangedListener?.invoke(false)
+
+        if (line != null && line > 0) {
+            val activeEditor = editor.editor
+            if (activeEditor != null && !activeEditor.isDisposed) {
+                val document = activeEditor.document
+                val targetLine = (line - 1).coerceIn(0, maxOf(0, document.lineCount - 1))
+                val lineLength = if (document.lineCount > 0) {
+                    document.getLineEndOffset(targetLine) - document.getLineStartOffset(targetLine)
+                } else {
+                    0
+                }
+                val targetColumn = ((column ?: 1) - 1).coerceIn(0, lineLength)
+                activeEditor.caretModel.moveToLogicalPosition(LogicalPosition(targetLine, targetColumn))
+                activeEditor.scrollingModel.scrollToCaret(ScrollType.CENTER)
+            }
+        }
+
+        focusContent()
     }
 
-    private fun switchToTreeMode() {
+    fun switchToTreeMode() {
+        if (isDisposed || project.isDisposed) return
         currentDisplayMode = EditorDisplayMode.TREE
         (contentContainer.layout as CardLayout).show(contentContainer, TREE_CARD)
-        updateToggleLabelStyles()
+        onDisplayModeChangedListener?.invoke(true)
         refreshVisibleTree()
+        focusContent()
+    }
+
+    fun toggleDisplayMode() {
+        if (isTextMode()) {
+            switchToTreeMode()
+        } else {
+            switchToTextMode()
+        }
+    }
+
+    fun setOnDisplayModeChangedListener(listener: (Boolean) -> Unit) {
+        onDisplayModeChangedListener = listener
+    }
+
+    fun expandAllTreeNodes() {
+        if (isTreeMode()) {
+            jsonEditorTreeView.expandAllBounded()
+        }
+    }
+
+    fun collapseAllTreeNodes() {
+        if (isTreeMode()) {
+            jsonEditorTreeView.collapseAll()
+        }
     }
 
     private fun refreshVisibleTree() {
@@ -193,12 +188,32 @@ class JsonEditorView(
         }
     }
 
-    private fun updateToggleLabelStyles() {
-        val isTextMode = currentDisplayMode == EditorDisplayMode.TEXT
-        textModeLabel.font = textModeLabel.font.deriveFont(if (isTextMode) Font.BOLD else Font.PLAIN, 11f)
-        treeModeLabel.font = treeModeLabel.font.deriveFont(if (isTextMode) Font.PLAIN else Font.BOLD, 11f)
-        textModeLabel.foreground = if (isTextMode) JBUI.CurrentTheme.Label.foreground() else JBUI.CurrentTheme.ContextHelp.FOREGROUND
-        treeModeLabel.foreground = if (isTextMode) JBUI.CurrentTheme.ContextHelp.FOREGROUND else JBUI.CurrentTheme.Label.foreground()
+    fun isTextMode(): Boolean = currentDisplayMode == EditorDisplayMode.TEXT
+
+    fun isTreeMode(): Boolean = currentDisplayMode == EditorDisplayMode.TREE
+
+    fun focusContent() {
+        if (isDisposed || project.isDisposed) return
+        val focusTarget = if (currentDisplayMode == EditorDisplayMode.TREE) {
+            jsonEditorTreeView.focusTarget
+        } else {
+            editor.editor?.contentComponent ?: editor
+        }
+        IdeFocusManager.getInstance(project).requestFocus(focusTarget, true)
+    }
+
+    fun showErrorHint(message: String) {
+        if (isDisposed || project.isDisposed) return
+        val activeEditor = editor.editor
+        if (isTextMode() && activeEditor != null && !activeEditor.isDisposed && activeEditor.contentComponent.isShowing) {
+            HintManager.getInstance().showErrorHint(activeEditor, "JSONinja: $message")
+            return
+        }
+
+        NotificationGroupManager.getInstance()
+            .getNotificationGroup(NOTIFICATION_GROUP_ID)
+            ?.createNotification("JSONinja", message, NotificationType.ERROR)
+            ?.notify(project)
     }
 
     fun setText(text: String) = presenter.setText(text)
@@ -208,6 +223,7 @@ class JsonEditorView(
     fun setOnContentChangeCallback(callback: (String) -> Unit) = presenter.setOnContentChangeCallback(callback)
 
     override fun dispose() {
+        isDisposed = true
         editor.removeDocumentListener(treeDocumentListener)
         treePresenter.dispose()
         Disposer.dispose(jsonEditorTextView)

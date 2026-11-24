@@ -32,6 +32,8 @@ class JsonDiffWindowDialog(
         return diffRequestPanel.component
     }
 
+    override fun getDimensionServiceKey(): String = "com.livteam.jsoninja.dialog.JsonDiffWindowDialog"
+
     override fun getPreferredFocusedComponent(): JComponent? {
         return diffRequestPanel.preferredFocusedComponent
     }

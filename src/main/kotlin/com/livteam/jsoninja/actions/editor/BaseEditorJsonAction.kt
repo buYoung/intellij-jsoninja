@@ -3,7 +3,6 @@ package com.livteam.jsoninja.actions.editor
 import com.intellij.codeInsight.hint.HintManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.application.EDT
@@ -13,6 +12,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.project.DumbAwareAction
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
@@ -24,7 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 
-abstract class BaseEditorJsonAction : AnAction() {
+abstract class BaseEditorJsonAction : DumbAwareAction() {
 
     protected open val requiresJsonValidation: Boolean = true
     protected open val unescapeBeforeTransform: Boolean = false
@@ -83,7 +83,12 @@ abstract class BaseEditorJsonAction : AnAction() {
 
                     when (result) {
                         EditorActionResult.InvalidJson -> {
-                            showErrorHint(editor, LocalizationBundle.message("editor.action.error.invalid.json"))
+                            val invalidMessageKey = if (hasSelection) {
+                                "editor.action.error.invalid.json"
+                            } else {
+                                "editor.action.error.invalid.json.document"
+                            }
+                            showErrorHint(editor, LocalizationBundle.message(invalidMessageKey))
                         }
 
                         is EditorActionResult.Success -> {

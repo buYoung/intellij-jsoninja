@@ -1,13 +1,14 @@
 package com.livteam.jsoninja.actions
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.Toggleable
 import com.intellij.openapi.actionSystem.ex.ComboBoxAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.DumbAwareAction
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonDiffSortMode
 import com.livteam.jsoninja.services.JsonDiffService
@@ -16,7 +17,7 @@ import javax.swing.JComponent
 /**
  * diff toolbar에서 현재 정렬 기준을 표시하고 바꾸는 선택 상자
  */
-class SelectJsonDiffSortModeAction : ComboBoxAction() {
+class SelectJsonDiffSortModeAction : ComboBoxAction(), DumbAware {
 
     init {
         templatePresentation.text = LocalizationBundle.message("action.diff.sort.mode")
@@ -44,7 +45,7 @@ class SelectJsonDiffSortModeAction : ComboBoxAction() {
 
     private class SortModeOptionAction(
         private val sortMode: JsonDiffSortMode
-    ) : AnAction(getSortModeText(sortMode), getSortModeDescription(sortMode), null), Toggleable {
+    ) : DumbAwareAction(getSortModeText(sortMode), getSortModeDescription(sortMode), null), Toggleable {
 
         override fun actionPerformed(e: AnActionEvent) {
             val target = JsonDiffActionUtils.getTarget(e) ?: return

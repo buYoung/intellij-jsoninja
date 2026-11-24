@@ -1,15 +1,18 @@
 package com.livteam.jsoninja.ui.component.editor
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.livteam.jsoninja.LocalizationBundle
+import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.TemplatePlaceholderSupport
+import com.livteam.jsoninja.utils.JsonPathHelper
+import com.livteam.jsoninja.utils.JsonPathSegment
 import java.util.Collections
 import java.util.Enumeration
 import java.util.NoSuchElementException
@@ -50,7 +53,7 @@ class JsonEditorTreePresenter(
         refreshTreeJob?.cancel()
         refreshTreeJob = coroutineScope.launch {
             try {
-                val treeModel = withContext(Dispatchers.Default) {
+                val buildResult = withContext(Dispatchers.Default) {
                     buildTreeModel(jsonText)
                 }
 
@@ -58,7 +61,11 @@ class JsonEditorTreePresenter(
                     if (project.isDisposed || isDisposed || sequence != refreshSequence.get() || !isCurrentDocument()) {
                         return@withContext
                     }
-                    view.setTreeModel(treeModel)
+                    when (buildResult) {
+                        is TreeBuildResult.Success -> view.setTreeModel(buildResult.model)
+                        TreeBuildResult.Empty -> view.setEmptyState()
+                        is TreeBuildResult.InvalidJson -> view.setInvalidJsonState(buildResult.line, buildResult.column)
+                    }
                 }
             } catch (cancellationException: CancellationException) {
                 throw cancellationException
@@ -78,8 +85,12 @@ class JsonEditorTreePresenter(
         coroutineScope.cancel()
     }
 
-    private fun buildTreeModel(jsonText: String): DefaultTreeModel {
-        val rootNode: LazyJsonTreeNode = try {
+    private fun buildTreeModel(jsonText: String): TreeBuildResult {
+        if (jsonText.isBlank()) {
+            return TreeBuildResult.Empty
+        }
+
+        return try {
             val textToParse: String
             val placeholderLookup: Map<String, String>
             if (jsonText.contains(PLACEHOLDER_OPEN)) {
@@ -101,17 +112,19 @@ class JsonEditorTreePresenter(
             }
 
             val jsonNode = objectMapperService.readTreeFast(textToParse)
-            createRootTreeNode(jsonNode, placeholderLookup)
+            val rootNode = createRootTreeNode(jsonNode, placeholderLookup)
+            TreeBuildResult.Success(DefaultTreeModel(rootNode))
         } catch (cancellationException: CancellationException) {
             throw cancellationException
-        } catch (_: Exception) {
-            SingleChildJsonTreeNode(
-                displayText = TREE_ROOT_LABEL,
-                childDisplayText = LocalizationBundle.message("dialog.json.diff.invalid.json.format"),
+        } catch (exception: JsonProcessingException) {
+            val location = exception.location
+            TreeBuildResult.InvalidJson(
+                line = location?.lineNr?.takeIf { it > 0 },
+                column = location?.columnNr?.takeIf { it > 0 },
             )
+        } catch (_: Exception) {
+            TreeBuildResult.InvalidJson(line = null, column = null)
         }
-
-        return DefaultTreeModel(rootNode)
     }
 
     private fun createRootTreeNode(
@@ -123,7 +136,9 @@ class JsonEditorTreePresenter(
                 parentNode = null,
                 indexInParent = 0,
                 depth = 0,
-                displayText = TREE_ROOT_LABEL,
+                keyText = TREE_ROOT_LABEL,
+                rawKeyName = null,
+                pathSegment = null,
                 objectNode = jsonNode,
                 placeholderLookup = placeholderLookup,
             )
@@ -131,22 +146,58 @@ class JsonEditorTreePresenter(
                 parentNode = null,
                 indexInParent = 0,
                 depth = 0,
-                displayText = TREE_ROOT_LABEL,
+                keyText = TREE_ROOT_LABEL,
+                rawKeyName = null,
+                pathSegment = null,
                 arrayNode = jsonNode,
                 placeholderLookup = placeholderLookup,
             )
             else -> SingleChildJsonTreeNode(
                 displayText = TREE_ROOT_LABEL,
-                childDisplayText = formatValueLabel(TREE_VALUE_PREFIX, jsonNode, placeholderLookup),
+                childKeyText = TREE_VALUE_PREFIX,
+                childJsonNode = jsonNode,
+                placeholderLookup = placeholderLookup,
             )
         }
     }
+
+    private sealed interface TreeBuildResult {
+        data class Success(val model: DefaultTreeModel) : TreeBuildResult
+        data object Empty : TreeBuildResult
+        data class InvalidJson(val line: Int?, val column: Int?) : TreeBuildResult
+    }
+}
+
+internal enum class JsonTreeValueKind {
+    OBJECT,
+    ARRAY,
+    EMPTY_OBJECT,
+    EMPTY_ARRAY,
+    STRING,
+    NUMBER,
+    BOOLEAN,
+    NULL,
+    PLACEHOLDER,
+}
+
+internal sealed interface JsonTreePathSegment {
+    data class Property(val name: String) : JsonTreePathSegment
+    data class ArrayIndex(val index: Int) : JsonTreePathSegment
+    data class PropertyArrayIndex(val name: String, val index: Int) : JsonTreePathSegment
 }
 
 internal sealed class LazyJsonTreeNode(
     val parentNode: LazyJsonTreeNode?,
     val indexInParent: Int,
     val depth: Int,
+    val keyText: String,
+    val rawKeyName: String?,
+    val valueText: String?,
+    val rawCopyValue: String?,
+    val valueKind: JsonTreeValueKind,
+    val containerCount: Int,
+    val jsonNode: JsonNode?,
+    val pathSegment: JsonTreePathSegment?,
     val displayText: String,
 ) : TreeNode {
     override fun getParent(): TreeNode? = parentNode
@@ -156,6 +207,50 @@ internal sealed class LazyJsonTreeNode(
     fun isLastSibling(): Boolean {
         val parent = parentNode ?: return true
         return indexInParent == parent.childCount - 1
+    }
+
+    fun buildQueryPath(queryType: JsonQueryType): String {
+        return JsonPathHelper.formatPathSegments(
+            segments = collectJsonPathSegments(),
+            queryType = queryType,
+            wildcardArrays = false,
+        )
+    }
+
+    fun buildArrayWildcardQueryPath(queryType: JsonQueryType): String? {
+        val segments = collectJsonPathSegments()
+        if (!JsonPathHelper.hasArrayIndexSegment(segments)) {
+            return null
+        }
+        return JsonPathHelper.formatPathSegments(
+            segments = segments,
+            queryType = queryType,
+            wildcardArrays = true,
+        )
+    }
+
+    private fun collectJsonPathSegments(): List<JsonPathSegment> {
+        val treeSegments = ArrayList<JsonTreePathSegment>()
+        var current: LazyJsonTreeNode? = this
+        while (current != null) {
+            current.pathSegment?.let(treeSegments::add)
+            current = current.parentNode
+        }
+
+        if (treeSegments.isEmpty()) return emptyList()
+
+        val result = ArrayList<JsonPathSegment>(treeSegments.size)
+        for (i in treeSegments.lastIndex downTo 0) {
+            when (val segment = treeSegments[i]) {
+                is JsonTreePathSegment.Property -> result.add(JsonPathSegment.Property(segment.name))
+                is JsonTreePathSegment.ArrayIndex -> result.add(JsonPathSegment.ArrayIndex(segment.index))
+                is JsonTreePathSegment.PropertyArrayIndex -> {
+                    result.add(JsonPathSegment.Property(segment.name))
+                    result.add(JsonPathSegment.ArrayIndex(segment.index))
+                }
+            }
+        }
+        return result
     }
 
     override fun getIndex(node: TreeNode?): Int {
@@ -205,8 +300,27 @@ private class LeafJsonTreeNode(
     parentNode: LazyJsonTreeNode?,
     indexInParent: Int,
     depth: Int,
-    displayText: String,
-) : LazyJsonTreeNode(parentNode, indexInParent, depth, displayText) {
+    keyText: String,
+    rawKeyName: String?,
+    valueText: String,
+    rawCopyValue: String,
+    valueKind: JsonTreeValueKind,
+    jsonNode: JsonNode?,
+    pathSegment: JsonTreePathSegment?,
+) : LazyJsonTreeNode(
+    parentNode = parentNode,
+    indexInParent = indexInParent,
+    depth = depth,
+    keyText = keyText,
+    rawKeyName = rawKeyName,
+    valueText = valueText,
+    rawCopyValue = rawCopyValue,
+    valueKind = valueKind,
+    containerCount = 0,
+    jsonNode = jsonNode,
+    pathSegment = pathSegment,
+    displayText = "$keyText : $valueText",
+) {
     override fun getChildCount(): Int = 0
 
     override fun getAllowsChildren(): Boolean = false
@@ -220,8 +334,23 @@ private class LeafJsonTreeNode(
 
 private class SingleChildJsonTreeNode(
     displayText: String,
-    private val childDisplayText: String,
-) : LazyJsonTreeNode(parentNode = null, indexInParent = 0, depth = 0, displayText = displayText) {
+    private val childKeyText: String,
+    private val childJsonNode: JsonNode,
+    private val placeholderLookup: Map<String, String>,
+) : LazyJsonTreeNode(
+    parentNode = null,
+    indexInParent = 0,
+    depth = 0,
+    keyText = displayText,
+    rawKeyName = null,
+    valueText = null,
+    rawCopyValue = null,
+    valueKind = JsonTreeValueKind.OBJECT,
+    containerCount = 1,
+    jsonNode = childJsonNode,
+    pathSegment = null,
+    displayText = displayText,
+) {
     private var childNode: LeafJsonTreeNode? = null
 
     override fun getChildCount(): Int = 1
@@ -234,11 +363,15 @@ private class SingleChildJsonTreeNode(
         if (childIndex != 0) {
             throw IndexOutOfBoundsException("Index $childIndex out of bounds for length 1")
         }
-        return childNode ?: LeafJsonTreeNode(
+        return childNode ?: createScalarLeafNode(
             parentNode = this,
             indexInParent = 0,
             depth = depth + 1,
-            displayText = childDisplayText,
+            keyText = childKeyText,
+            rawKeyName = null,
+            valueNode = childJsonNode,
+            pathSegment = null,
+            placeholderLookup = placeholderLookup,
         ).also { childNode = it }
     }
 }
@@ -247,10 +380,25 @@ private class ArrayContainerJsonTreeNode(
     parentNode: LazyJsonTreeNode?,
     indexInParent: Int,
     depth: Int,
-    displayText: String,
+    keyText: String,
+    rawKeyName: String?,
+    pathSegment: JsonTreePathSegment?,
     private val arrayNode: JsonNode,
     private val placeholderLookup: Map<String, String>,
-) : LazyJsonTreeNode(parentNode, indexInParent, depth, displayText) {
+) : LazyJsonTreeNode(
+    parentNode = parentNode,
+    indexInParent = indexInParent,
+    depth = depth,
+    keyText = keyText,
+    rawKeyName = rawKeyName,
+    valueText = null,
+    rawCopyValue = if (arrayNode.isEmpty) "[]" else null,
+    valueKind = if (arrayNode.isEmpty) JsonTreeValueKind.EMPTY_ARRAY else JsonTreeValueKind.ARRAY,
+    containerCount = arrayNode.size(),
+    jsonNode = arrayNode,
+    pathSegment = pathSegment,
+    displayText = if (arrayNode.isEmpty) "$keyText : []" else "$keyText [${arrayNode.size()}]",
+) {
     private val totalChildCount: Int = if (arrayNode.isEmpty) 1 else arrayNode.size()
     private var childCache: LazyChildCache? = null
 
@@ -271,7 +419,13 @@ private class ArrayContainerJsonTreeNode(
                     parentNode = this,
                     indexInParent = 0,
                     depth = depth + 1,
-                    displayText = "$LAZY_TREE_VALUE_PREFIX : []",
+                    keyText = LAZY_TREE_VALUE_PREFIX,
+                    rawKeyName = null,
+                    valueText = "[]",
+                    rawCopyValue = "[]",
+                    valueKind = JsonTreeValueKind.EMPTY_ARRAY,
+                    jsonNode = arrayNode,
+                    pathSegment = null,
                 )
             } else {
                 createArrayElementNode(
@@ -279,6 +433,8 @@ private class ArrayContainerJsonTreeNode(
                     indexInParent = childIndex,
                     depth = depth + 1,
                     itemLabel = "[$childIndex]",
+                    rawKeyName = "[$childIndex]",
+                    pathSegment = JsonTreePathSegment.ArrayIndex(childIndex),
                     itemNode = arrayNode.get(childIndex),
                     placeholderLookup = placeholderLookup,
                 )
@@ -291,10 +447,25 @@ private class ObjectContainerJsonTreeNode(
     parentNode: LazyJsonTreeNode?,
     indexInParent: Int,
     depth: Int,
-    displayText: String,
+    keyText: String,
+    rawKeyName: String?,
+    pathSegment: JsonTreePathSegment?,
     private val objectNode: JsonNode,
     private val placeholderLookup: Map<String, String>,
-) : LazyJsonTreeNode(parentNode, indexInParent, depth, displayText) {
+) : LazyJsonTreeNode(
+    parentNode = parentNode,
+    indexInParent = indexInParent,
+    depth = depth,
+    keyText = keyText,
+    rawKeyName = rawKeyName,
+    valueText = if (objectNode.isEmpty) "{}" else null,
+    rawCopyValue = if (objectNode.isEmpty) "{}" else null,
+    valueKind = if (objectNode.isEmpty) JsonTreeValueKind.EMPTY_OBJECT else JsonTreeValueKind.OBJECT,
+    containerCount = objectNode.size(),
+    jsonNode = objectNode,
+    pathSegment = pathSegment,
+    displayText = if (objectNode.isEmpty) "$keyText : {}" else "$keyText {${objectNode.size()}}",
+) {
     private class FieldLayout(
         val fieldNames: Array<String>,
         val fieldNodes: Array<JsonNode>,
@@ -332,7 +503,9 @@ private class ObjectContainerJsonTreeNode(
                     parentNode = this,
                     indexInParent = childIndex,
                     depth = depth + 1,
-                    displayText = fieldName,
+                    keyText = fieldName,
+                    rawKeyName = fieldName,
+                    pathSegment = JsonTreePathSegment.Property(fieldName),
                     objectNode = fieldNode,
                     placeholderLookup = placeholderLookup,
                 )
@@ -342,7 +515,13 @@ private class ObjectContainerJsonTreeNode(
                             parentNode = this,
                             indexInParent = childIndex,
                             depth = depth + 1,
-                            displayText = "$fieldName : []",
+                            keyText = fieldName,
+                            rawKeyName = fieldName,
+                            valueText = "[]",
+                            rawCopyValue = "[]",
+                            valueKind = JsonTreeValueKind.EMPTY_ARRAY,
+                            jsonNode = fieldNode,
+                            pathSegment = JsonTreePathSegment.Property(fieldName),
                         )
                     } else {
                         val arrayIndex = childIndex - rangeStart
@@ -356,16 +535,22 @@ private class ObjectContainerJsonTreeNode(
                             indexInParent = childIndex,
                             depth = depth + 1,
                             itemLabel = arrayItemLabel,
+                            rawKeyName = fieldName.ifEmpty { "[$arrayIndex]" },
+                            pathSegment = JsonTreePathSegment.PropertyArrayIndex(fieldName, arrayIndex),
                             itemNode = fieldNode.get(arrayIndex),
                             placeholderLookup = placeholderLookup,
                         )
                     }
                 }
-                else -> LeafJsonTreeNode(
+                else -> createScalarLeafNode(
                     parentNode = this,
                     indexInParent = childIndex,
                     depth = depth + 1,
-                    displayText = formatValueLabel(fieldName, fieldNode, placeholderLookup),
+                    keyText = fieldName,
+                    rawKeyName = fieldName,
+                    valueNode = fieldNode,
+                    pathSegment = JsonTreePathSegment.Property(fieldName),
+                    placeholderLookup = placeholderLookup,
                 )
             }
         }
@@ -407,6 +592,8 @@ private fun createArrayElementNode(
     indexInParent: Int,
     depth: Int,
     itemLabel: String,
+    rawKeyName: String?,
+    pathSegment: JsonTreePathSegment?,
     itemNode: JsonNode,
     placeholderLookup: Map<String, String>,
 ): LazyJsonTreeNode {
@@ -415,7 +602,9 @@ private fun createArrayElementNode(
             parentNode = parentNode,
             indexInParent = indexInParent,
             depth = depth,
-            displayText = itemLabel,
+            keyText = itemLabel,
+            rawKeyName = rawKeyName,
+            pathSegment = pathSegment,
             objectNode = itemNode,
             placeholderLookup = placeholderLookup,
         )
@@ -423,33 +612,72 @@ private fun createArrayElementNode(
             parentNode = parentNode,
             indexInParent = indexInParent,
             depth = depth,
-            displayText = itemLabel,
+            keyText = itemLabel,
+            rawKeyName = rawKeyName,
+            pathSegment = pathSegment,
             arrayNode = itemNode,
             placeholderLookup = placeholderLookup,
         )
-        else -> LeafJsonTreeNode(
+        else -> createScalarLeafNode(
             parentNode = parentNode,
             indexInParent = indexInParent,
             depth = depth,
-            displayText = formatValueLabel(itemLabel, itemNode, placeholderLookup),
+            keyText = itemLabel,
+            rawKeyName = rawKeyName,
+            valueNode = itemNode,
+            pathSegment = pathSegment,
+            placeholderLookup = placeholderLookup,
         )
     }
 }
 
-private fun formatValueLabel(
-    label: String,
+private fun createScalarLeafNode(
+    parentNode: LazyJsonTreeNode,
+    indexInParent: Int,
+    depth: Int,
+    keyText: String,
+    rawKeyName: String?,
     valueNode: JsonNode,
+    pathSegment: JsonTreePathSegment?,
     placeholderLookup: Map<String, String>,
-): String {
-    val valueText = when {
-        valueNode.isNull -> "null"
+): LeafJsonTreeNode {
+    val (valueText, rawCopyValue, kind) = when {
+        valueNode.isNull -> Triple("null", "null", JsonTreeValueKind.NULL)
+        valueNode.isBoolean -> {
+            val boolText = valueNode.booleanValue().toString()
+            Triple(boolText, boolText, JsonTreeValueKind.BOOLEAN)
+        }
+        valueNode.isNumber -> {
+            val numberText = valueNode.asText()
+            Triple(numberText, numberText, JsonTreeValueKind.NUMBER)
+        }
         valueNode.isTextual -> {
             val rawText = valueNode.textValue()
-            placeholderLookup[rawText] ?: rawText
+            val placeholder = placeholderLookup[rawText]
+            if (placeholder != null) {
+                Triple(placeholder, placeholder, JsonTreeValueKind.PLACEHOLDER)
+            } else {
+                Triple("\"$rawText\"", rawText, JsonTreeValueKind.STRING)
+            }
         }
-        else -> valueNode.toString()
+        else -> {
+            val text = valueNode.toString()
+            Triple(text, text, JsonTreeValueKind.STRING)
+        }
     }
-    return "$label : $valueText"
+
+    return LeafJsonTreeNode(
+        parentNode = parentNode,
+        indexInParent = indexInParent,
+        depth = depth,
+        keyText = keyText,
+        rawKeyName = rawKeyName,
+        valueText = valueText,
+        rawCopyValue = rawCopyValue,
+        valueKind = kind,
+        jsonNode = valueNode,
+        pathSegment = pathSegment,
+    )
 }
 
 private fun findFieldIndex(cumulativeEndIndices: IntArray, childIndex: Int): Int {

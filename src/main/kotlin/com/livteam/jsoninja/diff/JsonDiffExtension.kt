@@ -334,19 +334,30 @@ class JsonDiffExtension : DiffExtension() {
         val diffService = project.service<JsonDiffService>()
         val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
         val pendingSides = EnumSet.noneOf(Side::class.java)
+        val pendingValidationSides = EnumSet.noneOf(Side::class.java)
         var debounceJob: Job? = null
         var formattingJob: Job? = null
         val isHostActive = { !project.isDisposed && !isViewerDisposed.get() && editors.none { it.isDisposed } }
 
         // EDT에서만 호출된다.
         fun launchFormatting() {
-            if (project.isDisposed || pendingSides.isEmpty()) return
-            val changedSides = EnumSet.copyOf(pendingSides)
+            if (project.isDisposed || (pendingSides.isEmpty() && pendingValidationSides.isEmpty())) return
+            val changedSides = if (pendingSides.isEmpty()) {
+                EnumSet.noneOf(Side::class.java)
+            } else {
+                EnumSet.copyOf(pendingSides)
+            }
+            val validationSides = if (pendingValidationSides.isEmpty()) {
+                EnumSet.noneOf(Side::class.java)
+            } else {
+                EnumSet.copyOf(pendingValidationSides)
+            }
             pendingSides.clear()
+            pendingValidationSides.clear()
 
             formattingJob?.cancel()
             formattingJob = coroutineScope.launch {
-                diffService.formatAutomatically(session, changedSides, isHostActive)
+                diffService.formatAndValidateAutomatically(session, changedSides, validationSides, isHostActive)
             }
         }
 
@@ -366,23 +377,27 @@ class JsonDiffExtension : DiffExtension() {
             val fileName = editors[side.index].virtualFile?.name ?: "<${side.name.lowercase()}>"
             val documentListener = object : DocumentListener {
                 override fun documentChanged(event: DocumentEvent) {
-                    // 이 변경이 JSONinja 정렬/복원 쓰기에서 발생한 경우 스킵
+                    // 이 변경이 JSONinja 정렬/복원/스왑 쓰기에서 발생한 경우 스킵
                     if (document.getUserData(Constants.CHANGE_GUARD_KEY) == true) {
                         LOG.debug("Skipping self-update for '$fileName'")
                         return
                     }
 
+                    // 실시간 JSON 유효성 표시기는 소규모 삭제/편집에도 항상 갱신한다.
+                    pendingValidationSides.add(side)
+
                     // 소규모 공백 전용 편집 스킵 (immutable CharSequence 직접 확인)
                     val editSize = abs(event.newLength - event.oldLength)
-                    if (editSize <= Constants.SMALL_EDIT_THRESHOLD && isAllWhitespace(event.newFragment)) {
+                    val isSmallWhitespaceEdit = editSize <= Constants.SMALL_EDIT_THRESHOLD &&
+                        isAllWhitespace(event.newFragment)
+                    if (!isSmallWhitespaceEdit) {
+                        // 대용량 파일은 viewer 생성 시점에서 warning dialog이 처리
+                        pendingSides.add(side)
+                    } else {
                         LOG.debug("Skipping small whitespace edit ($editSize chars) for '$fileName'")
-                        return
                     }
 
-                    // 대용량 파일은 viewer 생성 시점에서 warning dialog이 처리
-                    pendingSides.add(side)
-
-                    // 대기 중인 포맷팅 취소 후 debounce로 새로운 포맷팅 예약
+                    // 대기 중인 포맷팅 취소 후 debounce로 새로운 포맷팅/유효성 검사 예약
                     scheduleFormatting()
                 }
             }
@@ -397,6 +412,7 @@ class JsonDiffExtension : DiffExtension() {
             debounceJob?.cancel()
             debounceJob = null
             pendingSides.clear()
+            pendingValidationSides.clear()
             formattingJob?.cancel()
         }
 
@@ -408,7 +424,9 @@ class JsonDiffExtension : DiffExtension() {
             LOG.debug("Disposed JSON diff extension")
         }
 
-        // content가 있으면 초기 포맷팅 수행 (document.text 복사 없이 immutableCharSequence 확인)
+        // content가 있으면 초기 포맷팅 및 양쪽 유효성 검사 수행 (document.text 복사 없이 immutableCharSequence 확인)
+        pendingValidationSides.add(Side.LEFT)
+        pendingValidationSides.add(Side.RIGHT)
         if (findFirstNonWhitespaceIndex(session.leftDocument.immutableCharSequence) >= 0) pendingSides.add(Side.LEFT)
         if (findFirstNonWhitespaceIndex(session.rightDocument.immutableCharSequence) >= 0) pendingSides.add(Side.RIGHT)
         launchFormatting()

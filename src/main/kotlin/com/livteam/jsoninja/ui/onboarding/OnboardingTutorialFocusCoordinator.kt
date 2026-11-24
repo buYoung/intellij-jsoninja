@@ -10,7 +10,6 @@ class OnboardingTutorialFocusCoordinator(
     }
 
     fun onEvent(event: Event, isLastStep: Boolean) {
-        if (isLastStep) return
         when (event) {
             Event.DIALOG_ACTIVATED,
             Event.STEP_RENDERED,

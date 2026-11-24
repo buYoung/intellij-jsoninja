@@ -5,6 +5,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.LabelPosition
+import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.model.JsonFormatState
@@ -16,8 +17,6 @@ import com.livteam.jsoninja.ui.dialog.convertType.model.TypeToJsonDialogConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import javax.swing.JComponent
 import javax.swing.JSpinner
-import javax.swing.SpinnerNumberModel
-import com.intellij.ui.dsl.builder.panel
 
 class TypeToJsonDialogView(
     project: com.intellij.openapi.project.Project,
@@ -26,7 +25,7 @@ class TypeToJsonDialogView(
     private val fieldsModeComboBox = ComboBox(SchemaPropertyGenerationMode.entries.toTypedArray())
     private val nullableCheckBox = JBCheckBox(LocalizationBundle.message("dialog.type.to.json.nullable"))
     private val realisticDataCheckBox = JBCheckBox(LocalizationBundle.message("dialog.type.to.json.faker"))
-    private val outputCountSpinner = JSpinner(SpinnerNumberModel(1, 1, 100, 1))
+    private lateinit var outputCountSpinner: JSpinner
     private val formatStateComboBox = ComboBox(arrayOf(
         JsonFormatState.PRETTIFY,
         JsonFormatState.PRETTIFY_COMPACT,
@@ -72,8 +71,9 @@ class TypeToJsonDialogView(
                 cell(nullableCheckBox)
             }
             row {
-                cell(outputCountSpinner)
+                outputCountSpinner = spinner(1..100)
                     .label(LocalizationBundle.message("dialog.type.to.json.output.count"), LabelPosition.TOP)
+                    .component
             }
             row {
                 cell(formatStateComboBox)
@@ -113,7 +113,7 @@ class TypeToJsonDialogView(
         fieldsModeComboBox.selectedItem = config.propertyGenerationMode
         nullableCheckBox.isSelected = config.includesNullableFieldWithNullValue
         realisticDataCheckBox.isSelected = config.usesRealisticSampleData
-        outputCountSpinner.value = config.outputCount
+        outputCountSpinner.value = config.outputCount.coerceIn(1, 100)
         formatStateComboBox.selectedItem = config.formatState
         updateInputLanguage(config.language)
     }
@@ -152,6 +152,10 @@ class TypeToJsonDialogView(
         workspace.showLoadingPreview()
     }
 
+    fun stopLoadingIndicator() {
+        workspace.stopLoadingIndicator()
+    }
+
     fun showErrorPreview(message: String) {
         workspace.showErrorPreview(message)
     }
@@ -171,6 +175,10 @@ class TypeToJsonDialogView(
     fun clearPreviewWarnings() = workspace.clearPreviewWarnings()
 
     fun getValidationComponent(): JComponent = outputCountSpinner
+
+    fun getInputValidationComponent(): JComponent = inputPanel.getPreferredFocusedComponent()
+
+    fun getOutputCountValidationComponent(): JComponent = outputCountSpinner
 
     fun getPreferredFocusedComponent(): JComponent = inputPanel.getPreferredFocusedComponent()
 

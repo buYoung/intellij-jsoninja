@@ -6,6 +6,7 @@ enum class ApiRequestMethod(
     GET(false),
     POST(true),
     PUT(true),
+    PATCH(true),
     DELETE(true)
 }
 
@@ -15,6 +16,11 @@ enum class ApiAuthorizationType {
     BEARER
 }
 
+data class ApiHeaderEntry(
+    val name: String,
+    val value: String
+)
+
 data class ApiLoadRequest(
     val requestMethod: ApiRequestMethod,
     val requestUrl: String,
@@ -22,5 +28,6 @@ data class ApiLoadRequest(
     val basicUsername: String,
     val basicPassword: String,
     val bearerToken: String,
-    val requestBodyText: String
+    val requestBodyText: String,
+    val headers: List<ApiHeaderEntry> = emptyList()
 )

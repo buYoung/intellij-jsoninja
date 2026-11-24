@@ -1,5 +1,6 @@
 package com.livteam.jsoninja.ui.component.main
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
@@ -7,12 +8,14 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.editor.Document
 import java.util.WeakHashMap
+import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.ui.component.tab.JsonTabsPresenter
 import com.livteam.jsoninja.ui.component.tab.JsonTabsView
 import com.intellij.openapi.wm.ToolWindowManager
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsonHelperService
+import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.ui.component.editor.JsonEditorView
 import kotlinx.coroutines.CancellationException
@@ -64,8 +67,18 @@ class JsoninjaPanelPresenter(
 
     fun getProject(): Project = project
 
-    fun addNewTab(content: String = "", fileExtension: String? = null) {
-        tabsPresenter.addNewTabFromPlusTab(content, fileExtension)
+    fun addNewTab(
+        content: String = "",
+        fileExtension: String? = null,
+        title: String? = null,
+        tooltip: String? = null,
+    ) {
+        tabsPresenter.addNewTabFromPlusTab(
+            content = content,
+            fileExtension = fileExtension,
+            title = title,
+            tooltip = tooltip,
+        )
     }
 
     fun setJsonFormatState(state: JsonFormatState) {
@@ -76,7 +89,7 @@ class JsoninjaPanelPresenter(
 
     fun formatJson(formatState: JsonFormatState? = null) {
         val state = formatState ?: getJsonFormatState()
-        processCurrentEditorTextAsync { jsonText ->
+        processCurrentEditorTextAsync(requiresJsonValidation = true) { jsonText ->
             formatterService.formatJson(jsonText, state)
         }
     }
@@ -123,7 +136,10 @@ class JsoninjaPanelPresenter(
         return true
     }
 
-    private fun processCurrentEditorTextAsync(processor: (String) -> String) {
+    private fun processCurrentEditorTextAsync(
+        requiresJsonValidation: Boolean = false,
+        processor: (String) -> String,
+    ) {
         val currentEditor = getCurrentEditor() ?: return
         val jsonText = currentEditor.getText()
         val documentModificationStamp = currentEditor.editor.document.modificationStamp
@@ -135,8 +151,14 @@ class JsoninjaPanelPresenter(
         textProcessingJob?.cancel()
         textProcessingJob = coroutineScope.launch {
             try {
-                val processedJson = withContext(Dispatchers.Default) {
-                    processor(jsonText)
+                val outcome = withContext(Dispatchers.Default) {
+                    val processedJson = processor(jsonText)
+                    val invalidJsonMessage = if (requiresJsonValidation && processedJson == jsonText) {
+                        resolveInvalidJsonMessage(jsonText)
+                    } else {
+                        null
+                    }
+                    TextProcessOutcome(processedJson = processedJson, invalidJsonMessage = invalidJsonMessage)
                 }
 
                 withContext(Dispatchers.EDT) {
@@ -144,11 +166,53 @@ class JsoninjaPanelPresenter(
                     if (getCurrentEditor() !== currentEditor) return@withContext
                     if (currentEditor.editor.document.modificationStamp != documentModificationStamp) return@withContext
                     if (currentEditor.getText() != jsonText) return@withContext
-                    currentEditor.setText(processedJson)
+
+                    if (outcome.invalidJsonMessage != null) {
+                        currentEditor.showErrorHint(outcome.invalidJsonMessage)
+                        return@withContext
+                    }
+                    if (outcome.processedJson != jsonText) {
+                        currentEditor.setText(outcome.processedJson)
+                    }
                 }
             } catch (cancellationException: CancellationException) {
                 throw cancellationException
             }
         }
     }
+
+    private fun resolveInvalidJsonMessage(jsonText: String): String? {
+        if (formatterService.isValidJson(jsonText)) {
+            return null
+        }
+
+        val unescapedJson = formatterService.fullyUnescapeJson(jsonText)
+        if (unescapedJson != jsonText && formatterService.isValidJson(unescapedJson)) {
+            return null
+        }
+
+        val parseLocation = try {
+            service<JsonObjectMapperService>().readTreeFast(jsonText)
+            null
+        } catch (exception: JsonProcessingException) {
+            exception.location
+        } catch (_: Exception) {
+            null
+        }
+
+        return if (parseLocation != null && parseLocation.lineNr > 0 && parseLocation.columnNr > 0) {
+            LocalizationBundle.message(
+                "editor.action.error.invalid.json.with.location",
+                parseLocation.lineNr,
+                parseLocation.columnNr,
+            )
+        } else {
+            LocalizationBundle.message("editor.action.error.invalid.json.document")
+        }
+    }
+
+    private data class TextProcessOutcome(
+        val processedJson: String,
+        val invalidJsonMessage: String?,
+    )
 }

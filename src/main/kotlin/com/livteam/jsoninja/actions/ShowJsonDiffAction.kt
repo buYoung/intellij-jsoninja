@@ -1,9 +1,9 @@
 package com.livteam.jsoninja.actions
 
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.icons.JsoninjaIcons
@@ -16,7 +16,7 @@ import com.livteam.jsoninja.utils.JsonHelperUtils
  * JSON 차이를 비교하는 액션 클래스
  * Editor Tab 또는 Window 방식으로 diff를 표시합니다.
  */
-class ShowJsonDiffAction : AnAction(
+class ShowJsonDiffAction : DumbAwareAction(
     LocalizationBundle.messagePointer("action.show.json.diff"),
     LocalizationBundle.messagePointer("action.show.json.diff.description"),
     null as javax.swing.Icon?

@@ -170,9 +170,10 @@ class TypeCodeEditorIntegrationTest : BasePlatformTestCase() {
             assertNotNull(field.getEditor(true))
             preview.setSuccess("{\"value\":null}", "json", listOf("Unknown type <b>is plain text</b>"))
             assertEquals("{\"value\":null}", findField(preview).text)
-            assertEquals("Unknown type <b>is plain text</b>", descendants(preview).filterIsInstance<JBTextArea>().single().text)
+            val warningsArea = descendants(preview).filterIsInstance<JBTextArea>().single { it.name == "convertPreviewWarnings" }
+            assertEquals("Unknown type <b>is plain text</b>", warningsArea.text)
             preview.setLoading()
-            assertEquals("", descendants(preview).filterIsInstance<JBTextArea>().single().text)
+            assertEquals("", warningsArea.text)
             preview.setSuccess("{}", "json")
             assertEquals("{}", findField(preview).text)
             assertNull(TypeCodeHighlighterResolver.profileFor("json"))
