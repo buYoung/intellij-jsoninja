@@ -1,13 +1,11 @@
 package com.livteam.jsoninja.services.schema
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.progress.ProcessCanceledException
 import kotlinx.coroutines.CancellationException
@@ -24,13 +22,18 @@ import java.util.IdentityHashMap
 
 @Service(Service.Level.PROJECT)
 class JsonSchemaNormalizer(private val project: Project) {
-    private val strictObjectMapper: ObjectMapper = ObjectMapper()
-        .registerModule(KotlinModule.Builder().build())
-        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+    private val strictObjectMapper: ObjectMapper by lazy {
+        project.service<JsonSchemaValidationService>().getStrictObjectMapper()
+    }
 
     data class NormalizedJsonSchema(
         val resolvedSchemaNode: JsonNode,
         val rootConstraint: JsonSchemaConstraint
+    )
+
+    internal data class NormalizedSchemaWithMetadata(
+        val normalized: NormalizedJsonSchema,
+        val referencedFileTimestamps: Map<Path, Long>
     )
 
     private class SchemaDocumentContext(
@@ -44,7 +47,10 @@ class JsonSchemaNormalizer(private val project: Project) {
 
     fun normalize(schemaNode: JsonNode): NormalizedJsonSchema = normalize(schemaNode, null)
 
-    fun normalize(schemaNode: JsonNode, retrievalUri: String?): NormalizedJsonSchema {
+    fun normalize(schemaNode: JsonNode, retrievalUri: String?): NormalizedJsonSchema =
+        normalizeWithMetadata(schemaNode, retrievalUri).normalized
+
+    internal fun normalizeWithMetadata(schemaNode: JsonNode, retrievalUri: String?): NormalizedSchemaWithMetadata {
         val projectBasePath = project.basePath?.let { Paths.get(it) }
         val loadedDocumentContextByPath = mutableMapOf<Path, SchemaDocumentContext>()
         val loadedRemoteDocumentContextByUri = mutableMapOf<String, SchemaDocumentContext>()
@@ -61,7 +67,15 @@ class JsonSchemaNormalizer(private val project: Project) {
         )
 
         validateSchemaContradictions(resolvedSchemaNode, "#")
-        return NormalizedJsonSchema(resolvedSchemaNode, createConstraint(resolvedSchemaNode, "#"))
+        val normalized = NormalizedJsonSchema(resolvedSchemaNode, createConstraint(resolvedSchemaNode, "#"))
+        val referencedFileTimestamps = if (loadedDocumentContextByPath.isEmpty()) {
+            emptyMap()
+        } else {
+            loadedDocumentContextByPath.keys.associateWith { path ->
+                runCatching { Files.getLastModifiedTime(path).toMillis() }.getOrDefault(-1L)
+            }
+        }
+        return NormalizedSchemaWithMetadata(normalized, referencedFileTimestamps)
     }
 
     private fun createDocumentContext(
@@ -483,7 +497,7 @@ class JsonSchemaNormalizer(private val project: Project) {
         anchorNodesByName: MutableMap<String, JsonNode>,
         dialect: SpecificationVersion
     ) {
-        for (keyword in listOf("\$anchor", "\$dynamicAnchor")) {
+        for (keyword in ANCHOR_KEYWORDS) {
             val anchorName = schemaNode.path(keyword).takeIf { it.isTextual }?.asText()
             if (!anchorName.isNullOrBlank()) anchorNodesByName[anchorName] = schemaNode
         }
@@ -857,5 +871,9 @@ class JsonSchemaNormalizer(private val project: Project) {
     @Suppress("unused")
     private fun asBigDecimal(numberNode: JsonNode): BigDecimal? {
         return if (numberNode.isNumber) numberNode.decimalValue() else null
+    }
+
+    companion object {
+        private val ANCHOR_KEYWORDS = arrayOf("\$anchor", "\$dynamicAnchor")
     }
 }

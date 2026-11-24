@@ -120,6 +120,7 @@ dependencies {
         exclude(group = "org.slf4j", module = "slf4j-api")
     }
     implementation(libs.chicoryRuntime)
+    implementation(libs.chicoryCompiler)
     implementation(libs.chicoryWasi)
 
     implementation(libs.jacksonJq)

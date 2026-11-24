@@ -52,8 +52,24 @@ internal class Json5InputNormalizer(private val source: String) {
     private fun appendString() {
         val quote = source[offset++]
         output.append('"')
+        var runStart = offset
         while (offset < source.length) {
-            val character = source[offset++]
+            val character = source[offset]
+            if (character >= ' ' &&
+                character != quote &&
+                character != '\\' &&
+                character != '"' &&
+                character != '\u2028' &&
+                character != '\u2029'
+            ) {
+                offset++
+                continue
+            }
+
+            if (offset > runStart) {
+                output.append(source, runStart, offset)
+            }
+            offset++
             when (character) {
                 quote -> {
                     output.append('"')
@@ -83,6 +99,7 @@ internal class Json5InputNormalizer(private val source: String) {
                 }
                 else -> appendStringCharacter(character)
             }
+            runStart = offset
         }
         fail("Unterminated string")
     }
@@ -109,7 +126,7 @@ internal class Json5InputNormalizer(private val source: String) {
 
     private fun appendToken() {
         val startOffset = offset
-        while (offset < source.length && !isWhitespace(source[offset]) && source[offset] !in "{}[]:,/\"'") offset++
+        while (offset < source.length && !isWhitespace(source[offset]) && !isTokenDelimiter(source[offset])) offset++
         if (offset == startOffset) fail("Unexpected token")
         val token = source.substring(startOffset, offset)
         skipTrivia()
@@ -117,16 +134,21 @@ internal class Json5InputNormalizer(private val source: String) {
             appendIdentifier(token)
             return
         }
+        val firstChar = token[0]
         when {
             token == "true" || token == "false" || token == "null" -> output.append(token)
-            token.removePrefix("+").removePrefix("-") in setOf("Infinity", "NaN") ->
+            isNonFiniteNumberToken(token) ->
                 fail("Non-finite numbers cannot be converted to JSON")
-            HEX_NUMBER.matches(token) -> {
+            (firstChar == '0' || firstChar == '+' || firstChar == '-') &&
+                token.length >= 3 &&
+                (token.indexOf('x') >= 0 || token.indexOf('X') >= 0) &&
+                HEX_NUMBER.matches(token) -> {
                 val unsignedToken = token.removePrefix("+").removePrefix("-")
                 val number = BigInteger(unsignedToken.substring(2), 16)
                 output.append(if (token.startsWith('-')) number.negate() else number)
             }
-            DECIMAL_NUMBER.matches(token) -> {
+            (firstChar in '0'..'9' || firstChar == '+' || firstChar == '-' || firstChar == '.') &&
+                DECIMAL_NUMBER.matches(token) -> {
                 var number = token.removePrefix("+")
                 if (number.startsWith('.')) number = "0$number"
                 if (number.startsWith("-.")) number = "-0${number.substring(1)}"
@@ -174,18 +196,37 @@ internal class Json5InputNormalizer(private val source: String) {
         private val HEX_NUMBER = Regex("[+-]?0[xX][0-9a-fA-F]+")
         private val DECIMAL_NUMBER = Regex("[+-]?(?:(?:0|[1-9][0-9]*)(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
 
-        private fun isWhitespace(character: Char): Boolean =
-            character in " \t\n\r\u000B\u000C\u00A0\uFEFF\u2028\u2029" ||
-                Character.getType(character) == Character.SPACE_SEPARATOR.toInt()
+        private fun isTokenDelimiter(character: Char): Boolean = when (character) {
+            '{', '}', '[', ']', ':', ',', '/', '"', '\'' -> true
+            else -> false
+        }
+
+        private fun isNonFiniteNumberToken(token: String): Boolean {
+            val unsigned = when (token[0]) {
+                '+', '-' -> token.substring(1)
+                else -> token
+            }
+            return unsigned == "Infinity" || unsigned == "NaN"
+        }
+
+        private fun isWhitespace(character: Char): Boolean = when (character) {
+            ' ', '\t', '\n', '\r', '\u000B', '\u000C', '\u00A0', '\uFEFF', '\u2028', '\u2029' -> true
+            else -> Character.getType(character) == Character.SPACE_SEPARATOR.toInt()
+        }
 
         private fun isIdentifierStart(codePoint: Int): Boolean =
             codePoint == '_'.code || codePoint == '$'.code || Character.isLetter(codePoint) ||
                 Character.getType(codePoint) == Character.LETTER_NUMBER.toInt()
 
-        private fun isIdentifierPart(codePoint: Int): Boolean = isIdentifierStart(codePoint) ||
-            codePoint == 0x200C || codePoint == 0x200D || Character.getType(codePoint) in setOf(
-                Character.NON_SPACING_MARK.toInt(), Character.COMBINING_SPACING_MARK.toInt(),
-                Character.DECIMAL_DIGIT_NUMBER.toInt(), Character.CONNECTOR_PUNCTUATION.toInt(),
-            )
+        private fun isIdentifierPart(codePoint: Int): Boolean {
+            if (isIdentifierStart(codePoint) || codePoint == 0x200C || codePoint == 0x200D) return true
+            return when (Character.getType(codePoint)) {
+                Character.NON_SPACING_MARK.toInt(),
+                Character.COMBINING_SPACING_MARK.toInt(),
+                Character.DECIMAL_DIGIT_NUMBER.toInt(),
+                Character.CONNECTOR_PUNCTUATION.toInt() -> true
+                else -> false
+            }
+        }
     }
 }

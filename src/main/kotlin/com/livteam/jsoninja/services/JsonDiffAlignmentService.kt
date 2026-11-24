@@ -1,6 +1,8 @@
 package com.livteam.jsoninja.services
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.intellij.openapi.components.Service
@@ -27,7 +29,11 @@ class JsonDiffAlignmentService(private val project: Project) {
     private val LOG = logger<JsonDiffAlignmentService>()
     private val formatterService: JsonFormatterService
         get() = project.service<JsonFormatterService>()
-    private val objectMapper by lazy { service<JsonObjectMapperService>().objectMapper }
+    private val objectMapperService by lazy { service<JsonObjectMapperService>() }
+    private val standardObjectMapper: ObjectMapper
+        get() = objectMapperService.standardObjectMapper
+    private val objectMapper: ObjectMapper
+        get() = objectMapperService.objectMapper
 
     suspend fun align(
         leftText: String,
@@ -57,16 +63,24 @@ class JsonDiffAlignmentService(private val project: Project) {
         rightText: String,
         coroutineContext: CoroutineContext
     ): JsonDiffAlignmentResult {
-        val isLeftValid = isValidInput(leftText)
-        val isRightValid = isValidInput(rightText)
-        if (!isLeftValid && !isRightValid) {
+        coroutineContext.ensureActive()
+        val formattedLeft = tryFormatSortedSinglePass(leftText)
+        coroutineContext.ensureActive()
+        val formattedRight = tryFormatSortedSinglePass(rightText)
+        if (formattedLeft == null && formattedRight == null) {
             return createUnavailableResult(leftText, rightText)
         }
 
-        coroutineContext.ensureActive()
-        val sortedLeftText = if (isLeftValid) formatSorted(leftText) else leftText
-        coroutineContext.ensureActive()
-        val sortedRightText = if (isRightValid) formatSorted(rightText) else rightText
+        val sortedLeftText = if (formattedLeft != null) {
+            keepOriginalWhenEquivalent(leftText, formattedLeft)
+        } else {
+            leftText
+        }
+        val sortedRightText = if (formattedRight != null) {
+            keepOriginalWhenEquivalent(rightText, formattedRight)
+        } else {
+            rightText
+        }
         return createResult(leftText, rightText, sortedLeftText, sortedRightText)
     }
 
@@ -81,6 +95,7 @@ class JsonDiffAlignmentService(private val project: Project) {
     ): JsonDiffAlignmentResult {
         val placeholderTokens = PlaceholderTokenTable()
         val leftNode = parseInput(leftText, placeholderTokens) ?: return createUnavailableResult(leftText, rightText)
+        coroutineContext.ensureActive()
         val rightNode = parseInput(rightText, placeholderTokens) ?: return createUnavailableResult(leftText, rightText)
 
         coroutineContext.ensureActive()
@@ -90,7 +105,13 @@ class JsonDiffAlignmentService(private val project: Project) {
             ?: return createUnavailableResult(leftText, rightText)
 
         coroutineContext.ensureActive()
-        val alignedLeftText = if (usesKeySorting) formatSorted(leftText) else leftText
+        val alignedLeftText = if (usesKeySorting) {
+            val formattedLeftText = writeFormatted(leftNode, true, placeholderTokens)
+                ?: return createUnavailableResult(leftText, rightText)
+            keepOriginalWhenEquivalent(leftText, formattedLeftText)
+        } else {
+            leftText
+        }
         return createResult(
             originalLeftText = leftText,
             originalRightText = rightText,
@@ -123,21 +144,39 @@ class JsonDiffAlignmentService(private val project: Project) {
         options: JsonDiffAlignmentOptions,
         coroutineContext: CoroutineContext
     ): ObjectNode {
-        val targetFieldNames = targetNode.fieldNames().asSequence().toList()
-        val orderedFieldNames = if (options.sortMode == JsonDiffSortMode.LEFT_ORDER) {
+        val alignedNode = standardObjectMapper.nodeFactory.objectNode()
+        if (options.sortMode == JsonDiffSortMode.LEFT_ORDER) {
             // 공통 키는 왼쪽 순서로, 오른쪽에만 있는 키는 원래 상대 순서로 뒤에 둔다.
-            val sharedFieldNames = referenceNode.fieldNames().asSequence().filter { targetNode.has(it) }.toList()
-            sharedFieldNames + targetFieldNames.filterNot { referenceNode.has(it) }
+            val referenceIterator = referenceNode.fieldNames()
+            while (referenceIterator.hasNext()) {
+                val fieldName = referenceIterator.next()
+                val targetValue = targetNode.get(fieldName)
+                if (targetValue != null) {
+                    alignedNode.set<JsonNode>(
+                        fieldName,
+                        alignNode(referenceNode.get(fieldName), targetValue, options, coroutineContext)
+                    )
+                }
+            }
+            val targetIterator = targetNode.fields()
+            while (targetIterator.hasNext()) {
+                val entry = targetIterator.next()
+                if (!referenceNode.has(entry.key)) {
+                    alignedNode.set<JsonNode>(
+                        entry.key,
+                        alignNode(null, entry.value, options, coroutineContext)
+                    )
+                }
+            }
         } else {
-            targetFieldNames
-        }
-
-        val alignedNode = objectMapper.nodeFactory.objectNode()
-        orderedFieldNames.forEach { fieldName ->
-            alignedNode.set<JsonNode>(
-                fieldName,
-                alignNode(referenceNode.get(fieldName), targetNode.get(fieldName), options, coroutineContext)
-            )
+            val targetIterator = targetNode.fields()
+            while (targetIterator.hasNext()) {
+                val entry = targetIterator.next()
+                alignedNode.set<JsonNode>(
+                    entry.key,
+                    alignNode(referenceNode.get(entry.key), entry.value, options, coroutineContext)
+                )
+            }
         }
         return alignedNode
     }
@@ -148,74 +187,120 @@ class JsonDiffAlignmentService(private val project: Project) {
         options: JsonDiffAlignmentOptions,
         coroutineContext: CoroutineContext
     ): ArrayNode {
-        val alignedNode = objectMapper.nodeFactory.arrayNode(targetNode.size())
+        val alignedNode = standardObjectMapper.nodeFactory.arrayNode(targetNode.size())
         if (!options.shouldIgnoreArrayOrder) {
-            targetNode.forEachIndexed { index, element ->
-                alignedNode.add(alignNode(referenceNode.get(index), element, options, coroutineContext))
+            for (index in 0 until targetNode.size()) {
+                alignedNode.add(alignNode(referenceNode.get(index), targetNode.get(index), options, coroutineContext))
             }
             return alignedNode
         }
 
         // JsonNode 동등성은 객체 필드 순서를 무시하고 중첩 배열 순서와 값 타입은 유지한다.
-        val unmatchedIndexesByElement = HashMap<JsonNode, ArrayDeque<Int>>()
-        targetNode.forEachIndexed { index, element ->
+        val unmatchedIndexesByElement = HashMap<JsonNode, ArrayDeque<Int>>(targetNode.size() * 2 + 1)
+        for (index in 0 until targetNode.size()) {
             coroutineContext.ensureActive()
+            val element = targetNode.get(index)
             unmatchedIndexesByElement.getOrPut(element) { ArrayDeque() }.addLast(index)
         }
 
         val isMatchedByIndex = BooleanArray(targetNode.size())
-        referenceNode.forEach { referenceElement ->
+        for (index in 0 until referenceNode.size()) {
             coroutineContext.ensureActive()
-            val matchedIndex = unmatchedIndexesByElement[referenceElement]?.removeFirstOrNull() ?: return@forEach
+            val referenceElement = referenceNode.get(index)
+            val matchedIndex = unmatchedIndexesByElement[referenceElement]?.removeFirstOrNull() ?: continue
             isMatchedByIndex[matchedIndex] = true
             alignedNode.add(alignNode(referenceElement, targetNode.get(matchedIndex), options, coroutineContext))
         }
 
         // 일치하지 않은 요소는 식별자를 추정하지 않고 원래 상대 순서로 뒤에 붙인다.
-        targetNode.forEachIndexed { index, element ->
-            if (!isMatchedByIndex[index]) alignedNode.add(element)
+        for (index in 0 until targetNode.size()) {
+            if (!isMatchedByIndex[index]) alignedNode.add(targetNode.get(index))
         }
         return alignedNode
     }
 
     /**
-     * JsonFormatterService.formatJson과 같은 unescape/placeholder/검증 경로로 입력을 해석합니다.
+     * JsonFormatterService.formatJson과 같은 unescape/placeholder/검증 경로로 입력을 단일 패스로 해석합니다.
      * 양쪽의 같은 placeholder가 같은 값으로 비교되도록 sentinel을 공통 token으로 바꿉니다.
      */
     private fun parseInput(text: String, placeholderTokens: PlaceholderTokenTable): JsonNode? {
         if (text.isBlank()) return null
 
-        val unescapedText = formatterService.fullyUnescapeJson(text)
-        val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(unescapedText)
-        if (!replacementResult.isSuccessful) return null
-        if (!formatterService.isValidJson(replacementResult.replacedText)) return null
+        parseSingleInput(text, placeholderTokens)?.let { return it }
 
-        val parsedNode = objectMapper.readTree(replacementResult.replacedText) ?: return null
+        if (!formatterService.containsEscapeCharacters(text)) {
+            return null
+        }
+
+        val unescapedText = formatterService.fullyUnescapeJson(text)
+        if (unescapedText == text) {
+            return null
+        }
+        return parseSingleInput(unescapedText, placeholderTokens)
+    }
+
+    private fun parseSingleInput(text: String, placeholderTokens: PlaceholderTokenTable): JsonNode? {
+        val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(text)
+        if (!replacementResult.isSuccessful) return null
+
+        val parsedNode = parseSingleValidTreeFast(replacementResult.replacedText) ?: return null
         if (replacementResult.mappings.isEmpty()) return parsedNode
 
-        val sharedTokensBySentinel = replacementResult.mappings.associate { mapping ->
-            mapping.sentinelToken to placeholderTokens.getToken(mapping.originalPlaceholder)
+        val sharedTokensBySentinel = HashMap<String, String>(replacementResult.mappings.size * 2)
+        for (mapping in replacementResult.mappings) {
+            sharedTokensBySentinel[mapping.sentinelToken] = placeholderTokens.getToken(mapping.originalPlaceholder)
         }
         return replaceSentinelTokens(parsedNode, sharedTokensBySentinel)
+    }
+
+    private fun parseSingleValidTreeFast(jsonText: String): JsonNode? {
+        if (jsonText.isBlank()) return null
+
+        return try {
+            parseSingleTree(standardObjectMapper, jsonText)
+        } catch (_: JsonProcessingException) {
+            try {
+                parseSingleTree(objectMapper, jsonText)
+            } catch (_: JsonProcessingException) {
+                null
+            }
+        }
+    }
+
+    private fun parseSingleTree(mapper: ObjectMapper, jsonText: String): JsonNode? {
+        return mapper.factory.createParser(jsonText).use { parser ->
+            if (parser.nextToken() == null) return null
+            val parsedNode = mapper.readTree<JsonNode>(parser) ?: return null
+            if (parser.nextToken() != null) return null
+            parsedNode
+        }
     }
 
     private fun replaceSentinelTokens(node: JsonNode, sharedTokensBySentinel: Map<String, String>): JsonNode {
         return when {
             node.isTextual -> sharedTokensBySentinel[node.textValue()]
-                ?.let { objectMapper.nodeFactory.textNode(it) }
+                ?.let { standardObjectMapper.nodeFactory.textNode(it) }
                 ?: node
 
             node is ObjectNode -> {
-                val fieldNames = node.fieldNames().asSequence().toList()
-                fieldNames.forEach { fieldName ->
-                    node.set<JsonNode>(fieldName, replaceSentinelTokens(node.get(fieldName), sharedTokensBySentinel))
+                val iterator = node.fields()
+                while (iterator.hasNext()) {
+                    val entry = iterator.next()
+                    val replacement = replaceSentinelTokens(entry.value, sharedTokensBySentinel)
+                    if (replacement !== entry.value) {
+                        entry.setValue(replacement)
+                    }
                 }
                 node
             }
 
             node is ArrayNode -> {
                 for (index in 0 until node.size()) {
-                    node.set(index, replaceSentinelTokens(node.get(index), sharedTokensBySentinel))
+                    val existing = node.get(index)
+                    val replacement = replaceSentinelTokens(existing, sharedTokensBySentinel)
+                    if (replacement !== existing) {
+                        node.set(index, replacement)
+                    }
                 }
                 node
             }
@@ -229,27 +314,44 @@ class JsonDiffAlignmentService(private val project: Project) {
         usesKeySorting: Boolean,
         placeholderTokens: PlaceholderTokenTable
     ): String? {
-        val compactText = objectMapper.writeValueAsString(node)
-        val formattedText = formatterService.formatJson(compactText, JsonFormatState.PRETTIFY, usesKeySorting)
+        val formattedText = formatterService.formatJsonNode(node, JsonFormatState.PRETTIFY, usesKeySorting)
         if (placeholderTokens.isEmpty()) return formattedText
 
         val restoredText = TemplatePlaceholderSupport.restorePlaceholders(formattedText, placeholderTokens.mappings)
         return restoredText.takeUnless { it.contains(placeholderTokens.tokenPrefix) }
     }
 
-    private fun formatSorted(text: String): String {
-        return keepOriginalWhenEquivalent(text, formatterService.formatJson(text, JsonFormatState.PRETTIFY, true))
-    }
+    private fun tryFormatSortedSinglePass(text: String): String? {
+        if (text.isBlank()) return null
 
-    private fun isValidInput(text: String): Boolean {
-        return formatterService.isValidJson(formatterService.fullyUnescapeJson(text))
+        formatterService.tryFormatValidJson(text, JsonFormatState.PRETTIFY, true)?.let { return it }
+
+        if (!formatterService.containsEscapeCharacters(text)) {
+            return null
+        }
+
+        val unescapedText = formatterService.fullyUnescapeJson(text)
+        if (unescapedText == text) {
+            return null
+        }
+        return formatterService.tryFormatValidJson(unescapedText, JsonFormatState.PRETTIFY, true)
     }
 
     /**
      * 앞뒤 공백만 다른 결과는 변경으로 보지 않고 원본을 유지합니다.
      */
     private fun keepOriginalWhenEquivalent(originalText: String, formattedText: String): String {
-        return if (formattedText == originalText.trim()) originalText else formattedText
+        return if (equalsTrimmed(originalText, formattedText)) originalText else formattedText
+    }
+
+    private fun equalsTrimmed(originalText: String, targetText: String): Boolean {
+        var start = 0
+        var end = originalText.length
+        while (start < end && originalText[start] <= ' ') start++
+        while (end > start && originalText[end - 1] <= ' ') end--
+        val trimmedLength = end - start
+        return trimmedLength == targetText.length &&
+            originalText.regionMatches(start, targetText, 0, trimmedLength)
     }
 
     private fun createResult(

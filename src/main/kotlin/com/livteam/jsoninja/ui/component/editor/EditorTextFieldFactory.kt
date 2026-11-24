@@ -34,6 +34,7 @@ internal object EditorTextFieldFactory {
         shouldShowHorizontalScrollbar: Boolean = false,
         shouldShowVerticalScrollbar: Boolean = false,
         shouldEmbedIntoDialogWrapper: Boolean = true,
+        isSupplementary: Boolean = shouldEmbedIntoDialogWrapper,
         configureEditorSettings: EditorSettings.() -> Unit = {},
         customizeEditor: EditorEx.(FileType) -> Unit = {},
     ): EditorTextField {
@@ -55,6 +56,7 @@ internal object EditorTextFieldFactory {
             shouldShowHorizontalScrollbar = shouldShowHorizontalScrollbar,
             shouldShowVerticalScrollbar = shouldShowVerticalScrollbar,
             shouldEmbedIntoDialogWrapper = shouldEmbedIntoDialogWrapper,
+            isSupplementary = isSupplementary,
             configureEditorSettings = configureEditorSettings,
             customizeEditor = customizeEditor,
         )
@@ -74,6 +76,7 @@ internal object EditorTextFieldFactory {
         shouldShowHorizontalScrollbar: Boolean = false,
         shouldShowVerticalScrollbar: Boolean = false,
         shouldEmbedIntoDialogWrapper: Boolean = true,
+        isSupplementary: Boolean = shouldEmbedIntoDialogWrapper,
         highlighterProvider: ((Project, FileType, EditorColorsScheme) -> EditorHighlighter)? = null,
         configureEditorSettings: EditorSettings.() -> Unit = {},
         customizeEditor: EditorEx.(FileType) -> Unit = {},
@@ -102,6 +105,7 @@ internal object EditorTextFieldFactory {
             shouldShowHorizontalScrollbar = shouldShowHorizontalScrollbar,
             shouldShowVerticalScrollbar = shouldShowVerticalScrollbar,
             shouldEmbedIntoDialogWrapper = shouldEmbedIntoDialogWrapper,
+            isSupplementary = isSupplementary,
             configureEditorSettings = configureEditorSettings,
             customizeEditor = customizeEditor,
         )
@@ -115,6 +119,7 @@ internal object EditorTextFieldFactory {
         isViewer: Boolean = false,
         oneLineMode: Boolean = false,
         shouldEmbedIntoDialogWrapper: Boolean = true,
+        isSupplementary: Boolean = shouldEmbedIntoDialogWrapper,
         configureEditorSettings: EditorSettings.() -> Unit = {},
         customizeEditor: EditorEx.(FileType) -> Unit = {},
     ): EditorTextField {
@@ -134,6 +139,7 @@ internal object EditorTextFieldFactory {
             shouldShowHorizontalScrollbar = false,
             shouldShowVerticalScrollbar = false,
             shouldEmbedIntoDialogWrapper = shouldEmbedIntoDialogWrapper,
+            isSupplementary = isSupplementary,
             configureEditorSettings = configureEditorSettings,
             customizeEditor = customizeEditor,
         )
@@ -153,6 +159,7 @@ internal object EditorTextFieldFactory {
         shouldShowHorizontalScrollbar: Boolean,
         shouldShowVerticalScrollbar: Boolean,
         shouldEmbedIntoDialogWrapper: Boolean,
+        isSupplementary: Boolean,
         configureEditorSettings: EditorSettings.() -> Unit,
         customizeEditor: EditorEx.(FileType) -> Unit,
         highlighterProvider: ((Project, FileType, EditorColorsScheme) -> EditorHighlighter)? = null,
@@ -166,7 +173,7 @@ internal object EditorTextFieldFactory {
 
         placeholderText?.let(editorTextField::setPlaceholder)
         preferredSize?.let { editorTextField.preferredSize = it }
-        editorTextField.setSupplementary(true)
+        editorTextField.setSupplementary(isSupplementary)
         editorTextField.addSettingsProvider { editor ->
             editor.settings.configureEditorSettings()
             editor.settings.isFoldingOutlineShown = shouldEnableCodeFolding

@@ -1,39 +1,79 @@
 package com.livteam.jsoninja.services.schema
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectWriter
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.NullNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.databind.node.TextNode
-import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProcessCanceledException
-import kotlinx.coroutines.CancellationException
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.services.JsonObjectMapperService
 import com.livteam.jsoninja.services.RandomJsonDataCreator
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationConfig
 import com.livteam.jsoninja.ui.dialog.generateJson.model.JsonGenerationMode
 import com.livteam.jsoninja.ui.dialog.generateJson.model.SchemaPropertyGenerationMode
 import com.networknt.schema.Schema
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlinx.coroutines.CancellationException
 
 @Service(Service.Level.PROJECT)
-class JsonSchemaDataGenerationService(private val project: Project) {
+class JsonSchemaDataGenerationService(private val project: Project) : Disposable {
     private val LOG = logger<JsonSchemaDataGenerationService>()
     private val validationService by lazy { project.service<JsonSchemaValidationService>() }
     private val normalizer by lazy { project.service<JsonSchemaNormalizer>() }
     private val valueGenerator by lazy { project.service<JsonSchemaValueGenerator>() }
-    private val objectMapper by lazy { service<JsonObjectMapperService>().objectMapper }
+    private val objectMapper by lazy { service<JsonObjectMapperService>().standardObjectMapper }
+    private val prettyObjectWriter: ObjectWriter by lazy {
+        objectMapper.writerWithDefaultPrettyPrinter()
+            .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+    }
     private val randomJsonDataCreator by lazy { RandomJsonDataCreator() }
+
+    private val preparedSchemaCacheLock = Any()
+    private val preparedSchemaCache = object : LinkedHashMap<PreparedSchemaCacheKey, CachedPreparedSchema>(
+        MAX_PREPARED_SCHEMA_CACHE_SIZE,
+        0.75f,
+        true
+    ) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<PreparedSchemaCacheKey, CachedPreparedSchema>?): Boolean {
+            return size > MAX_PREPARED_SCHEMA_CACHE_SIZE
+        }
+    }
 
     data class PreparedSchema(
         val resolvedSchemaNode: JsonNode,
         val compiledSchema: Schema,
         val rootConstraint: JsonSchemaConstraint
     )
+
+    private data class PreparedSchemaCacheKey(
+        val schemaText: String,
+        val retrievalUri: String?
+    )
+
+    private class CachedPreparedSchema(
+        val preparedSchema: PreparedSchema,
+        val referencedFileTimestamps: Map<Path, Long>
+    ) {
+        fun isFresh(): Boolean {
+            if (referencedFileTimestamps.isEmpty()) return true
+            for ((path, expectedTimestamp) in referencedFileTimestamps) {
+                val currentTimestamp = runCatching { Files.getLastModifiedTime(path).toMillis() }.getOrDefault(-1L)
+                if (currentTimestamp != expectedTimestamp) {
+                    return false
+                }
+            }
+            return true
+        }
+    }
 
     private data class CommentedSchemaNodes(
         val activeNode: JsonNode,
@@ -51,8 +91,20 @@ class JsonSchemaDataGenerationService(private val project: Project) {
     fun prepareSchema(schemaText: String): PreparedSchema = prepareSchema(schemaText, null)
 
     fun prepareSchema(schemaText: String, retrievalUri: String?): PreparedSchema {
+        val cacheKey = PreparedSchemaCacheKey(schemaText, retrievalUri)
+        synchronized(preparedSchemaCacheLock) {
+            val cached = preparedSchemaCache[cacheKey]
+            if (cached != null) {
+                if (cached.isFresh()) {
+                    return cached.preparedSchema
+                }
+                preparedSchemaCache.remove(cacheKey)
+            }
+        }
+
         val parsedSchemaNode = validationService.parseStrictSchema(schemaText)
-        val normalizedJsonSchema = normalizer.normalize(parsedSchemaNode, retrievalUri)
+        val normalizedWithMetadata = normalizer.normalizeWithMetadata(parsedSchemaNode, retrievalUri)
+        val normalizedJsonSchema = normalizedWithMetadata.normalized
         val schemaValidationResult = validationService.validateSchema(normalizedJsonSchema.resolvedSchemaNode)
         if (!schemaValidationResult.isValid || schemaValidationResult.compiledSchema == null) {
             throw JsonSchemaGenerationException(
@@ -61,11 +113,24 @@ class JsonSchemaDataGenerationService(private val project: Project) {
             )
         }
 
-        return PreparedSchema(
+        val preparedSchema = PreparedSchema(
             resolvedSchemaNode = normalizedJsonSchema.resolvedSchemaNode,
             compiledSchema = schemaValidationResult.compiledSchema,
             rootConstraint = normalizedJsonSchema.rootConstraint
         )
+        synchronized(preparedSchemaCacheLock) {
+            preparedSchemaCache[cacheKey] = CachedPreparedSchema(
+                preparedSchema = preparedSchema,
+                referencedFileTimestamps = normalizedWithMetadata.referencedFileTimestamps
+            )
+        }
+        return preparedSchema
+    }
+
+    override fun dispose() {
+        synchronized(preparedSchemaCacheLock) {
+            preparedSchemaCache.clear()
+        }
     }
 
     fun generateFromSchema(config: JsonGenerationConfig): String = generateFromSchema(config) { ProgressManager.checkCanceled() }
@@ -102,9 +167,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
             resultArrayNode
         }
 
-        val generatedJsonString = objectMapper.writerWithDefaultPrettyPrinter()
-            .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .writeValueAsString(resultNode)
+        val generatedJsonString = prettyObjectWriter.writeValueAsString(resultNode)
 
         checkCancellation()
         return if (config.isJson5) {
@@ -458,9 +521,7 @@ class JsonSchemaDataGenerationService(private val project: Project) {
 
     private fun renderPlainNode(node: JsonNode, indentDepth: Int): List<String> {
         val serializedNode = if (node.isContainerNode) {
-            objectMapper.writerWithDefaultPrettyPrinter()
-                .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-                .writeValueAsString(node)
+            prettyObjectWriter.writeValueAsString(node)
         } else {
             objectMapper.writeValueAsString(node)
         }
@@ -759,5 +820,6 @@ class JsonSchemaDataGenerationService(private val project: Project) {
 
     companion object {
         private const val INDENT_UNIT = "  "
+        private const val MAX_PREPARED_SCHEMA_CACHE_SIZE = 16
     }
 }

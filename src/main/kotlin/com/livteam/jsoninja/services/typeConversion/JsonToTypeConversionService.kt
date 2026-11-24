@@ -12,7 +12,7 @@ import com.livteam.jsoninja.services.typeConversion.languages.TypeLanguageRegist
 class JsonToTypeConversionService(
     private val project: Project,
 ) {
-    private val objectMapper by lazy { service<JsonObjectMapperService>().objectMapper }
+    private val objectMapperService by lazy { service<JsonObjectMapperService>() }
     private val renderer = JsonToTypeRenderer()
 
     fun convert(
@@ -33,7 +33,7 @@ class JsonToTypeConversionService(
             "Root type name must be a valid identifier."
         }
 
-        val jsonNode = objectMapper.readTree(jsonText)
+        val jsonNode = objectMapperService.readTreeFast(jsonText)
         val inferenceContext = JsonToTypeInferenceContext(language, options)
         val inferenceResult = inferenceContext.infer(jsonNode)
         val warnings = inferenceResult.warnings +

@@ -61,7 +61,7 @@ class JsonTabContextFactory(
         tabContentPanel.add(jmesComponent, BorderLayout.NORTH)
         tabContentPanel.add(editor, BorderLayout.CENTER)
 
-        setupJmesPathPresenter(jsonQueryPresenter, editor, tabDisposable, initialJson = content)
+        setupJmesPathPresenter(jsonQueryPresenter, editor, tabDisposable)
 
         return TabUiState(
             panel = tabContentPanel,
@@ -76,8 +76,8 @@ class JsonTabContextFactory(
         onTabContentChangedListener: ((String) -> Unit)?
     ): JsonEditorView {
         return JsonEditorView(project, fileExtension).apply {
-            setOnContentChangeCallback { newContent ->
-                onTabContentChangedListener?.invoke(newContent)
+            if (onTabContentChangedListener != null) {
+                setOnContentChangeCallback(onTabContentChangedListener)
             }
         }
     }
@@ -86,7 +86,6 @@ class JsonTabContextFactory(
         jsonQueryPresenter: JsonQueryPresenter,
         editor: JsonEditorView,
         tabDisposable: Disposable,
-        initialJson: String? = null
     ) {
         val queryResultFormatScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
         var queryResultFormatJob: Job? = null
@@ -95,7 +94,8 @@ class JsonTabContextFactory(
         editor.editor.document.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
                 if (!isApplyingQueryResult) {
-                    jsonQueryPresenter.setOriginalJson(event.document.text)
+                    // Invalidate cached query source lazily instead of copying document.text on every keystroke.
+                    jsonQueryPresenter.setOriginalJson("")
                     queryResultFormatJob?.cancel()
                 }
             }
@@ -104,10 +104,6 @@ class JsonTabContextFactory(
             isTabDisposed.set(true)
             queryResultFormatJob?.cancel()
             queryResultFormatScope.cancel()
-        }
-
-        initialJson?.takeIf { it.isNotBlank() }?.let {
-            jsonQueryPresenter.setOriginalJson(it)
         }
 
         jsonQueryPresenter.setOnBeforeSearchCallback {

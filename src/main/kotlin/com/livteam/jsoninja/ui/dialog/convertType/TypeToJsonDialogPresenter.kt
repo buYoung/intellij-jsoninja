@@ -1,8 +1,10 @@
 package com.livteam.jsoninja.ui.dialog.convertType
 
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.ui.EditorTextField
 import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.typeConversion.TypeToJsonGenerationOptions
@@ -18,6 +20,10 @@ class TypeToJsonDialogPresenter(
     initialInputText: String,
     private val onLanguageChanged: (SupportedLanguage) -> Unit,
 ) {
+    companion object {
+        private const val NON_BLANK_SENTINEL = "x"
+    }
+
     private val settingsAdapter = TypeToJsonDialogSettingsAdapter(JsoninjaSettingsState.getInstance(project))
     private val generationService = project.getService(TypeToJsonGenerationService::class.java)
     private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
@@ -25,6 +31,8 @@ class TypeToJsonDialogPresenter(
     private val view = TypeToJsonDialogView(project)
     private var currentConfig = settingsAdapter.load()
     private var previewState: ConvertPreviewState<TypeToJsonDialogConfig> = ConvertPreviewState.Invalid()
+    private var readyInputDocument: Document? = null
+    private var readyInputStamp: Long = -1L
     private var onPreviewStateChanged: (() -> Unit)? = null
     private var isApplyingState = false
 
@@ -50,7 +58,7 @@ class TypeToJsonDialogPresenter(
 
     fun validate(): ValidationInfo? {
         return TypeToJsonDialogValidator.validate(
-            sourceCode = view.getInputText(),
+            sourceCode = if (isInputBlank()) "" else NON_BLANK_SENTINEL,
             outputCount = view.collectConfig().outputCount,
             validationComponent = view.getValidationComponent(),
         ) ?: (previewState as? ConvertPreviewState.Invalid)?.message?.let {
@@ -60,7 +68,13 @@ class TypeToJsonDialogPresenter(
 
     fun getCurrentPreviewText(): String {
         val ready = previewState as? ConvertPreviewState.Ready<*> ?: return ""
-        return if (ready.input == view.getInputText() && ready.config == view.collectConfig()) ready.text else ""
+        return if (isInputUnchanged(readyInputDocument, readyInputStamp, ready.input) &&
+            ready.config == view.collectConfig()
+        ) {
+            ready.text
+        } else {
+            ""
+        }
     }
 
     fun setOnPreviewStateChanged(callback: () -> Unit) {
@@ -78,6 +92,8 @@ class TypeToJsonDialogPresenter(
     }
 
     fun dispose() {
+        readyInputDocument = null
+        readyInputStamp = -1L
         updatePreviewState(ConvertPreviewState.Invalid())
         previewExecutor.dispose()
         coroutineScope.cancel()
@@ -110,23 +126,30 @@ class TypeToJsonDialogPresenter(
 
     private fun schedulePreview() {
         invalidatePreview()
-        val inputText = view.getInputText()
-        if (inputText.isBlank()) {
+        if (isInputBlank()) {
             updatePreviewState(ConvertPreviewState.Invalid())
             view.showEmptyPreview()
             return
         }
-        val validationInfo = validate()
+        val validationInfo = TypeToJsonDialogValidator.validate(
+            sourceCode = NON_BLANK_SENTINEL,
+            outputCount = currentConfig.outputCount,
+            validationComponent = view.getValidationComponent(),
+        )
         if (validationInfo != null) {
             updatePreviewState(ConvertPreviewState.Invalid(validationInfo.message))
             view.showErrorPreview(validationInfo.message)
             return
         }
+
+        val expectedDocument = getInputDocument()
+        val expectedStamp = expectedDocument?.modificationStamp ?: -1L
+        val inputText = view.getInputText()
         val previewConfig = currentConfig
         view.showLoadingPreview()
         previewExecutor.submitDetailed(
             delayMs = 500,
-            onLoading = { view.showLoadingPreview() },
+            onLoading = {},
             computePreview = { checkCancellation ->
                 generationService.generateDetailed(
                     sourceCode = inputText,
@@ -142,9 +165,14 @@ class TypeToJsonDialogPresenter(
                 )
             },
             onSuccess = { result ->
-                if (inputText == view.getInputText() && previewConfig == view.collectConfig()) {
+                if (isInputUnchanged(expectedDocument, expectedStamp, inputText) &&
+                    previewConfig == view.collectConfig()
+                ) {
                     val previewText = result.jsonText
-                    updatePreviewState(ConvertPreviewState.Ready(inputText, previewConfig, previewText))
+                    readyInputDocument = expectedDocument
+                    readyInputStamp = expectedStamp
+                    val retainedInput = if (expectedDocument != null) "" else inputText
+                    updatePreviewState(ConvertPreviewState.Ready(retainedInput, previewConfig, previewText))
                     val warnings = if (previewConfig.language.showsAnalysisWarnings) result.diagnostics
                         .filter { it.severity == com.livteam.jsoninja.model.typeConversion.TypeAnalysisSeverity.WARNING }
                         .map { it.message }.distinct() else emptyList()
@@ -152,7 +180,9 @@ class TypeToJsonDialogPresenter(
                 }
             },
             onError = { error ->
-                if (inputText == view.getInputText() && previewConfig == view.collectConfig()) {
+                if (isInputUnchanged(expectedDocument, expectedStamp, inputText) &&
+                    previewConfig == view.collectConfig()
+                ) {
                     val message = error.message ?: error.javaClass.simpleName
                     updatePreviewState(ConvertPreviewState.Invalid(message))
                     view.showErrorPreview(message)
@@ -161,7 +191,33 @@ class TypeToJsonDialogPresenter(
         )
     }
 
+    private fun getInputDocument(): Document? =
+        (view.getPreferredFocusedComponent() as? EditorTextField)?.document
+
+    private fun isInputBlank(): Boolean {
+        val document = getInputDocument()
+        return if (document != null) {
+            document.immutableCharSequence.isBlank()
+        } else {
+            view.getInputText().isBlank()
+        }
+    }
+
+    private fun isInputUnchanged(
+        expectedDocument: Document?,
+        expectedStamp: Long,
+        expectedInput: String,
+    ): Boolean {
+        if (expectedDocument != null) {
+            val currentDocument = getInputDocument()
+            return currentDocument === expectedDocument && currentDocument.modificationStamp == expectedStamp
+        }
+        return expectedInput == view.getInputText()
+    }
+
     private fun invalidatePreview() {
+        readyInputDocument = null
+        readyInputStamp = -1L
         previewExecutor.cancel()
         view.clearPreviewWarnings()
         updatePreviewState(ConvertPreviewState.Pending)

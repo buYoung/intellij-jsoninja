@@ -19,6 +19,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.runInEdtAndGet
 import com.intellij.testFramework.runInEdtAndWait
+import com.intellij.ui.EditorTextField
 import com.intellij.util.ui.UIUtil
 
 class JsonEditorUndoRedoTest : BasePlatformTestCase() {
@@ -159,6 +160,24 @@ class JsonEditorUndoRedoTest : BasePlatformTestCase() {
         }
     }
 
+    fun testToolWindowEditorFlagsAndLineSeparatorNormalization() {
+        val jsonEditor = createJsonEditor()
+
+        runInEdtAndWait {
+            assertFalse("Tool-window JSON editor must not be marked embedded into a dialog", jsonEditor.editor.isEmbeddedIntoDialogWrapper)
+            assertFalse(
+                "Tool-window JSON editor must not be marked supplementary",
+                jsonEditor.editor.getUserData(EditorTextField.SUPPLEMENTARY_KEY) == true,
+            )
+
+            jsonEditor.view.setText("{\r\n\"k\":1\r\n}")
+            assertEquals("{\n\"k\":1\n}", jsonEditor.view.getText())
+            jsonEditor.view.setText("")
+            appendText(jsonEditor.editor, "{\n\"a\":1\n}")
+            assertEquals("CRLF must not latch on EditorTextField after clearing", "{\n\"a\":1\n}", jsonEditor.view.getText())
+        }
+    }
+
     private fun createJsonEditor(
         initialText: String = "",
         parentFileEditor: TextEditor? = null,
@@ -167,7 +186,6 @@ class JsonEditorUndoRedoTest : BasePlatformTestCase() {
         editorDisposables.add(disposable)
         val view = JsonEditorView(project)
         Disposer.register(disposable, view)
-        view.editor.setDisposedWith(disposable)
         UiDataProvider.wrapComponent(view) { sink ->
             sink[CommonDataKeys.PROJECT] = project
             if (parentFileEditor != null) {

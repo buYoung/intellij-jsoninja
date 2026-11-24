@@ -1,21 +1,27 @@
 package com.livteam.jsoninja.services
 
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.service
-import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.core.JsonGenerator
+import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.core.JsonToken
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.core.util.Separators
-import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.JsonFormatState
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
+import java.io.Writer
 import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
@@ -29,27 +35,27 @@ class JsonFormatterService(private val project: Project) {
     private val settings: JsoninjaSettingsState
         get() = JsoninjaSettingsState.getInstance(project)
 
-    private val defaultMapper: ObjectMapper by lazy {
-        service<JsonObjectMapperService>().objectMapper
+    private val objectMapperService: JsonObjectMapperService by lazy {
+        service<JsonObjectMapperService>()
     }
 
-    private val sortedMapper: ObjectMapper by lazy {
-        defaultMapper.copy().apply {
-            configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
-        }
-    }
+    private val standardJsonFactory: JsonFactory
+        get() = objectMapperService.standardJsonFactory
 
-    private val nonSortedMapper: ObjectMapper by lazy {
-        defaultMapper.copy().apply {
-            configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, false)
-        }
-    }
+    private val standardMapper: ObjectMapper
+        get() = objectMapperService.standardObjectMapper
 
-    private val prettyPrinterCache = ConcurrentHashMap<Pair<Int, Boolean>, DefaultPrettyPrinter>()
+    private val defaultMapper: ObjectMapper
+        get() = objectMapperService.objectMapper
+
+    private val prettyPrinterCache = ConcurrentHashMap<Pair<Int, Boolean>, CustomPrettyPrinter>()
 
     companion object {
         // 기본 들여쓰기 공백 수
         private const val DEFAULT_INDENT_SIZE = 2
+        private val OBJECT_FIELD_SEPARATORS: Separators =
+            Separators.createDefaultInstance()
+                .withObjectFieldValueSpacing(Separators.Spacing.AFTER)
     }
 
 
@@ -72,7 +78,6 @@ class JsonFormatterService(private val project: Project) {
      * @return this (메서드 체이닝 지원)
      */
     fun setSortKeys(sort: Boolean): JsonFormatterService {
-
         settings.sortKeys = sort
         return this
     }
@@ -91,26 +96,12 @@ class JsonFormatterService(private val project: Project) {
     }
 
     /**
-     * 현재 설정에 맞는 ObjectMapper 가져오기
-     *
-     * @param usesSorting 키 정렬 여부
-     * @return 설정된 ObjectMapper
-     */
-    private fun getConfiguredMapper(usesSorting: Boolean): ObjectMapper {
-        if (usesSorting) {
-            return sortedMapper
-        } else {
-            return nonSortedMapper
-        }
-    }
-
-    /**
-     * 현재 설정에 맞는 PrettyPrinter 생성
+     * 현재 설정에 맞는 PrettyPrinter 템플릿 가져오기
      *
      * @param formatState 포맷 상태
      * @return 설정된 CustomPrettyPrinter
      */
-    private fun createConfiguredPrettyPrinter(formatState: JsonFormatState): DefaultPrettyPrinter {
+    private fun createConfiguredPrettyPrinter(formatState: JsonFormatState): CustomPrettyPrinter {
         val currentIndentSize = settings.indentSize
         val useEffectiveCompactArrays = formatState.usesCompactArrays()
         val cacheKey = Pair(currentIndentSize, useEffectiveCompactArrays)
@@ -133,25 +124,103 @@ class JsonFormatterService(private val project: Project) {
      * @return 포맷팅된 JSON 문자열, 포맷팅 실패 시 원본 반환
      */
     fun formatJson(json: String, formatState: JsonFormatState, sortOverride: Boolean? = null): String {
-        val trimedJson = json.trim()
-        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
+        if (json.isBlank()) return json
 
-        if (isEmptyJson) return json
+        // Fast path: most inputs are already valid unescaped JSON; validate and format in a single pass.
+        tryFormatJson(json, formatState, sortOverride)?.let { return it }
 
-        val inputToFormat = fullyUnescapeJson(json)
-        val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(inputToFormat)
+        if (!containsEscapeCharacters(json)) {
+            return json
+        }
+
+        val unescapedJson = fullyUnescapeJson(json)
+        if (unescapedJson == json) {
+            return json
+        }
+        return tryFormatJson(unescapedJson, formatState, sortOverride) ?: json
+    }
+
+    /**
+     * Validates and formats raw JSON/JSON5 in a single parse pass without auto-unescaping.
+     * Returns [json] unchanged if invalid, empty, or tokenless (e.g., BOM-only or comment-only).
+     */
+    internal fun formatJsonIfValid(
+        json: String,
+        formatState: JsonFormatState,
+        sortOverride: Boolean? = null
+    ): String {
+        if (json.isBlank()) return json
+        return tryFormatJson(json, formatState, sortOverride) ?: json
+    }
+
+    /**
+     * Validates and formats raw JSON/JSON5 in a single parse pass without auto-unescaping.
+     * Returns null if [json] is blank, invalid, tokenless, or contains invalid placeholder syntax.
+     */
+    internal fun tryFormatValidJson(
+        json: String,
+        formatState: JsonFormatState,
+        sortOverride: Boolean? = null
+    ): String? {
+        if (json.isBlank()) return null
+        return tryFormatJson(json, formatState, sortOverride)
+    }
+
+    /**
+     * Formats an already-parsed [JsonNode] directly without an intermediate serialize/re-parse round-trip.
+     */
+    internal fun formatJsonNode(
+        node: JsonNode,
+        formatState: JsonFormatState,
+        sortOverride: Boolean? = null
+    ): String {
+        val usesSorting = if (formatState == JsonFormatState.UGLIFY) {
+            false
+        } else if (sortOverride != null) {
+            sortOverride
+        } else {
+            formatState.usesSorting() || settings.sortKeys
+        }
+        val writer = FastStringWriter(if (formatState.usesPrettyPrinting()) 256 else 128)
+        standardMapper.createGenerator(writer).use { generator ->
+            if (formatState.usesPrettyPrinting()) {
+                generator.prettyPrinter = createConfiguredPrettyPrinter(formatState).createInstance()
+            }
+            if (usesSorting) {
+                writeSortedJsonNode(node, generator)
+            } else {
+                writeJsonNode(node, generator)
+            }
+        }
+        return writer.toString()
+    }
+
+    private fun tryFormatJson(
+        json: String,
+        formatState: JsonFormatState,
+        sortOverride: Boolean?
+    ): String? {
+        val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(json)
         if (!replacementResult.isSuccessful) {
             LOG.debug("Invalid placeholder syntax detected, returning original input")
-            return json
+            return null
         }
 
+        return formatParsedJson(
+            originalJson = json,
+            replacementResult = replacementResult,
+            formatState = formatState,
+            sortOverride = sortOverride
+        )
+    }
+
+    private fun formatParsedJson(
+        originalJson: String,
+        replacementResult: ReplacementResult,
+        formatState: JsonFormatState,
+        sortOverride: Boolean?
+    ): String? {
         val jsonForParsing = replacementResult.replacedText
-
-        // Check if JSON is valid before attempting to format
-        if (!isValidJsonText(jsonForParsing)) {
-            LOG.debug("Invalid JSON detected, returning original input")
-            return json
-        }
 
         return try {
             // 포맷 상태에 따라 설정 조정
@@ -164,16 +233,11 @@ class JsonFormatterService(private val project: Project) {
                 formatState.usesSorting() || settings.sortKeys
             }
 
-            // 매퍼 설정
-            val mapper = getConfiguredMapper(usesSorting)
-            val jsonNode = mapper.readTree(jsonForParsing)
-
-            val valueToWrite = if (usesSorting) mapper.treeToValue(jsonNode, Any::class.java) else jsonNode
-            val formattedJson = if (formatState.usesPrettyPrinting()) {
-                mapper.writer(createConfiguredPrettyPrinter(formatState)).writeValueAsString(valueToWrite)
+            val formattedJson = if (usesSorting) {
+                formatSortedJson(jsonForParsing, formatState)
             } else {
-                mapper.writeValueAsString(valueToWrite)
-            }
+                streamFormatJson(jsonForParsing, formatState)
+            } ?: return null
 
             if (replacementResult.mappings.isEmpty()) {
                 formattedJson
@@ -186,7 +250,7 @@ class JsonFormatterService(private val project: Project) {
                     restoredJson.contains(replacementResult.sentinelPrefix)
                 ) {
                     LOG.warn("Placeholder restoration failed after formatting, returning original JSON")
-                    json
+                    originalJson
                 } else {
                     restoredJson
                 }
@@ -195,11 +259,208 @@ class JsonFormatterService(private val project: Project) {
             throw cancellationException
         } catch (processCanceledException: ProcessCanceledException) {
             throw processCanceledException
+        } catch (e: JsonProcessingException) {
+            LOG.debug("Invalid JSON detected, returning original input (${e.javaClass.simpleName})")
+            null
         } catch (e: Exception) {
             // 포맷팅 실패 시 원본 반환
             LOG.warn("JSON 포맷팅 실패 (${e.javaClass.simpleName})")
-            json
+            null
         }
+    }
+
+    private fun streamFormatJson(jsonForParsing: String, formatState: JsonFormatState): String? {
+        return try {
+            streamFormatWithFactory(standardJsonFactory, jsonForParsing, formatState)
+        } catch (_: JsonProcessingException) {
+            streamFormatWithFactory(defaultMapper.factory, jsonForParsing, formatState)
+        }
+    }
+
+    private fun streamFormatWithFactory(
+        factory: JsonFactory,
+        jsonForParsing: String,
+        formatState: JsonFormatState
+    ): String? {
+        val estimatedCapacity = estimateFormattedCapacity(jsonForParsing.length, formatState)
+        val writer = FastStringWriter(estimatedCapacity)
+        factory.createParser(jsonForParsing).use { parser ->
+            val firstToken = parser.nextToken() ?: return null
+            standardJsonFactory.createGenerator(writer).use { generator ->
+                if (formatState.usesPrettyPrinting()) {
+                    // DefaultPrettyPrinter carries nesting state; createInstance() ensures thread safety while reusing indenter.
+                    generator.prettyPrinter = createConfiguredPrettyPrinter(formatState).createInstance()
+                }
+                if (!copyJsonValueTokens(parser, firstToken, generator)) {
+                    return null
+                }
+            }
+            if (parser.nextToken() != null) {
+                return null
+            }
+        }
+        return writer.toString()
+    }
+
+    private fun copyJsonValueTokens(
+        parser: JsonParser,
+        firstToken: JsonToken,
+        generator: JsonGenerator
+    ): Boolean {
+        var depth = 0
+        var currentToken: JsonToken? = firstToken
+        while (currentToken != null) {
+            when (currentToken) {
+                JsonToken.START_OBJECT -> {
+                    generator.writeStartObject()
+                    depth++
+                }
+                JsonToken.END_OBJECT -> {
+                    generator.writeEndObject()
+                    depth--
+                }
+                JsonToken.START_ARRAY -> {
+                    generator.writeStartArray()
+                    depth++
+                }
+                JsonToken.END_ARRAY -> {
+                    generator.writeEndArray()
+                    depth--
+                }
+                JsonToken.FIELD_NAME -> generator.writeFieldName(parser.currentName())
+                JsonToken.VALUE_STRING -> {
+                    if (parser.hasTextCharacters()) {
+                        generator.writeString(parser.textCharacters, parser.textOffset, parser.textLength)
+                    } else {
+                        generator.writeString(parser.text)
+                    }
+                }
+                JsonToken.VALUE_NUMBER_INT,
+                JsonToken.VALUE_NUMBER_FLOAT -> generator.writeNumber(parser.text)
+                JsonToken.VALUE_TRUE -> generator.writeBoolean(true)
+                JsonToken.VALUE_FALSE -> generator.writeBoolean(false)
+                JsonToken.VALUE_NULL -> generator.writeNull()
+                else -> throw JsonParseException(parser, "Unexpected JSON token: $currentToken")
+            }
+            if (depth == 0) {
+                return true
+            }
+            currentToken = parser.nextToken()
+        }
+        return false
+    }
+
+    private fun formatSortedJson(jsonForParsing: String, formatState: JsonFormatState): String? {
+        val jsonNode = parseSingleNodeFast(jsonForParsing) ?: return null
+        val estimatedCapacity = estimateFormattedCapacity(jsonForParsing.length, formatState)
+        val writer = FastStringWriter(estimatedCapacity)
+        standardMapper.createGenerator(writer).use { generator ->
+            if (formatState.usesPrettyPrinting()) {
+                generator.prettyPrinter = createConfiguredPrettyPrinter(formatState).createInstance()
+            }
+            writeSortedJsonNode(jsonNode, generator)
+        }
+        return writer.toString()
+    }
+
+    private fun parseSingleNodeFast(jsonForParsing: String): JsonNode? {
+        return try {
+            parseSingleNode(standardMapper, jsonForParsing)
+        } catch (_: JsonProcessingException) {
+            parseSingleNode(defaultMapper, jsonForParsing)
+        }
+    }
+
+    private fun parseSingleNode(mapper: ObjectMapper, jsonForParsing: String): JsonNode? {
+        return mapper.factory.createParser(jsonForParsing).use { parser ->
+            if (parser.nextToken() == null) return null
+            val parsedNode = mapper.readTree<JsonNode>(parser) ?: return null
+            if (parser.nextToken() != null) return null
+            parsedNode
+        }
+    }
+
+    private fun writeJsonNode(node: JsonNode, generator: JsonGenerator) {
+        when {
+            node.isObject -> {
+                generator.writeStartObject()
+                val fieldsIterator = node.fields()
+                while (fieldsIterator.hasNext()) {
+                    val entry = fieldsIterator.next()
+                    generator.writeFieldName(entry.key)
+                    writeJsonNode(entry.value, generator)
+                }
+                generator.writeEndObject()
+            }
+            node.isArray -> {
+                generator.writeStartArray()
+                for (index in 0 until node.size()) {
+                    writeJsonNode(node.get(index), generator)
+                }
+                generator.writeEndArray()
+            }
+            node.isTextual -> generator.writeString(node.textValue())
+            node.isBoolean -> generator.writeBoolean(node.booleanValue())
+            node.isNull || node.isMissingNode -> generator.writeNull()
+            node.isInt -> generator.writeNumber(node.intValue())
+            node.isLong -> generator.writeNumber(node.longValue())
+            node.isBigInteger -> generator.writeNumber(node.bigIntegerValue())
+            node.isBigDecimal -> generator.writeNumber(node.decimalValue())
+            node.isDouble -> generator.writeNumber(node.doubleValue())
+            node.isFloat -> generator.writeNumber(node.floatValue())
+            else -> generator.writeTree(node)
+        }
+    }
+
+    private fun writeSortedJsonNode(node: JsonNode, generator: JsonGenerator) {
+        when {
+            node.isObject -> {
+                generator.writeStartObject()
+                val entryCount = node.size()
+                if (entryCount == 1) {
+                    val entry = node.fields().next()
+                    generator.writeFieldName(entry.key)
+                    writeSortedJsonNode(entry.value, generator)
+                } else if (entryCount > 1) {
+                    val entries = ArrayList<Map.Entry<String, JsonNode>>(entryCount)
+                    val fieldsIterator = node.fields()
+                    while (fieldsIterator.hasNext()) {
+                        entries.add(fieldsIterator.next())
+                    }
+                    entries.sortBy { it.key }
+                    for (entry in entries) {
+                        generator.writeFieldName(entry.key)
+                        writeSortedJsonNode(entry.value, generator)
+                    }
+                }
+                generator.writeEndObject()
+            }
+            node.isArray -> {
+                generator.writeStartArray()
+                for (index in 0 until node.size()) {
+                    writeSortedJsonNode(node.get(index), generator)
+                }
+                generator.writeEndArray()
+            }
+            node.isTextual -> generator.writeString(node.textValue())
+            node.isBoolean -> generator.writeBoolean(node.booleanValue())
+            node.isNull || node.isMissingNode -> generator.writeNull()
+            node.isInt -> generator.writeNumber(node.intValue())
+            node.isLong -> generator.writeNumber(node.longValue())
+            node.isBigInteger -> generator.writeNumber(node.bigIntegerValue())
+            node.isBigDecimal -> generator.writeNumber(node.decimalValue())
+            node.isDouble -> generator.writeNumber(node.doubleValue())
+            node.isFloat -> generator.writeNumber(node.floatValue())
+            else -> generator.writeTree(node)
+        }
+    }
+
+    private fun estimateFormattedCapacity(inputLength: Int, formatState: JsonFormatState): Int {
+        if (!formatState.usesPrettyPrinting()) {
+            return maxOf(16, inputLength)
+        }
+        val extra = inputLength / 2 + 64
+        return if (inputLength > Int.MAX_VALUE - extra) Int.MAX_VALUE else maxOf(32, inputLength + extra)
     }
 
     suspend fun formatJsonOnDefault(
@@ -217,9 +478,7 @@ class JsonFormatterService(private val project: Project) {
      * @return 유효한 JSON이면 true, 아니면 false
      */
     fun isValidJson(json: String): Boolean {
-        val trimedJson = json.trim()
-        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
-        if (isEmptyJson) return false
+        if (json.isBlank()) return false
 
         val replacementResult = TemplatePlaceholderSupport.extractAndReplaceValuePlaceholders(json)
         return if (!replacementResult.isSuccessful) {
@@ -232,14 +491,7 @@ class JsonFormatterService(private val project: Project) {
 
     private fun isValidJsonText(jsonText: String): Boolean {
         return try {
-            // Use JsonParser to validate the entire input string including trailing tokens
-            defaultMapper.factory.createParser(jsonText).use { parser ->
-                // Parse the JSON value completely
-                parser.nextToken()
-                parser.skipChildren()
-                // Check if there are any trailing tokens after the JSON
-                parser.nextToken() == null
-            }
+            objectMapperService.isValidJsonTokenStream(jsonText)
         } catch (cancellationException: CancellationException) {
             throw cancellationException
         } catch (processCanceledException: ProcessCanceledException) {
@@ -251,6 +503,51 @@ class JsonFormatterService(private val project: Project) {
     }
 
     /**
+     * Unsynchronized StringBuilder-backed Writer to avoid StringWriter/StringBuffer monitor lock overhead
+     * and leverage Compact Strings on JDK 17+.
+     */
+    private class FastStringWriter(initialCapacity: Int) : Writer() {
+        private val builder = StringBuilder(initialCapacity)
+
+        override fun write(c: Int) {
+            builder.append(c.toChar())
+        }
+
+        override fun write(cbuf: CharArray, off: Int, len: Int) {
+            builder.append(cbuf, off, len)
+        }
+
+        override fun write(str: String) {
+            builder.append(str)
+        }
+
+        override fun write(str: String, off: Int, len: Int) {
+            builder.append(str, off, off + len)
+        }
+
+        override fun append(csq: CharSequence?): Writer {
+            builder.append(csq)
+            return this
+        }
+
+        override fun append(csq: CharSequence?, start: Int, end: Int): Writer {
+            builder.append(csq, start, end)
+            return this
+        }
+
+        override fun append(c: Char): Writer {
+            builder.append(c)
+            return this
+        }
+
+        override fun flush() = Unit
+
+        override fun close() = Unit
+
+        override fun toString(): String = builder.toString()
+    }
+
+    /**
      * 커스텀 PrettyPrinter 클래스
      * JSON 포맷팅 시 사용되는 들여쓰기 및 출력 형식 정의
      *
@@ -259,23 +556,17 @@ class JsonFormatterService(private val project: Project) {
      */
     private class CustomPrettyPrinter(
         private val indentSize: Int = 2,
-        private val useCompactArrays: Boolean = false
-    ) : DefaultPrettyPrinter(
-        Separators.createDefaultInstance()
-            .withObjectFieldValueSpacing(Separators.Spacing.AFTER)
-    ) {
+        private val useCompactArrays: Boolean = false,
+        private val sharedIndenter: DefaultIndenter = DefaultIndenter(" ".repeat(indentSize), "\n")
+    ) : DefaultPrettyPrinter(OBJECT_FIELD_SEPARATORS) {
 
         init {
-            // 들여쓰기 설정
-            val spaces = " ".repeat(indentSize)
-            val indenter = DefaultIndenter(spaces, "\n")
-
             // 객체 들여쓰기 설정
-            indentObjectsWith(indenter)
+            indentObjectsWith(sharedIndenter)
 
             // 배열 들여쓰기 설정 (압축 모드가 아닐 경우)
             if (!useCompactArrays) {
-                indentArraysWith(indenter)
+                indentArraysWith(sharedIndenter)
             }
         }
 
@@ -315,7 +606,7 @@ class JsonFormatterService(private val project: Project) {
          * 복제 메서드 (Jackson 내부에서 사용)
          */
         override fun createInstance(): DefaultPrettyPrinter {
-            return CustomPrettyPrinter(indentSize, useCompactArrays)
+            return CustomPrettyPrinter(indentSize, useCompactArrays, sharedIndenter)
         }
     }
 
@@ -327,9 +618,7 @@ class JsonFormatterService(private val project: Project) {
      * @return 이스케이프 처리된 JSON 문자열, 실패 시 원본 반환
      */
     fun escapeJson(json: String): String {
-        val trimedJson = json.trim()
-        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
-        if (isEmptyJson) return json
+        if (json.isBlank()) return json
 
         try {
             if (isBeautifiedJson(json)) {
@@ -337,7 +626,7 @@ class JsonFormatterService(private val project: Project) {
             }
 
             // Use Jackson to properly escape the JSON string
-            val escaped = defaultMapper.writeValueAsString(json)
+            val escaped = standardMapper.writeValueAsString(json)
             // Remove the enclosing quotes that Jackson adds
             return escaped.substring(1, escaped.length - 1)
         } catch (cancellationException: CancellationException) {
@@ -358,10 +647,7 @@ class JsonFormatterService(private val project: Project) {
      * @return 한 단계 언이스케이프 처리된 JSON 문자열, 실패 시 원본 반환
      */
     fun unescapeJson(json: String): String {
-        val trimedJson = json.trim()
-        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
-        if (isEmptyJson) return json
-
+        if (json.isBlank()) return json
 
         // 이스케이프 문자가 포함되어 있는지 확인
         if (!containsEscapeCharacters(json)) {
@@ -375,8 +661,12 @@ class JsonFormatterService(private val project: Project) {
 
             // Add quotes to make it a valid JSON string
             val quoted = "\"$json\""
-            // Use Jackson to properly unescape the JSON string
-            return defaultMapper.readValue(quoted, String::class.java)
+            // Try standard Jackson first (zero JSON5 preprocessing), falling back to JSON5 on error.
+            return try {
+                standardMapper.readValue(quoted, String::class.java)
+            } catch (_: JsonProcessingException) {
+                defaultMapper.readValue(quoted, String::class.java)
+            }
         } catch (cancellationException: CancellationException) {
             throw cancellationException
         } catch (processCanceledException: ProcessCanceledException) {
@@ -456,7 +746,6 @@ class JsonFormatterService(private val project: Project) {
             i++
         }
         return result.toString()
-
     }
 
     /**
@@ -466,16 +755,10 @@ class JsonFormatterService(private val project: Project) {
      * @return true if the JSON is beautified, false otherwise
      */
     fun isBeautifiedJson(jsonString: String): Boolean {
-        val trimedJson = jsonString.trim()
-        val isEmptyJson = trimedJson.isBlank() || trimedJson.isEmpty()
+        if (jsonString.isBlank()) return false
 
-        if (isEmptyJson) return false
-
-        val hasMultipleLines = jsonString.contains("\n")
-        if (!hasMultipleLines) return false
-
-        val hasSpaceAfterColon = jsonString.contains(": ")
-        if (!hasSpaceAfterColon) return false
+        if (jsonString.indexOf('\n') < 0) return false
+        if (jsonString.indexOf(": ") < 0) return false
 
         var atLineStart = true
         for (char in jsonString) {
@@ -522,7 +805,13 @@ class JsonFormatterService(private val project: Project) {
      * @return 이스케이프 문자가 포함되어 있으면 true, 아니면 false
      */
     fun containsEscapeCharacters(text: String): Boolean {
-        val escapeSequences = arrayOf("\\\"", "\\\\", "\\b", "\\f", "\\n", "\\r", "\\t", "\\u")
-        return escapeSequences.any { text.contains(it) }
+        var index = text.indexOf('\\')
+        while (index >= 0 && index + 1 < text.length) {
+            when (text[index + 1]) {
+                '"', '\\', 'b', 'f', 'n', 'r', 't', 'u' -> return true
+            }
+            index = text.indexOf('\\', index + 1)
+        }
+        return false
     }
 }

@@ -14,6 +14,7 @@ import com.livteam.jsoninja.model.SupportedLanguage
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.ui.component.convertType.CodePreviewPanel
 import com.livteam.jsoninja.ui.component.convertType.highlighting.TypeCodeToken
+import com.livteam.jsoninja.ui.component.editor.JsonEditorTextView
 import java.awt.Color
 import java.awt.Point
 import java.awt.Component
@@ -61,7 +62,7 @@ class TypeConversionUiTest : BasePlatformTestCase() {
                         assertSame(PlainTextFileType.INSTANCE, field.fileType)
                         assertEquals(presenter.getCurrentPreviewText(), editor.document.text)
                         descendants(root).filterIsInstance<EditorTextField>().forEach {
-                            if (initializedFields.add(it)) it.setDisposedWith(lifetime)
+                            if (initializedFields.add(it) && it.parent !is JsonEditorTextView) it.setDisposedWith(lifetime)
                             it.getEditor(true)
                         }
                         root.setSize(1400, maxOf(900, editor.document.lineCount * editor.lineHeight + 240))
