@@ -4,12 +4,43 @@
 
 ## [Unreleased]
 
+### Added
+
+- **JSON Query**:
+  - Switch between JsonPath, JMESPath, and jq directly in the query bar.
+  - Use the filter banner to restore the original JSON, open the result in a new tab, or apply the result as the tab's contents.
+- **Query Paths**: Copy a query that matches every item in an array or the same field across those items. This works from the editor and Tree view in all three query languages.
+- **Tree View**: Type to find nodes, then use the context menu to copy a node's key, value, JSON, or query path. Use Expand All and Collapse All, or expand and collapse individual branches.
+- **JSONinja Tabs**: Double-click empty space in the tab bar to create a tab. Right-click a tab to rename or duplicate it, close the other tabs, or close all tabs.
+- **Open JSON File**: Open multiple JSON or JSON5 files at once. Each file opens in a tab named after it.
+- **JSON Diff**:
+  - Swap the left and right contents and labels, double-click a label to rename it, or move the current comparison between an editor tab and a separate window.
+  - See which side contains invalid JSON as you edit, and hover over its warning for details.
+  - Find diff actions through the IDE's Find Action search and assign them keyboard shortcuts in Keymap settings.
+- **Load JSON from API**:
+  - Paste a `curl` command into the URL field to fill in the request, add custom headers, and reuse recent successful requests from the URL dropdown.
+  - Send PATCH requests to APIs that accept HTTP method overrides.
+  - Cancel a pending request or open a server's JSON error response in a new tab.
+- **Schema-Based JSON Generation**: Load a schema from a local file or the current JSONinja tab. Cancel a schema download or reopen the schema for editing from a generation error notification.
+
+### Changed
+
+- **Large JSON**: Formatting and comparing large documents, browsing large trees, and rerunning queries on unchanged JSON take less time. The editor pauses syntax highlighting for very large documents or long lines to keep editing responsive.
+- **JSON Editing**: The editor context menu includes standard editing commands such as Find, Undo, and Redo. The compact formatting action is now named Minify JSON.
+- **JSON Query**: The query bar distinguishes invalid query syntax, invalid source JSON, and queries with no matches.
+- **Tree View**: When JSON is invalid, switch to Text view from the error message. If the error location is available, the editor jumps to it.
+- **JSON Generation**: Generation runs in the background and can be canceled. While the project is open, the dialog remembers the last generation mode and restores your schema draft and options when reopened.
+- **Type Conversion**:
+  - When converting code from a supported file in the IDE editor, the dialog selects its language. You can search the language list by typing and resize the input and preview panes.
+  - Choose where to send the result from the dialog's main button menu. The default action inserts into a compatible writable editor, opens a new tab when launched from the JSONinja tool window, or copies to the clipboard.
+- **Settings**: Find formatting, diff, query, appearance, and performance options in named groups, and preview icon packs before choosing one.
+- **Onboarding**: The first-run welcome appears as an IDE notification. Use the left and right arrow keys to move through tutorial steps.
+
 ### Fixed
 
-- **IntelliJ Platform Compatibility**:
-  - Updated Kotlin bytecode/metadata target to Kotlin 2.0, excluded platform-provided runtime libraries from the plugin bundle, and aligned Jackson 2 ABI for compatibility across IntelliJ Platform 2024.3–2026.3+.
-  - Migrated deprecated/scheduled-for-removal platform APIs (`DynamicBundle(String)`, `SimpleListCellRenderer.create`, synchronous `FileChooser`, and `WindowManager.getFrame`) and added explicit `ActionUpdateThread` declarations.
-  - Fixed dynamic plugin unload lifecycle, modal dialog EDT modality, New UI icon mappings, dark plugin icon placement, and removed the `until-build` cap.
+- **IntelliJ Platform Compatibility**: JSONinja can be installed on JetBrains IDEs based on IntelliJ Platform 2024.3 or later. Icons display correctly in the New UI and dark themes, and disabling the plugin closes its tutorial window.
+- **JSON Editing**: Pasting into a string or comment preserves the pasted text. Large JSON pastes appear immediately. Automatic formatting follows if you leave the pasted text untouched.
+- **JSON Formatting**: Input containing only comments is reported as invalid JSON and stays unchanged when formatted.
 
 ## [1.15.0] - 2026-09-28
 
