@@ -1,6 +1,5 @@
 package com.livteam.jsoninja.extensions
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.intellij.codeInsight.daemon.impl.HighlightInfo
 import com.intellij.codeInsight.daemon.impl.HighlightInfoFilter
 import com.intellij.lang.annotation.HighlightSeverity
@@ -38,10 +37,20 @@ class JsoninjaTemplateHighlightErrorFilter : HighlightInfoFilter {
 
         val shouldSuppress = if (document != null) {
             project.service<TemplateHighlightErrorCacheService>().getOrCompute(document) {
-                shouldSuppressForDocumentText(document.text)
+                val chars = document.immutableCharSequence
+                if (!TemplatePlaceholderSupport.containsPlaceholderOpen(chars)) {
+                    false
+                } else {
+                    shouldSuppressForDocumentText(chars.toString())
+                }
             }
         } else {
-            shouldSuppressForDocumentText(file.text)
+            val fileText = file.text
+            if (!TemplatePlaceholderSupport.containsPlaceholderOpen(fileText)) {
+                false
+            } else {
+                shouldSuppressForDocumentText(fileText)
+            }
         }
         return !shouldSuppress
     }
@@ -60,12 +69,12 @@ class JsoninjaTemplateHighlightErrorFilter : HighlightInfoFilter {
         return isJsoninjaDummyFile
     }
 
-    private fun resolveObjectMapper(): ObjectMapper {
+    private fun resolveObjectMapperService(): JsonObjectMapperService {
         val application = ApplicationManager.getApplication()
         if (application != null && !application.isDisposed) {
-            application.getService(JsonObjectMapperService::class.java)?.objectMapper?.let { return it }
+            application.getService(JsonObjectMapperService::class.java)?.let { return it }
         }
-        return JsonObjectMapperService().objectMapper
+        return JsonObjectMapperService()
     }
 
     private fun shouldSuppressForDocumentText(documentText: String): Boolean {
@@ -77,11 +86,7 @@ class JsoninjaTemplateHighlightErrorFilter : HighlightInfoFilter {
         }
 
         return try {
-            resolveObjectMapper().factory.createParser(replacementResult.replacedText).use { parser ->
-                parser.nextToken()
-                parser.skipChildren()
-                parser.nextToken() == null
-            }
+            resolveObjectMapperService().isValidJsonTokenStream(replacementResult.replacedText)
         } catch (cancellationException: CancellationException) {
             throw cancellationException
         } catch (cancellationException: ProcessCanceledException) {

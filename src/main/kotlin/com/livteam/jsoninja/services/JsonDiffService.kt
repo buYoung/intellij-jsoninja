@@ -24,6 +24,7 @@ import com.intellij.openapi.fileTypes.UnknownFileType
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.util.text.StringUtil
 import com.livteam.jsoninja.LocalizationBundle
 import com.livteam.jsoninja.actions.RenameJsonDiffTitlesAction
 import com.livteam.jsoninja.actions.RestoreJsonDiffSortAction
@@ -122,12 +123,9 @@ class JsonDiffService(private val project: Project) : Disposable {
      */
     fun validateAndFormat(json: String, semantic: Boolean): Pair<Boolean, String?> {
         return try {
-            if (!formatterService.isValidJson(json)) {
-                return Pair(false, null)
-            }
-
             val formatState = if (semantic) JsonFormatState.PRETTIFY_SORTED else JsonFormatState.PRETTIFY
-            val formatted = formatterService.formatJson(json, formatState, semantic)
+            val formatted = formatterService.tryFormatValidJson(json, formatState, semantic)
+                ?: return Pair(false, null)
             Pair(true, formatted)
         } catch (cancellationException: CancellationException) {
             throw cancellationException
@@ -405,11 +403,20 @@ class JsonDiffService(private val project: Project) : Disposable {
     }
 
     private fun formatSide(text: String, sortKeys: Boolean): String {
-        val trimmedText = text.trim()
-        if (trimmedText.isEmpty()) return text
+        if (text.isBlank()) return text
 
-        val formattedText = formatterService.formatJson(trimmedText, JsonFormatState.PRETTIFY, sortKeys)
-        return if (formattedText == trimmedText) text else formattedText
+        val formattedText = formatterService.formatJson(text, JsonFormatState.PRETTIFY, sortKeys)
+        return if (equalsTrimmed(text, formattedText)) text else formattedText
+    }
+
+    private fun equalsTrimmed(originalText: String, targetText: String): Boolean {
+        var start = 0
+        var end = originalText.length
+        while (start < end && originalText[start] <= ' ') start++
+        while (end > start && originalText[end - 1] <= ' ') end--
+        val trimmedLength = end - start
+        return trimmedLength == targetText.length &&
+            originalText.regionMatches(start, targetText, 0, trimmedLength)
     }
 
     private fun capturePair(session: JsonDiffSession): DiffPairCapture {
@@ -597,7 +604,7 @@ class JsonDiffService(private val project: Project) : Disposable {
     }
 
     private fun replaceDocumentText(document: Document, newText: String) {
-        if (document.text == newText) return
+        if (StringUtil.equals(document.immutableCharSequence, newText)) return
 
         WriteCommandAction.runWriteCommandAction(project) {
             document.setText(newText)

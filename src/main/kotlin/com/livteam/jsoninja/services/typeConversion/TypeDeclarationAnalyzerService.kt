@@ -60,9 +60,9 @@ class TypeDeclarationAnalyzerService(
 
             val resultBuffer = memoryBridge.unpackPointerLength(packedResult)
             return try {
-                TreeSitterQueryResult.parse(
-                    jsonText = memoryBridge.readUtf8String(resultBuffer),
-                    objectMapper = objectMapper,
+                TreeSitterQueryResult.parseUtf8Bytes(
+                    jsonBytes = memoryBridge.readUtf8Bytes(resultBuffer),
+                    enumValueMapper = objectMapper,
                 ).toTypeAnalysisResult()
             } finally {
                 memoryBridge.releaseBuffer(resultBuffer)

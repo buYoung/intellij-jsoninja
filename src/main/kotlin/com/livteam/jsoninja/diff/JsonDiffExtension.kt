@@ -19,7 +19,6 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
-import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -64,9 +63,10 @@ class JsonDiffExtension : DiffExtension() {
 
     private data class EditorContentSnapshot(
         val fileName: String,
-        val fileType: FileType?,
-        val fileExtension: String?,
-        val text: String,
+        val isJsonFileType: Boolean,
+        val isBlank: Boolean,
+        val startsWithJsonDelimiter: Boolean,
+        val textToValidate: String?,
         val textLength: Int
     )
 
@@ -198,32 +198,49 @@ class JsonDiffExtension : DiffExtension() {
         try {
             val snapshot = readAction {
                 val virtualFile = editor.virtualFile
-                EditorContentSnapshot(
-                    fileName = virtualFile?.name ?: "<unknown>",
-                    fileType = virtualFile?.fileType,
-                    fileExtension = virtualFile?.extension,
-                    text = document.text,
-                    textLength = document.textLength
-                )
+                val fileType = virtualFile?.fileType
+                val fileExtension = virtualFile?.extension
+                val isJson5 = fileType?.name?.equals("JSON5", ignoreCase = true) == true ||
+                    fileType?.defaultExtension == "json5" ||
+                    fileExtension?.equals("json5", ignoreCase = true) == true
+                val isJsonFileType = fileType == JsonFileType.INSTANCE || isJson5
+                val docLength = document.textLength
+                if (isJsonFileType) {
+                    EditorContentSnapshot(
+                        fileName = virtualFile?.name ?: "<unknown>",
+                        isJsonFileType = true,
+                        isBlank = false,
+                        startsWithJsonDelimiter = true,
+                        textToValidate = null,
+                        textLength = docLength
+                    )
+                } else {
+                    val chars = document.immutableCharSequence
+                    val firstNonWhitespaceIndex = findFirstNonWhitespaceIndex(chars)
+                    val isBlank = firstNonWhitespaceIndex < 0
+                    val startsWithDelimiter = !isBlank &&
+                        (chars[firstNonWhitespaceIndex] == '{' || chars[firstNonWhitespaceIndex] == '[')
+                    EditorContentSnapshot(
+                        fileName = virtualFile?.name ?: "<unknown>",
+                        isJsonFileType = false,
+                        isBlank = isBlank,
+                        startsWithJsonDelimiter = startsWithDelimiter,
+                        textToValidate = if (startsWithDelimiter) chars.toString() else null,
+                        textLength = docLength
+                    )
+                }
             }
             fileName = snapshot.fileName
             textLength = snapshot.textLength
 
-            // 1단계: 빠른 경로 - 파일 타입 확인
-            val fileType = snapshot.fileType
-            // JSON5 파일 타입 이름은 플러그인마다 다를 수 있으므로 확장자도 확인
-            val isJson5 = fileType?.name?.equals("JSON5", ignoreCase = true) == true ||
-                    fileType?.defaultExtension == "json5" ||
-                    snapshot.fileExtension?.equals("json5", ignoreCase = true) == true
-
-            if (fileType == JsonFileType.INSTANCE || isJson5) {
+            // 1단계: 빠른 경로 - 파일 타입 확인 (document.text 복사 없음)
+            if (snapshot.isJsonFileType) {
                 LOG.debug("File '$fileName' detected as JSON via file type")
                 state.detectionResult = JsonDiffDetectionCacheService.JsonDetectionResult.YES
                 return true
             }
 
-            val text = snapshot.text
-            if (text.isBlank()) {
+            if (snapshot.isBlank) {
                 LOG.debug("File '$fileName' is blank, not JSON")
                 state.detectionResult = JsonDiffDetectionCacheService.JsonDetectionResult.NO
                 return false
@@ -232,23 +249,23 @@ class JsonDiffExtension : DiffExtension() {
             // 2단계: 크기 확인 - warning이 활성된 경우에만
             if (settings.showLargeFileWarning) {
                 val thresholdBytes = settings.largeFileThresholdMB * 1024 * 1024L
-                if (text.length > thresholdBytes) {
-                    LOG.debug("File '$fileName' larger than threshold (${text.length / (1024 * 1024)} MB vs ${settings.largeFileThresholdMB} MB), will show warning later")
+                if (snapshot.textLength > thresholdBytes) {
+                    LOG.debug("File '$fileName' larger than threshold (${snapshot.textLength / (1024 * 1024)} MB vs ${settings.largeFileThresholdMB} MB), will show warning later")
                     // 여기서 거절하지 말고 - 나중에 warning dialog이 처리하도록 함
                     // 지금은 JSON 감지를 계속 진행
                 }
             }
 
             // 3단계: 휴리스틱 확인
-            val trimmed = text.trim()
-            if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) {
+            val textToValidate = snapshot.textToValidate
+            if (!snapshot.startsWithJsonDelimiter || textToValidate == null) {
                 LOG.debug("File '$fileName' does not start with JSON delimiters")
                 state.detectionResult = JsonDiffDetectionCacheService.JsonDetectionResult.NO
                 return false
             }
 
             // 4단계: JsonFormatterService를 통한 필수 검증
-            val isValid = formatterService.isValidJson(trimmed)
+            val isValid = formatterService.isValidJson(textToValidate)
             state.detectionResult = if (isValid) {
                 JsonDiffDetectionCacheService.JsonDetectionResult.YES
             } else {
@@ -355,14 +372,11 @@ class JsonDiffExtension : DiffExtension() {
                         return
                     }
 
-                    // 소규모 공백 전용 편집 스킵
+                    // 소규모 공백 전용 편집 스킵 (immutable CharSequence 직접 확인)
                     val editSize = abs(event.newLength - event.oldLength)
-                    if (editSize <= Constants.SMALL_EDIT_THRESHOLD) {
-                        val changedText = event.newFragment.toString()
-                        if (changedText.isBlank() || changedText.all { it.isWhitespace() }) {
-                            LOG.debug("Skipping small whitespace edit ($editSize chars) for '$fileName'")
-                            return
-                        }
+                    if (editSize <= Constants.SMALL_EDIT_THRESHOLD && isAllWhitespace(event.newFragment)) {
+                        LOG.debug("Skipping small whitespace edit ($editSize chars) for '$fileName'")
+                        return
                     }
 
                     // 대용량 파일은 viewer 생성 시점에서 warning dialog이 처리
@@ -394,10 +408,24 @@ class JsonDiffExtension : DiffExtension() {
             LOG.debug("Disposed JSON diff extension")
         }
 
-        // content가 있으면 초기 포맷팅 수행
-        if (session.leftDocument.text.isNotBlank()) pendingSides.add(Side.LEFT)
-        if (session.rightDocument.text.isNotBlank()) pendingSides.add(Side.RIGHT)
+        // content가 있으면 초기 포맷팅 수행 (document.text 복사 없이 immutableCharSequence 확인)
+        if (findFirstNonWhitespaceIndex(session.leftDocument.immutableCharSequence) >= 0) pendingSides.add(Side.LEFT)
+        if (findFirstNonWhitespaceIndex(session.rightDocument.immutableCharSequence) >= 0) pendingSides.add(Side.RIGHT)
         launchFormatting()
+    }
+
+    private fun findFirstNonWhitespaceIndex(text: CharSequence): Int {
+        for (index in 0 until text.length) {
+            if (!text[index].isWhitespace()) return index
+        }
+        return -1
+    }
+
+    private fun isAllWhitespace(text: CharSequence): Boolean {
+        for (index in 0 until text.length) {
+            if (!text[index].isWhitespace()) return false
+        }
+        return true
     }
 }
 

@@ -10,8 +10,9 @@ import java.awt.BorderLayout
 import javax.swing.JPanel
 import javax.swing.JTree
 import javax.swing.tree.DefaultMutableTreeNode
-import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.DefaultTreeCellRenderer
+import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreePath
 
 class JsonEditorTreeView : JPanel(), Disposable {
     companion object {
@@ -22,6 +23,7 @@ class JsonEditorTreeView : JPanel(), Disposable {
         private const val TREE_BRANCH_PREFIX_LAST = "└─ "
         private const val TREE_VERTICAL_LINE = "│  "
         private const val TREE_EMPTY_INDENT = "   "
+        private const val MAX_INITIAL_EXPAND_ROWS = 500
     }
 
     private val editorScheme = EditorColorsManager.getInstance().globalScheme
@@ -49,14 +51,49 @@ class JsonEditorTreeView : JPanel(), Disposable {
 
     fun setTreeModel(treeModel: DefaultTreeModel) {
         treeView.model = treeModel
-        expandAllRows()
+        expandInitialRows(treeModel)
     }
 
-    private fun expandAllRows() {
-        var rowIndex = 0
-        while (rowIndex < treeView.rowCount) {
-            treeView.expandRow(rowIndex)
-            rowIndex += 1
+    private fun expandInitialRows(treeModel: DefaultTreeModel) {
+        val initialRowCount = treeView.rowCount
+        if (initialRowCount == 0 || initialRowCount >= MAX_INITIAL_EXPAND_ROWS) {
+            return
+        }
+
+        val pendingPaths = ArrayDeque<TreePath>(initialRowCount)
+        for (rowIndex in 0 until initialRowCount) {
+            val path = treeView.getPathForRow(rowIndex) ?: continue
+            val node = path.lastPathComponent
+            if (!treeModel.isLeaf(node)) {
+                pendingPaths.addLast(path)
+            }
+        }
+
+        var expandedNodeCount = 0
+        while (pendingPaths.isNotEmpty() &&
+            treeView.rowCount < MAX_INITIAL_EXPAND_ROWS &&
+            expandedNodeCount < MAX_INITIAL_EXPAND_ROWS
+        ) {
+            val path = pendingPaths.removeFirst()
+            val node = path.lastPathComponent
+            if (treeModel.isLeaf(node)) {
+                continue
+            }
+
+            val childCount = treeModel.getChildCount(node)
+            if (childCount <= 0 || treeView.rowCount + childCount > MAX_INITIAL_EXPAND_ROWS) {
+                continue
+            }
+
+            treeView.expandPath(path)
+            expandedNodeCount += 1
+
+            for (childIndex in 0 until childCount) {
+                val childNode = treeModel.getChild(node, childIndex) ?: continue
+                if (!treeModel.isLeaf(childNode)) {
+                    pendingPaths.addLast(path.pathByAddingChild(childNode))
+                }
+            }
         }
     }
 
@@ -90,9 +127,41 @@ class JsonEditorTreeView : JPanel(), Disposable {
             hasFocus
         ).also {
             font = treeFont
-            val node = value as? DefaultMutableTreeNode ?: return@also
-            text = buildTreeBranchPrefix(node) + (node.userObject?.toString() ?: "")
+            text = when (value) {
+                is LazyJsonTreeNode -> buildTreeBranchPrefix(value) + value.displayText
+                is DefaultMutableTreeNode -> buildTreeBranchPrefix(value) + (value.userObject?.toString() ?: "")
+                else -> return@also
+            }
         }
+    }
+
+    private fun buildTreeBranchPrefix(node: LazyJsonTreeNode): String {
+        val depth = node.depth
+        if (depth <= 1) {
+            return ""
+        }
+
+        val prefixBuilder = StringBuilder((depth - 1) * 3)
+        val ancestorLastFlags = BooleanArray(depth - 2)
+        var currentAncestor = node.parentNode
+        var flagIndex = ancestorLastFlags.lastIndex
+        while (flagIndex >= 0 && currentAncestor != null) {
+            ancestorLastFlags[flagIndex] = currentAncestor.isLastSibling()
+            currentAncestor = currentAncestor.parentNode
+            flagIndex -= 1
+        }
+
+        for (isAncestorLast in ancestorLastFlags) {
+            prefixBuilder.append(if (isAncestorLast) TREE_EMPTY_INDENT else TREE_VERTICAL_LINE)
+        }
+        prefixBuilder.append(
+            if (node.isLastSibling()) {
+                TREE_BRANCH_PREFIX_LAST
+            } else {
+                TREE_BRANCH_PREFIX_MIDDLE
+            }
+        )
+        return prefixBuilder.toString()
     }
 
     private fun buildTreeBranchPrefix(node: DefaultMutableTreeNode): String {

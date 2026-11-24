@@ -6,7 +6,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.livteam.jsoninja.model.JsonQueryType
-import com.livteam.jsoninja.services.JsonFormatterService
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.services.JsonQueryService
 import com.livteam.jsoninja.settings.JsoninjaSettingsListener
@@ -32,7 +31,6 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
     private val view = JsonQueryView()
 
     private val jsonQueryService = project.getService(JsonQueryService::class.java)
-    private val jsonFormatterService = project.getService(JsonFormatterService::class.java)
     private val coroutineScope = project.service<JsoninjaCoroutineScopeService>().createChildScope()
 
     @Volatile
@@ -97,11 +95,9 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
         model.lastQuery = query
         val sequenceNumber = searchSequence.incrementAndGet()
         val originalJson = model.originalJson
-        val originalJsonTrim = originalJson.trim()
-        val isOriginalJsonEmpty = originalJsonTrim.isBlank() || originalJsonTrim.isEmpty()
 
         // 원본 JSON이 비어있으면 검색 중단
-        if (isOriginalJsonEmpty) {
+        if (originalJson.isBlank()) {
             LOG.warn("원본 JSON이 비어있거나 유효하지 않습니다.")
             return
         }
@@ -110,7 +106,7 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
             try {
                 if (isDisposed) return@launch
                 val result = withContext(Dispatchers.Default) {
-                    if (!isValidJson(originalJson) || !jsonQueryService.isValidExpression(query)) {
+                    if (!jsonQueryService.isValidExpression(query)) {
                         null
                     } else {
                         jsonQueryService.query(originalJson, query)
@@ -133,15 +129,6 @@ class JsonQueryPresenter(private val project: Project, private val model: JsonQu
                 // 예외 발생 시에도 이전 상태 유지
             }
         }
-    }
-
-    /**
-     * JSON 문자열이 유효한지 확인합니다.
-     * @param json 검사할 JSON 문자열
-     * @return 유효성 여부
-     */
-    private fun isValidJson(json: String): Boolean {
-        return jsonFormatterService.isValidJson(json)
     }
 
     /**

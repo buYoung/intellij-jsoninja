@@ -11,7 +11,13 @@ class WasmMemoryBridge(
     )
 
     fun writeUtf8String(value: String): BufferSlice {
-        val bytes = value.toByteArray(StandardCharsets.UTF_8)
+        if (value.isEmpty()) {
+            return BufferSlice(pointer = 0, length = 0)
+        }
+        return writeUtf8Bytes(value.toByteArray(StandardCharsets.UTF_8))
+    }
+
+    fun writeUtf8Bytes(bytes: ByteArray): BufferSlice {
         if (bytes.isEmpty()) {
             return BufferSlice(pointer = 0, length = 0)
         }
@@ -30,6 +36,13 @@ class WasmMemoryBridge(
             }
             throw failure
         }
+    }
+
+    fun readUtf8Bytes(bufferSlice: BufferSlice): ByteArray {
+        if (bufferSlice.length <= 0) {
+            return ByteArray(0)
+        }
+        return runtimeHandle.memory.readBytes(bufferSlice.pointer, bufferSlice.length)
     }
 
     fun readUtf8String(bufferSlice: BufferSlice): String {

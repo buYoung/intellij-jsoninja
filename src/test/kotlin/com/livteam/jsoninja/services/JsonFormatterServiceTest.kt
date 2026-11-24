@@ -285,4 +285,22 @@ class JsonFormatterServiceTest : BasePlatformTestCase() {
         val formattedCombination = jsonFormatterService.formatJson(json5Combination, JsonFormatState.UGLIFY)
         assertEquals("Should normalize to standard JSON", """{"key":"value","list":[1,2]}""", formattedCombination)
     }
+
+    fun testTokenlessBomAndCommentInputsAreRejected() {
+        val tokenlessInputs = listOf("\uFEFF", "// comment", "/* comment */", "\uFEFF  \n// only comment")
+        for (input in tokenlessInputs) {
+            assertFalse("Tokenless input should be invalid: $input", jsonFormatterService.isValidJson(input))
+            assertEquals(input, jsonFormatterService.formatJson(input, JsonFormatState.PRETTIFY))
+            assertEquals(input, jsonFormatterService.formatJsonIfValid(input, JsonFormatState.PRETTIFY))
+        }
+
+        val bomPrefixedJson = "\uFEFF{\"a\":1}"
+        assertTrue(jsonFormatterService.isValidJson(bomPrefixedJson))
+        assertEquals("""{"a":1}""", jsonFormatterService.formatJson(bomPrefixedJson, JsonFormatState.UGLIFY))
+        assertEquals("""{"a":1}""", jsonFormatterService.formatJsonIfValid(bomPrefixedJson, JsonFormatState.UGLIFY))
+
+        val escapedJson = jsonFormatterService.escapeJson("""{"a":1}""")
+        assertEquals(escapedJson, jsonFormatterService.formatJsonIfValid(escapedJson, JsonFormatState.PRETTIFY))
+        assertEquals("""{"test":1},"test"""", jsonFormatterService.formatJsonIfValid("""{"test":1},"test"""", JsonFormatState.PRETTIFY))
+    }
 }

@@ -22,6 +22,7 @@ import com.livteam.jsoninja.model.JsonQueryType
 import com.livteam.jsoninja.services.JsoninjaCoroutineScopeService
 import com.livteam.jsoninja.settings.JsoninjaSettingsState
 import com.livteam.jsoninja.utils.JsonPathHelper
+import java.lang.ref.WeakReference
 import javax.swing.JComponent
 import javax.swing.SwingUtilities
 import kotlinx.coroutines.*
@@ -34,6 +35,7 @@ class JsonEditorTooltipListener(
 
     companion object {
         private const val HINT_DELAY_MS = 200
+        private const val PLACEHOLDER_OPEN = "{{"
     }
 
     private val settings: JsoninjaSettingsState
@@ -42,42 +44,58 @@ class JsonEditorTooltipListener(
     @Volatile
     private var pendingTooltip: PendingTooltip? = null
     private var activeHint: LightweightHint? = null
+    private var lastTooltipEditor: WeakReference<EditorEx>? = null
 
     init {
         Disposer.register(parentDisposable) {
             cancelPending()
+            lastTooltipEditor = null
         }
     }
 
     override fun mouseMoved(e: EditorMouseEvent) {
-        if (e.editor.project != project) return
-
-        // Check if the event comes from our editor
-        // We check if the editor component is a child of the editorContainer
-        if (!SwingUtilities.isDescendingFrom(e.editor.component, editorContainer)) {
-            return
-        }
+        if (project.isDisposed || e.editor.isDisposed || e.editor.project != project) return
 
         val event = e.mouseEvent
         val isModifierDown = if (SystemInfo.isMac) event.isMetaDown else event.isControlDown
-
-        val editorEx = e.editor as? EditorEx ?: return
         if (!isModifierDown) {
+            if (pendingTooltip == null && activeHint == null && lastTooltipEditor == null) {
+                return
+            }
+            val editorEx = e.editor as? EditorEx ?: return
+            if (!SwingUtilities.isDescendingFrom(editorEx.component, editorContainer)) {
+                return
+            }
             cancelPending()
             if (editorEx.contentComponent.toolTipText != null) {
                 editorEx.contentComponent.toolTipText = null
             }
+            lastTooltipEditor = null
             return
         }
 
+        val editorEx = e.editor as? EditorEx ?: return
+        if (!SwingUtilities.isDescendingFrom(editorEx.component, editorContainer)) {
+            return
+        }
+
+        val document = editorEx.document
         val offset = e.offset
-        if (pendingTooltip?.offset == offset) {
+        if (offset < 0 || offset > document.textLength) {
+            return
+        }
+        val expectedModificationStamp = document.modificationStamp
+        val currentPending = pendingTooltip
+        if (currentPending != null &&
+            currentPending.offset == offset &&
+            currentPending.modificationStamp == expectedModificationStamp
+        ) {
             return
         }
 
         cancelPending()
 
-        val pending = PendingTooltip(offset, null)
+        val pending = PendingTooltip(offset, expectedModificationStamp)
         pendingTooltip = pending
 
         tooltipJob = project.service<JsoninjaCoroutineScopeService>().launch {
@@ -87,16 +105,21 @@ class JsonEditorTooltipListener(
             val result = try {
                 readAction {
                     if (project.isDisposed || editorEx.isDisposed) return@readAction null
-                    val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editorEx.document) ?: return@readAction null
+                    if (document.modificationStamp != expectedModificationStamp) return@readAction null
+                    val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(document) ?: return@readAction null
                     val element = psiFile.findElementAt(offset)
                     val queryType = JsonQueryType.fromString(settings.jsonQueryType)
 
-                    val templateResult = JsonPathHelper.getPathFromTemplateText(
-                        documentText = editorEx.document.text,
-                        offset = offset,
-                        project = project,
-                        queryType = queryType
-                    )
+                    val templateResult = if (document.immutableCharSequence.indexOf(PLACEHOLDER_OPEN) >= 0) {
+                        JsonPathHelper.getPathFromTemplateText(
+                            documentText = document.text,
+                            offset = offset,
+                            project = project,
+                            queryType = queryType
+                        )
+                    } else {
+                        null
+                    }
 
                     val resolvedPath = templateResult?.path ?: if (element != null) {
                         JsonPathHelper.getPath(element, queryType)
@@ -124,8 +147,15 @@ class JsonEditorTooltipListener(
             if (project.isDisposed || editorEx.isDisposed) return@launch
 
             withContext(Dispatchers.EDT + ModalityState.any().asContextElement()) {
-                if (pendingTooltip != pending || project.isDisposed || editorEx.isDisposed) return@withContext
+                if (pendingTooltip != pending ||
+                    project.isDisposed ||
+                    editorEx.isDisposed ||
+                    document.modificationStamp != expectedModificationStamp
+                ) {
+                    return@withContext
+                }
                 if (result != null) {
+                    lastTooltipEditor = WeakReference(editorEx)
                     if (result.isTemplatePlaceholder) {
                         editorEx.contentComponent.toolTipText = null
                         showTemplateHint(editorEx, result.text, offset)
@@ -134,6 +164,7 @@ class JsonEditorTooltipListener(
                     }
                 } else {
                     editorEx.contentComponent.toolTipText = null
+                    lastTooltipEditor = null
                 }
             }
         }
@@ -174,6 +205,6 @@ class JsonEditorTooltipListener(
 
     private data class PendingTooltip(
         val offset: Int,
-        val text: String?
+        val modificationStamp: Long
     )
 }

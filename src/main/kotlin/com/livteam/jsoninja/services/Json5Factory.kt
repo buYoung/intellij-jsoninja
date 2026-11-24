@@ -10,6 +10,10 @@ internal class Json5Factory : JsonFactory {
 
     override fun copy(): Json5Factory = Json5Factory(this)
 
-    override fun createParser(content: String): JsonParser =
-        super.createParser(Json5InputNormalizer(content).normalize())
+    override fun createParser(content: String): JsonParser {
+        if (content.isEmpty()) {
+            return super.createParser(content)
+        }
+        return super.createParser(Json5InputNormalizer(content).normalize())
+    }
 }
