@@ -58,19 +58,6 @@ function updateVersionFiles() {
   }
 
   fs.writeFileSync(gradlePropertiesPath, nextGradleProperties);
-
-  const pluginXmlPath = path.join(rootDirectory, "src/main/resources/META-INF/plugin.xml");
-  const pluginXml = fs.readFileSync(pluginXmlPath, "utf8");
-  const nextPluginXml = pluginXml.replace(
-    /(<version>)[^<]+(<\/version>)/,
-    `$1${releaseVersion}$2`,
-  );
-
-  if (nextPluginXml === pluginXml) {
-    throw new Error("version element was not found in src/main/resources/META-INF/plugin.xml.");
-  }
-
-  fs.writeFileSync(pluginXmlPath, nextPluginXml);
 }
 
 function getChangelogReference() {
@@ -204,8 +191,7 @@ function assertExpectedFilesOnly() {
   const unexpectedFiles = changedFiles.filter(
     (filePath) =>
       filePath !== "CHANGELOG.md" &&
-      filePath !== "gradle.properties" &&
-      filePath !== "src/main/resources/META-INF/plugin.xml",
+      filePath !== "gradle.properties",
   );
 
   if (unexpectedFiles.length === 0) {
@@ -216,7 +202,7 @@ function assertExpectedFilesOnly() {
   for (const filePath of unexpectedFiles) {
     console.error(filePath);
   }
-  console.error("Only CHANGELOG.md, gradle.properties, and src/main/resources/META-INF/plugin.xml may be changed during release.");
+  console.error("Only CHANGELOG.md and gradle.properties may be changed during release.");
   process.exit(1);
 }
 
