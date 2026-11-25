@@ -314,7 +314,7 @@ class JsonToTypeInferenceContext(
         val usedFieldNames = HashSet<String>(fieldCount * 2 + 1)
         val inferredFields = ArrayList<TypeField>(fieldCount)
 
-        val fieldsIterator = objectNode.fields()
+        val fieldsIterator = objectNode.properties().iterator()
         while (fieldsIterator.hasNext()) {
             val entry = fieldsIterator.next()
             val fieldSourceName = entry.key
@@ -386,7 +386,7 @@ class JsonToTypeInferenceContext(
 
         val fieldSourceNames = LinkedHashMap<String, MutableList<JsonNode>>()
         for (nodeIndex in objectNodes.indices) {
-            val fieldsIterator = objectNodes[nodeIndex].fields()
+            val fieldsIterator = objectNodes[nodeIndex].properties().iterator()
             while (fieldsIterator.hasNext()) {
                 val entry = fieldsIterator.next()
                 fieldSourceNames.getOrPut(entry.key) { ArrayList() }.add(entry.value)

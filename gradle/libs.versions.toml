@@ -1,8 +1,9 @@
 [versions]
 # libraries
 junit = "4.13.2"
-jackson-databind = "2.17.2"
-jackson-module-kotlin = "2.17.2"
+jackson-databind = "2.21.7"
+jackson-module-kotlin = "2.21.7"
+jackson3-bom = "3.2.4"
 json-path = "3.0.0"
 jmespath-jackson = "0.6.0"
 jackson-jq = "1.6.5"
@@ -12,7 +13,7 @@ chicory = "1.7.5"
 
 # plugins
 changelog = "2.5.0"
-intelliJPlatform = "2.11.0"
+intelliJPlatform = "2.20.1"
 kotlin = "2.4.20"
 kover = "0.9.9"
 qodana = "2026.2.1"
@@ -21,6 +22,7 @@ qodana = "2026.2.1"
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 jacksonDatabind = {  group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson-databind" }
 jacksonModuleKotlin = { group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version.ref = "jackson-module-kotlin" }
+jackson3Bom = { group = "tools.jackson", name = "jackson-bom", version.ref = "jackson3-bom" }
 jsonPath = { group = "com.jayway.jsonpath", name = "json-path", version.ref = "json-path" }
 jmespathJackson = { group = "io.burt", name = "jmespath-jackson", version.ref = "jmespath-jackson" }
 jacksonJq = { group = "net.thisptr", name = "jackson-jq", version.ref = "jackson-jq" }

@@ -158,7 +158,7 @@ class JsonDiffAlignmentService(private val project: Project) {
                     )
                 }
             }
-            val targetIterator = targetNode.fields()
+            val targetIterator = targetNode.properties().iterator()
             while (targetIterator.hasNext()) {
                 val entry = targetIterator.next()
                 if (!referenceNode.has(entry.key)) {
@@ -169,7 +169,7 @@ class JsonDiffAlignmentService(private val project: Project) {
                 }
             }
         } else {
-            val targetIterator = targetNode.fields()
+            val targetIterator = targetNode.properties().iterator()
             while (targetIterator.hasNext()) {
                 val entry = targetIterator.next()
                 alignedNode.set<JsonNode>(
@@ -283,7 +283,7 @@ class JsonDiffAlignmentService(private val project: Project) {
                 ?: node
 
             node is ObjectNode -> {
-                val iterator = node.fields()
+                val iterator = node.properties().iterator()
                 while (iterator.hasNext()) {
                     val entry = iterator.next()
                     val replacement = replaceSentinelTokens(entry.value, sharedTokensBySentinel)

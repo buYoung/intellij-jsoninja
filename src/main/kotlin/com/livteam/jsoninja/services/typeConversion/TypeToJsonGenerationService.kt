@@ -104,7 +104,7 @@ class TypeToJsonGenerationService(
             is ObjectNode -> {
                 val sortedNode = objectMapper.nodeFactory.objectNode()
                 val entries = ArrayList<Map.Entry<String, JsonNode>>(node.size())
-                val fieldsIterator = node.fields()
+                val fieldsIterator = node.properties().iterator()
                 while (fieldsIterator.hasNext()) {
                     entries.add(fieldsIterator.next())
                 }
