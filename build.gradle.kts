@@ -2,6 +2,7 @@ import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 import org.jetbrains.intellij.platform.gradle.tasks.PrintProductsReleasesTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
@@ -119,6 +120,8 @@ dependencies {
     implementation(libs.jsonSchemaValidator) {
         exclude(group = "org.slf4j", module = "slf4j-api")
     }
+    // json-schema-validator brings Jackson 3 transitively; the BOM raises it to the patched release.
+    implementation(platform(libs.jackson3Bom))
     implementation(libs.chicoryRuntime)
     implementation(libs.chicoryCompiler)
     implementation(libs.chicoryWasi)
@@ -163,7 +166,7 @@ configurations.configureEach {
             (requested.group == "com.fasterxml.jackson.module" && requested.name == "jackson-module-kotlin")
         ) {
             useVersion(libs.versions.jackson.databind.get())
-            because("Keep Jackson 2 ABI compatible with IntelliJ Platform 243 bundled Jackson 2.17.2.")
+            because("Keep Jackson 2 core, databind, and Kotlin module on the patched catalog version across configurations.")
         }
     }
 }
@@ -316,12 +319,12 @@ intellijPlatform {
             VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
         )
         ides {
-            val recommendedIdes = ProductReleasesValueSource()
             tasks.named<PrintProductsReleasesTask>("printProductsReleases") {
-                productsReleases.set(recommendedIdes)
+                // Match the channels used by the recommended verifier IDE list.
+                channels = listOf(ProductRelease.Channel.RELEASE, ProductRelease.Channel.EAP, ProductRelease.Channel.RC)
             }
             // CI splits this same recommended list across jobs; local verification keeps the full list.
-            create(providers.gradleProperty("pluginVerificationIde").map { listOf(it) }.orElse(recommendedIdes))
+            create(providers.gradleProperty("pluginVerificationIde").orRecommended())
         }
     }
 }
@@ -368,7 +371,7 @@ tasks {
             archiveFile.set(suppliedArchive)
         }
         publishPlugin {
-            archiveFile.set(suppliedArchive)
+            archiveFiles.setFrom(suppliedArchive)
             // Publish the previously verified bytes without building or signing a replacement.
             setDependsOn(emptyList<Any>())
         }

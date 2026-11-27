@@ -384,7 +384,7 @@ class JsonFormatterService(private val project: Project) {
         when {
             node.isObject -> {
                 generator.writeStartObject()
-                val fieldsIterator = node.fields()
+                val fieldsIterator = node.properties().iterator()
                 while (fieldsIterator.hasNext()) {
                     val entry = fieldsIterator.next()
                     generator.writeFieldName(entry.key)
@@ -418,12 +418,12 @@ class JsonFormatterService(private val project: Project) {
                 generator.writeStartObject()
                 val entryCount = node.size()
                 if (entryCount == 1) {
-                    val entry = node.fields().next()
+                    val entry = node.properties().iterator().next()
                     generator.writeFieldName(entry.key)
                     writeSortedJsonNode(entry.value, generator)
                 } else if (entryCount > 1) {
                     val entries = ArrayList<Map.Entry<String, JsonNode>>(entryCount)
-                    val fieldsIterator = node.fields()
+                    val fieldsIterator = node.properties().iterator()
                     while (fieldsIterator.hasNext()) {
                         entries.add(fieldsIterator.next())
                     }
